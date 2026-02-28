@@ -21,6 +21,15 @@ interface AdminStaffFormsProps {
   weekdays: string[];
 }
 
+const adminSelectClassNames = {
+  trigger:
+    'min-h-14 rounded-2xl border border-transparent bg-white/[0.03] shadow-none data-[hover=true]:border-transparent data-[hover=true]:bg-white/[0.08] data-[focus=true]:border-transparent data-[focus=true]:bg-white/[0.08] data-[open=true]:border-transparent data-[open=true]:bg-white/[0.08]',
+  label: 'text-[11px] font-semibold text-slate-400',
+  value: 'text-sm font-medium text-slate-100',
+  selectorIcon: 'text-slate-400',
+  popoverContent: 'rounded-2xl border border-transparent bg-[#0b1527] p-1',
+} as const;
+
 export function AdminStaffForms({ shopId, staff, weekdays }: AdminStaffFormsProps) {
   return (
     <>
@@ -47,6 +56,7 @@ export function AdminStaffForms({ shopId, staff, weekdays }: AdminStaffFormsProp
                 aria-label="Rol de personal"
                 label="Rol"
                 labelPlacement="inside"
+                classNames={adminSelectClassNames}
                 defaultSelectedKeys={['staff']}
               >
                 <SelectItem key="staff">Personal</SelectItem>
@@ -78,6 +88,7 @@ export function AdminStaffForms({ shopId, staff, weekdays }: AdminStaffFormsProp
                 label="Personal"
                 labelPlacement="inside"
                 placeholder="Selecciona personal"
+                classNames={adminSelectClassNames}
                 isRequired
               >
                 {staff.map((item) => (
@@ -89,6 +100,7 @@ export function AdminStaffForms({ shopId, staff, weekdays }: AdminStaffFormsProp
                 aria-label="Dia de la semana"
                 label="Dia"
                 labelPlacement="inside"
+                classNames={adminSelectClassNames}
                 defaultSelectedKeys={['1']}
               >
                 {weekdays.map((day, index) => (
@@ -145,6 +157,7 @@ export function AdminStaffForms({ shopId, staff, weekdays }: AdminStaffFormsProp
               label="Personal"
               labelPlacement="inside"
               placeholder="Selecciona personal"
+              classNames={adminSelectClassNames}
               isRequired
             >
               {staff.map((item) => (

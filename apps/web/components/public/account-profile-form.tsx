@@ -73,7 +73,7 @@ const editableInputClassNames = {
   input: 'text-sm font-medium text-slate-100 placeholder:text-slate/35',
 } as const;
 const editButtonClassName =
-  'inline-flex h-10 w-10 items-center justify-center rounded-full bg-transparent text-white/70 transition-colors hover:text-brass focus:outline-none focus-visible:text-brass';
+  'inline-flex h-10 w-10 items-center justify-center rounded-full bg-transparent text-white/70 transition-colors md:hover:text-brass focus:outline-none focus-visible:text-brass';
 
 const editButtonActiveClassName =
   'text-brass';
@@ -243,7 +243,7 @@ export function AccountProfileForm({
               fallback={initials}
               className="h-16 w-16 text-base font-semibold"
             />
-            <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/0 opacity-0 transition group-hover:bg-black/35 group-hover:opacity-100">
+            <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/0 opacity-0 transition md:group-hover:bg-black/35 md:group-hover:opacity-100">
               <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white/90 text-ink">
                 <Pencil className="h-3.5 w-3.5" />
               </span>

@@ -213,7 +213,7 @@ export default function HomePage() {
       <div className="grid gap-4 md:grid-cols-2">
         {routeShowcase.map((item) => (
           <Link key={item.href} href={item.href} className="no-underline">
-            <Card className="soft-panel rounded-[1.8rem] border-0 shadow-none transition-transform duration-200 hover:-translate-y-1">
+            <Card className="soft-panel rounded-[1.8rem] border-0 shadow-none">
               <CardBody className="overflow-hidden p-5">
                 <div className={`absolute inset-x-0 top-0 h-24 bg-gradient-to-r ${item.accent}`} />
                 <div className="relative z-10">

@@ -250,7 +250,10 @@ export function BookingFlow({ shopId, services, staff, initialCustomerEmail }: B
               }}
             >
               {services.map((item) => (
-                <SelectItem key={item.id}>
+                <SelectItem
+                  key={item.id}
+                  textValue={`${item.name} - $${(item.price_cents / 100).toFixed(2)} (${item.duration_minutes}m)`}
+                >
                   {item.name} - ${(item.price_cents / 100).toFixed(2)} ({item.duration_minutes}m)
                 </SelectItem>
               ))}
@@ -284,7 +287,9 @@ export function BookingFlow({ shopId, services, staff, initialCustomerEmail }: B
               isDisabled={!serviceId}
             >
               {staff.map((item) => (
-                <SelectItem key={item.id}>{item.name}</SelectItem>
+                <SelectItem key={item.id} textValue={item.name}>
+                  {item.name}
+                </SelectItem>
               ))}
             </Select>
           </div>
@@ -328,10 +333,10 @@ export function BookingFlow({ shopId, services, staff, initialCustomerEmail }: B
                 <button
                   type="button"
                   key={`${slot.staff_id}-${slot.start_at}`}
-                  className={`rounded-2xl border px-3 py-3 text-left text-xs transition ${
+                  className={`rounded-2xl border border-transparent px-3 py-3 text-left text-xs transition ${
                     isSelected
-                      ? 'border-sky-400/28 bg-sky-500/[0.09] shadow-[0_16px_24px_-22px_rgba(14,165,233,0.55)]'
-                      : 'border-white/70 bg-white/62 hover:-translate-y-px hover:border-white/90 hover:bg-white/82 dark:border-white/8 dark:bg-white/[0.03] dark:hover:border-white/12 dark:hover:bg-white/[0.05]'
+                      ? 'border-sky-400/38 bg-sky-500/[0.1] dark:border-sky-300/22 dark:bg-sky-400/[0.08]'
+                      : 'bg-white/58 md:hover:bg-white/78 dark:bg-white/[0.03] dark:md:hover:bg-white/[0.05]'
                   }`}
                   onClick={() => {
                     setSelectedSlot(slot);

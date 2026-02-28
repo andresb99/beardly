@@ -532,7 +532,7 @@ export function LoginForm({
             {mode === 'login' ? (
               <button
                 type="button"
-                className="inline-flex items-center gap-2 text-xs font-semibold text-slate/80 transition-colors hover:text-ink dark:text-slate-300 dark:hover:text-slate-100"
+                className="inline-flex items-center gap-2 text-xs font-semibold text-slate/80 transition-colors md:hover:text-ink dark:text-slate-300 dark:md:hover:text-slate-100"
                 onClick={() => {
                   setMode('recover');
                   setPassword('');

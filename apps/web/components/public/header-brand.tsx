@@ -15,9 +15,9 @@ export function HeaderBrand({ className }: HeaderBrandProps) {
         alt="Logo de Beardly"
         width={774}
         height={297}
-        sizes="(max-width: 768px) 136px, 160px"
+        sizes="(max-width: 768px) 126px, 152px"
         quality={100}
-        className="block h-full w-auto shrink-0 object-contain"
+        className="block h-12 w-auto shrink-0 object-contain sm:h-[3.35rem] md:h-[3.75rem]"
         priority
       />
     </span>

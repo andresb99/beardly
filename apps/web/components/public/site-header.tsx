@@ -60,7 +60,7 @@ const staffHeaderLinks = [
 ] as const;
 
 const actionButtonClassName =
-  'h-10 rounded-2xl border border-white/75 bg-white/58 px-4 text-xs font-semibold text-ink no-underline shadow-[0_16px_24px_-20px_rgba(15,23,42,0.24)] transition-[background-color,transform,box-shadow,color,border-color] duration-150 data-[hover=true]:-translate-y-px data-[hover=true]:border-white/90 data-[hover=true]:bg-white/84 data-[pressed=true]:scale-[0.98] data-[pressed=true]:bg-white/92 data-[focus-visible=true]:ring-2 data-[focus-visible=true]:ring-sky-400/55 data-[focus-visible=true]:ring-offset-1 data-[focus-visible=true]:ring-offset-transparent dark:border-white/10 dark:bg-white/[0.05] dark:text-slate-100 dark:data-[hover=true]:bg-white/[0.08] dark:data-[pressed=true]:bg-white/[0.09]';
+  'h-10 rounded-2xl border border-white/75 bg-white/58 px-4 text-xs font-semibold text-ink no-underline shadow-[0_16px_24px_-20px_rgba(15,23,42,0.24)] transition-[background-color,transform,box-shadow,color,border-color] duration-150 data-[hover=true]:border-white/90 data-[hover=true]:bg-white/84 data-[pressed=true]:scale-[0.98] data-[pressed=true]:bg-white/92 data-[focus-visible=true]:ring-2 data-[focus-visible=true]:ring-sky-400/55 data-[focus-visible=true]:ring-offset-1 data-[focus-visible=true]:ring-offset-transparent dark:border-white/10 dark:bg-white/[0.05] dark:text-slate-100 dark:data-[hover=true]:bg-white/[0.08] dark:data-[pressed=true]:bg-white/[0.09]';
 
 function getAvatarInitials(name: string | null, email: string | null) {
   const source = (name || email || '').trim();
@@ -288,8 +288,8 @@ export function SiteHeader() {
       }}
     >
       <NavbarContent justify="start">
-        <NavbarBrand className="h-full items-center py-0">
-          <NextLink href="/" className="flex h-full items-center no-underline">
+        <NavbarBrand className="h-full items-center py-0 md:w-[14rem]">
+          <NextLink href="/" className="flex h-full items-center no-underline md:w-full">
             <HeaderBrand />
           </NextLink>
         </NavbarBrand>
@@ -376,7 +376,7 @@ export function SiteHeader() {
             onPress={handleThemeToggle}
             aria-label={theme === 'dark' ? 'Activar modo claro' : 'Activar modo oscuro'}
             title={theme === 'dark' ? 'Modo claro' : 'Modo oscuro'}
-            className="h-10 w-10 min-w-0 rounded-2xl border border-white/75 bg-white/58 p-0 text-ink shadow-[0_16px_24px_-20px_rgba(15,23,42,0.24)] transition data-[hover=true]:-translate-y-px data-[hover=true]:border-white/90 data-[hover=true]:bg-white/84 data-[hover=true]:text-sky-700 data-[pressed=true]:scale-100 data-[pressed=true]:bg-white/88 dark:border-white/10 dark:bg-white/[0.05] dark:text-white dark:data-[hover=true]:bg-white/[0.08] dark:data-[hover=true]:text-sky-200"
+            className="h-10 w-10 min-w-0 rounded-2xl border border-white/75 bg-white/58 p-0 text-ink shadow-[0_16px_24px_-20px_rgba(15,23,42,0.24)] transition data-[hover=true]:border-white/90 data-[hover=true]:bg-white/84 data-[hover=true]:text-sky-700 data-[pressed=true]:scale-100 data-[pressed=true]:bg-white/88 dark:border-white/10 dark:bg-white/[0.05] dark:text-white dark:data-[hover=true]:bg-white/[0.08] dark:data-[hover=true]:text-sky-200"
           >
             {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </Button>
@@ -385,7 +385,7 @@ export function SiteHeader() {
         <NavbarItem className="md:hidden">
           <NavbarMenuToggle
             aria-label={isMenuOpen ? 'Cerrar menu' : 'Abrir menu'}
-            className="text-ink data-[hover=true]:bg-white/65 dark:text-white dark:data-[hover=true]:bg-white/[0.06]"
+            className="h-10 w-10 min-w-10 rounded-2xl border border-white/75 bg-white/58 text-ink shadow-[0_16px_24px_-20px_rgba(15,23,42,0.24)] transition data-[hover=true]:border-white/90 data-[hover=true]:bg-white/84 data-[pressed=true]:scale-100 data-[pressed=true]:bg-white/88 dark:border-white/10 dark:bg-white/[0.05] dark:text-white dark:data-[hover=true]:bg-white/[0.08]"
           />
         </NavbarItem>
       </NavbarContent>

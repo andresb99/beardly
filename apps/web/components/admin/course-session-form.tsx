@@ -10,6 +10,15 @@ interface CourseOption {
   title: string;
 }
 
+const adminSelectClassNames = {
+  trigger:
+    'min-h-14 rounded-2xl border border-white/8 bg-white/[0.03] shadow-none data-[hover=true]:border-white/12 data-[hover=true]:bg-white/[0.05] data-[focus=true]:border-white/12 data-[focus=true]:bg-white/[0.05] data-[open=true]:border-white/12 data-[open=true]:bg-white/[0.05]',
+  label: 'text-[11px] font-semibold text-slate-400',
+  value: 'text-sm font-medium text-slate-100',
+  selectorIcon: 'text-slate-400',
+  popoverContent: 'rounded-2xl border border-white/10 bg-[#091120]/92 p-1',
+} as const;
+
 export function AdminCourseSessionForm({ courses }: { courses: CourseOption[] }) {
   return (
     <form action={upsertCourseSessionAction} className="mt-4 grid gap-3">
@@ -19,6 +28,7 @@ export function AdminCourseSessionForm({ courses }: { courses: CourseOption[] })
         label="Curso"
         labelPlacement="inside"
         placeholder="Selecciona curso"
+        classNames={adminSelectClassNames}
         isRequired
       >
         {courses.map((item) => (
@@ -50,6 +60,7 @@ export function AdminCourseSessionForm({ courses }: { courses: CourseOption[] })
         aria-label="Estado de sesion"
         label="Estado"
         labelPlacement="inside"
+        classNames={adminSelectClassNames}
         defaultSelectedKeys={['scheduled']}
       >
         <SelectItem key="scheduled">Programada</SelectItem>
