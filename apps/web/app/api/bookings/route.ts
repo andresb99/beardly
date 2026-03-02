@@ -1,6 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { bookingInputSchema } from '@navaja/shared';
-import { SHOP_ID } from '@/lib/constants';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
@@ -18,10 +17,6 @@ export async function POST(request: NextRequest) {
     return new NextResponse('Selecciona un horario valido con barbero asignado.', { status: 400 });
   }
 
-  if (parsed.data.shop_id !== SHOP_ID) {
-    return new NextResponse('Shop invalido.', { status: 400 });
-  }
-
   const sessionSupabase = await createSupabaseServerClient();
   const {
     data: { user },
@@ -31,22 +26,32 @@ export async function POST(request: NextRequest) {
 
   const supabase = createSupabaseAdminClient();
 
-  const [{ data: service }, { data: staffMember }] = await Promise.all([
+  const [{ data: shop }, { data: service }, { data: staffMember }] = await Promise.all([
+    supabase
+      .from('shops')
+      .select('id, status')
+      .eq('id', parsed.data.shop_id)
+      .eq('status', 'active')
+      .maybeSingle(),
     supabase
       .from('services')
       .select('id')
       .eq('id', parsed.data.service_id)
-      .eq('shop_id', SHOP_ID)
+      .eq('shop_id', parsed.data.shop_id)
       .eq('is_active', true)
       .maybeSingle(),
     supabase
       .from('staff')
       .select('id')
       .eq('id', parsed.data.staff_id)
-      .eq('shop_id', SHOP_ID)
+      .eq('shop_id', parsed.data.shop_id)
       .eq('is_active', true)
       .maybeSingle(),
   ]);
+
+  if (!shop) {
+    return new NextResponse('La barbershop seleccionada no esta disponible.', { status: 400 });
+  }
 
   if (!service) {
     return new NextResponse('El servicio seleccionado no esta disponible.', { status: 400 });
@@ -59,7 +64,7 @@ export async function POST(request: NextRequest) {
   const { data: existingCustomer, error: existingCustomerError } = await supabase
     .from('customers')
     .select('id')
-    .eq('shop_id', SHOP_ID)
+    .eq('shop_id', parsed.data.shop_id)
     .eq('phone', parsed.data.customer_phone)
     .maybeSingle();
 
@@ -84,7 +89,8 @@ export async function POST(request: NextRequest) {
     const { error: customerUpdateError } = await supabase
       .from('customers')
       .update(customerUpdatePayload)
-      .eq('id', customerId);
+      .eq('id', customerId)
+      .eq('shop_id', parsed.data.shop_id);
 
     if (customerUpdateError) {
       return new NextResponse(customerUpdateError.message || 'No se pudo actualizar el cliente.', { status: 400 });

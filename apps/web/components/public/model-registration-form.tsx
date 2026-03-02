@@ -1,16 +1,23 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { modelRegistrationInputSchema } from '@navaja/shared';
 import { Button, Input, Select, SelectItem } from '@heroui/react';
 
 interface SessionOption {
   session_id: string;
   label: string;
+  shop_id?: string;
+}
+
+interface ShopOption {
+  shop_id: string;
+  label: string;
 }
 
 interface ModelRegistrationFormProps {
-  shopId: string;
+  shopId?: string;
+  shops?: ShopOption[];
   sessions: SessionOption[];
   initialSessionId?: string;
 }
@@ -25,6 +32,7 @@ const preferenceOptions = [
 
 export function ModelRegistrationForm({
   shopId,
+  shops = [],
   sessions,
   initialSessionId,
 }: ModelRegistrationFormProps) {
@@ -33,6 +41,14 @@ export function ModelRegistrationForm({
   const [email, setEmail] = useState('');
   const [instagram, setInstagram] = useState('');
   const [sessionId, setSessionId] = useState(initialSessionId || '');
+  const [selectedShopId, setSelectedShopId] = useState(() => {
+    if (shopId) {
+      return shopId;
+    }
+
+    const initialSession = sessions.find((session) => session.session_id === initialSessionId);
+    return initialSession?.shop_id || '';
+  });
   const [preferences, setPreferences] = useState<string[]>([]);
   const [consentPhotos, setConsentPhotos] = useState(false);
   const [marketingOptIn, setMarketingOptIn] = useState(false);
@@ -40,7 +56,49 @@ export function ModelRegistrationForm({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
-  const canSubmit = useMemo(() => !!fullName && !!phone && !loading, [fullName, phone, loading]);
+  const resolvedShopId = shopId || selectedShopId;
+  const visibleSessions = useMemo(() => {
+    if (shopId) {
+      return sessions;
+    }
+
+    if (!selectedShopId) {
+      return sessions;
+    }
+
+    return sessions.filter((session) => !session.shop_id || session.shop_id === selectedShopId);
+  }, [selectedShopId, sessions, shopId]);
+  const canSubmit = useMemo(
+    () => !!fullName && !!phone && !loading,
+    [fullName, phone, loading],
+  );
+
+  useEffect(() => {
+    if (shopId) {
+      setSelectedShopId(shopId);
+      return;
+    }
+
+    if (!sessionId) {
+      return;
+    }
+
+    const currentSession = sessions.find((session) => session.session_id === sessionId);
+    if (currentSession?.shop_id && currentSession.shop_id !== selectedShopId) {
+      setSelectedShopId(currentSession.shop_id);
+    }
+  }, [selectedShopId, sessionId, sessions, shopId]);
+
+  useEffect(() => {
+    if (!sessionId) {
+      return;
+    }
+
+    const stillVisible = visibleSessions.some((session) => session.session_id === sessionId);
+    if (!stillVisible) {
+      setSessionId('');
+    }
+  }, [sessionId, visibleSessions]);
 
   function togglePreference(value: string) {
     setPreferences((current) =>
@@ -54,7 +112,7 @@ export function ModelRegistrationForm({
     setSuccess(false);
 
     const parsed = modelRegistrationInputSchema.safeParse({
-      shop_id: shopId,
+      shop_id: resolvedShopId || undefined,
       session_id: sessionId || undefined,
       full_name: fullName,
       phone,
@@ -90,6 +148,9 @@ export function ModelRegistrationForm({
     setEmail('');
     setInstagram('');
     setSessionId(initialSessionId || '');
+    if (!shopId) {
+      setSelectedShopId('');
+    }
     setPreferences([]);
     setConsentPhotos(false);
     setMarketingOptIn(false);
@@ -102,7 +163,7 @@ export function ModelRegistrationForm({
           Listo, recibimos tu registro
         </h2>
         <p className="mt-2 text-sm text-slate/80 dark:text-slate-300">
-          Te vamos a contactar por WhatsApp para confirmar disponibilidad.
+          Tu perfil ya quedo disponible y te vamos a contactar por WhatsApp cuando encaje con una convocatoria.
         </p>
       </div>
     );
@@ -119,7 +180,7 @@ export function ModelRegistrationForm({
             Completa tu registro
           </h2>
           <p className="mt-2 text-sm text-slate/80 dark:text-slate-300">
-            Guarda tus datos, tus preferencias y los consentimientos necesarios en una sola vista.
+            Guarda tu perfil global y, si quieres, asocialo a una barberia o a una sesion concreta.
           </p>
         </div>
         <div className="surface-card">
@@ -170,6 +231,22 @@ export function ModelRegistrationForm({
         />
       </div>
 
+      {!shopId ? (
+        <Select
+          id="shopId"
+          aria-label="Barberia"
+          label="Barberia"
+          labelPlacement="inside"
+          selectedKeys={selectedShopId ? [selectedShopId] : []}
+          placeholder="Opcional: elige una barberia para quedar visible ahi"
+          onChange={(event) => setSelectedShopId(event.target.value)}
+        >
+          {shops.map((shop) => (
+            <SelectItem key={shop.shop_id}>{shop.label}</SelectItem>
+          ))}
+        </Select>
+      ) : null}
+
       <Select
         id="sessionId"
         aria-label="Sesion de curso"
@@ -181,7 +258,7 @@ export function ModelRegistrationForm({
         placeholder="Me anoto para proximas convocatorias"
         onChange={(event) => setSessionId(event.target.value)}
       >
-        {sessions.map((session) => (
+        {visibleSessions.map((session) => (
           <SelectItem key={session.session_id}>{session.label}</SelectItem>
         ))}
       </Select>

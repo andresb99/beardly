@@ -1,6 +1,6 @@
 import { Card, CardBody } from '@heroui/card';
 import { AdminStaffForms } from '@/components/admin/staff-forms';
-import { SHOP_ID } from '@/lib/constants';
+import { requireAdmin } from '@/lib/auth';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 const weekdays = ['Domingo', 'Lunes', 'Martes', 'Miercoles', 'Jueves', 'Viernes', 'Sabado'];
@@ -19,23 +19,29 @@ function getInitials(name: string) {
   return `${parts[0]!.charAt(0)}${parts[1]!.charAt(0)}`.toUpperCase();
 }
 
-export default async function StaffPage() {
+interface StaffPageProps {
+  searchParams: Promise<{ shop?: string }>;
+}
+
+export default async function StaffPage({ searchParams }: StaffPageProps) {
+  const params = await searchParams;
+  const ctx = await requireAdmin({ shopSlug: params.shop });
   const supabase = await createSupabaseServerClient();
   const [{ data: staff }, { data: workingHours }, { data: timeOff }] = await Promise.all([
     supabase
       .from('staff')
       .select('id, name, role, phone, is_active')
-      .eq('shop_id', SHOP_ID)
+      .eq('shop_id', ctx.shopId)
       .order('name'),
     supabase
       .from('working_hours')
       .select('id, staff_id, day_of_week, start_time, end_time, staff(name)')
-      .eq('shop_id', SHOP_ID)
+      .eq('shop_id', ctx.shopId)
       .order('day_of_week'),
     supabase
       .from('time_off')
       .select('id, staff_id, start_at, end_at, reason, staff(name)')
-      .eq('shop_id', SHOP_ID)
+      .eq('shop_id', ctx.shopId)
       .order('start_at', { ascending: false })
       .limit(20),
   ]);
@@ -117,7 +123,8 @@ export default async function StaffPage() {
       </div>
 
       <AdminStaffForms
-        shopId={SHOP_ID}
+        shopId={ctx.shopId}
+        shopSlug={ctx.shopSlug}
         weekdays={weekdays}
         staff={(staff || []).map((item) => ({
           id: String(item.id),

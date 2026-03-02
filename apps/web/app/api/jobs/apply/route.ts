@@ -42,6 +42,16 @@ export async function POST(request: NextRequest) {
   const buffer = Buffer.from(await cv.arrayBuffer());
 
   const supabase = createSupabaseAdminClient();
+  const { data: shop } = await supabase
+    .from('shops')
+    .select('id')
+    .eq('id', parsedPayload.data.shop_id)
+    .eq('status', 'active')
+    .maybeSingle();
+
+  if (!shop) {
+    return new NextResponse('La barbershop seleccionada no esta disponible.', { status: 400 });
+  }
 
   const { error: uploadError } = await supabase.storage
     .from('cvs')

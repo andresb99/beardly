@@ -8,11 +8,13 @@ import {
   AdminModelRequirementsForm,
 } from '@/components/admin/session-modelos-forms';
 import { updateModelApplicationStatusAction } from '@/app/admin/actions';
+import { requireAdmin } from '@/lib/auth';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { buildAdminHref } from '@/lib/workspace-routes';
 
 interface SessionModelosPageProps {
   params: Promise<{ sessionId: string }>;
-  searchParams: Promise<{ ok?: string; error?: string }>;
+  searchParams: Promise<{ ok?: string; error?: string; shop?: string }>;
 }
 
 function toneForStatus(status: string): 'default' | 'success' | 'warning' | 'danger' {
@@ -56,15 +58,16 @@ export default async function SessionModelosPage({
 }: SessionModelosPageProps) {
   const { sessionId } = await params;
   const notices = await searchParams;
+  const ctx = await requireAdmin({ shopSlug: notices.shop });
   const supabase = await createSupabaseServerClient();
 
   const { data: session } = await supabase
     .from('course_sessions')
-    .select('id, start_at, location, status, course_id, courses(title)')
+    .select('id, start_at, location, status, course_id, courses(title, shop_id)')
     .eq('id', sessionId)
     .maybeSingle();
 
-  if (!session) {
+  if (!session || String((session.courses as { shop_id?: string } | null)?.shop_id || '') !== ctx.shopId) {
     notFound();
   }
 
@@ -112,7 +115,7 @@ export default async function SessionModelosPage({
             </p>
           </div>
           <Link
-            href="/admin/courses"
+            href={buildAdminHref('/admin/courses', ctx.shopSlug)}
             className="action-secondary inline-flex rounded-full px-4 py-2 text-sm font-semibold no-underline"
           >
             Volver a cursos
@@ -132,6 +135,8 @@ export default async function SessionModelosPage({
             Define cupos, requisitos y condiciones para la sesion.
           </p>
           <AdminModelRequirementsForm
+            shopId={ctx.shopId}
+            shopSlug={ctx.shopSlug}
             sessionId={sessionId}
             modelsNeeded={modelsNeeded || 1}
             hairLengthCategory={String(requirementObj.hair_length_category || 'indistinto')}
@@ -189,6 +194,8 @@ export default async function SessionModelosPage({
                 </p>
                 <AdminModelApplicationStatusForm
                   applicationId={String(application.id)}
+                  shopId={ctx.shopId}
+                  shopSlug={ctx.shopSlug}
                   status={String(application.status)}
                   notesInternal={String(application.notes_internal || '')}
                 />
@@ -237,6 +244,8 @@ export default async function SessionModelosPage({
                 <div className="mt-3 flex flex-wrap gap-2">
                   <form action={updateModelApplicationStatusAction}>
                     <input type="hidden" name="application_id" value={String(application.id)} />
+                    <input type="hidden" name="shop_id" value={ctx.shopId} />
+                    <input type="hidden" name="shop_slug" value={ctx.shopSlug} />
                     <input type="hidden" name="status" value="attended" />
                     <Button type="submit" className="action-primary px-4 text-sm font-semibold">
                       Marcar asistio
@@ -244,6 +253,8 @@ export default async function SessionModelosPage({
                   </form>
                   <form action={updateModelApplicationStatusAction}>
                     <input type="hidden" name="application_id" value={String(application.id)} />
+                    <input type="hidden" name="shop_id" value={ctx.shopId} />
+                    <input type="hidden" name="shop_slug" value={ctx.shopSlug} />
                     <input type="hidden" name="status" value="no_show" />
                     <Button type="submit" color="danger" className="px-4 text-sm font-semibold">
                       Marcar no se presento
@@ -251,6 +262,8 @@ export default async function SessionModelosPage({
                   </form>
                   <form action={updateModelApplicationStatusAction}>
                     <input type="hidden" name="application_id" value={String(application.id)} />
+                    <input type="hidden" name="shop_id" value={ctx.shopId} />
+                    <input type="hidden" name="shop_slug" value={ctx.shopSlug} />
                     <input type="hidden" name="status" value="confirmed" />
                     <Button
                       type="submit"

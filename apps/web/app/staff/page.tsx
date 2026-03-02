@@ -20,8 +20,13 @@ const statusLabel: Record<string, string> = {
   done: 'Realizada',
 };
 
-export default async function StaffPage() {
-  const ctx = await requireStaff();
+interface StaffPageProps {
+  searchParams: Promise<{ shop?: string }>;
+}
+
+export default async function StaffPage({ searchParams }: StaffPageProps) {
+  const params = await searchParams;
+  const ctx = await requireStaff({ shopSlug: params.shop });
   const supabase = await createSupabaseServerClient();
 
   const start = new Date();
@@ -45,7 +50,7 @@ export default async function StaffPage() {
             Panel de staff
           </h1>
           <p className="mt-2 text-sm text-slate/80 dark:text-slate-300">
-            Agenda de los proximos 7 dias para {ctx.email || 'tu cuenta'}.
+            Agenda de los proximos 7 dias en {ctx.shopName} para {ctx.email || 'tu cuenta'}.
           </p>
         </div>
       </div>
@@ -90,6 +95,7 @@ export default async function StaffPage() {
                 <StaffAppointmentStatusForm
                   appointmentId={String(item.id)}
                   status={String(item.status)}
+                  shopId={ctx.shopId}
                 />
               </div>
             ))}

@@ -7,6 +7,10 @@
     "dev": "turbo run dev --parallel",
     "build": "turbo run build",
     "lint": "turbo run lint",
+    "test:unit": "pnpm --filter @navaja/web test:unit",
+    "test:integration": "pnpm --filter @navaja/web test:integration",
+    "test:e2e": "pnpm --filter @navaja/web test:e2e",
+    "coverage": "pnpm --filter @navaja/web coverage",
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",
     "format": "prettier --write ."

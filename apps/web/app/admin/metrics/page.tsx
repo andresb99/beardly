@@ -6,7 +6,9 @@ import { KpiCard } from '@/components/admin/kpi-card';
 import { MetricBar } from '@/components/admin/metric-bar';
 import { StaffComparisonTable } from '@/components/admin/staff-comparison-table';
 import { StaffPerformanceFilters } from '@/components/admin/staff-performance-filters';
+import { requireAdmin } from '@/lib/auth';
 import { getStaffPerformanceDashboard } from '@/lib/metrics';
+import { buildAdminHref } from '@/lib/workspace-routes';
 
 interface MetricsPageProps {
   searchParams: Promise<{
@@ -14,6 +16,7 @@ interface MetricsPageProps {
     from?: string;
     to?: string;
     compare?: string | string[];
+    shop?: string;
   }>;
 }
 
@@ -25,18 +28,17 @@ function formatHours(minutes: number) {
   return `${(minutes / 60).toFixed(1)} h`;
 }
 
-function buildDetailHref(staffId: string, from: string, to: string) {
-  const search = new URLSearchParams({
+function buildDetailHref(staffId: string, shopSlug: string, from: string, to: string) {
+  return buildAdminHref(`/admin/performance/${staffId}`, shopSlug, {
     from,
     to,
   });
-
-  return `/admin/performance/${staffId}?${search.toString()}`;
 }
 
 export default async function MetricsPage({ searchParams }: MetricsPageProps) {
   const params = await searchParams;
-  const dashboard = await getStaffPerformanceDashboard(params);
+  const ctx = await requireAdmin({ shopSlug: params.shop });
+  const dashboard = await getStaffPerformanceDashboard(params, ctx.shopId, ctx.shopSlug);
   const maxRevenue = Math.max(1, ...dashboard.staff.map((item) => item.totalRevenueCents));
 
   return (
@@ -76,6 +78,7 @@ export default async function MetricsPage({ searchParams }: MetricsPageProps) {
       </div>
 
       <StaffPerformanceFilters
+        shopSlug={ctx.shopSlug}
         dateRange={dashboard.dateRange}
         compareSelection={dashboard.compareSelection}
         staff={dashboard.staff}
@@ -100,7 +103,7 @@ export default async function MetricsPage({ searchParams }: MetricsPageProps) {
           {dashboard.insights.map((item) => (
             <Link
               key={`${item.label}-${item.value}`}
-              href={item.href || '/admin/metrics'}
+              href={item.href || buildAdminHref('/admin/metrics', ctx.shopSlug)}
               className="data-card block rounded-[1.6rem] p-4 no-underline"
             >
               <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate/55 dark:text-slate-400">
@@ -271,6 +274,7 @@ export default async function MetricsPage({ searchParams }: MetricsPageProps) {
                 <Link
                   href={buildDetailHref(
                     item.staffId,
+                    ctx.shopSlug,
                     dashboard.dateRange.fromDate,
                     dashboard.dateRange.toDate,
                   )}

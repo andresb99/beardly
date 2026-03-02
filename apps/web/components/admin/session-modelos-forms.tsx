@@ -9,6 +9,8 @@ import {
 } from '@/app/admin/actions';
 
 interface AdminModelRequirementsFormProps {
+  shopId: string;
+  shopSlug: string;
   sessionId: string;
   modelsNeeded: number;
   hairLengthCategory: string;
@@ -22,11 +24,15 @@ interface AdminModelRequirementsFormProps {
 
 interface AdminModelApplicationStatusFormProps {
   applicationId: string;
+  shopId: string;
+  shopSlug: string;
   status: string;
   notesInternal: string;
 }
 
 export function AdminModelRequirementsForm({
+  shopId,
+  shopSlug,
   sessionId,
   modelsNeeded,
   hairLengthCategory,
@@ -39,6 +45,8 @@ export function AdminModelRequirementsForm({
 }: AdminModelRequirementsFormProps) {
   return (
     <form action={upsertModelRequirementsAction} className="mt-4 grid gap-3 md:grid-cols-2">
+      <input type="hidden" name="shop_id" value={shopId} />
+      <input type="hidden" name="shop_slug" value={shopSlug} />
       <input type="hidden" name="session_id" value={sessionId} />
       <Input
         id="models_needed"
@@ -125,6 +133,8 @@ export function AdminModelRequirementsForm({
 
 export function AdminModelApplicationStatusForm({
   applicationId,
+  shopId,
+  shopSlug,
   status,
   notesInternal,
 }: AdminModelApplicationStatusFormProps) {
@@ -134,6 +144,8 @@ export function AdminModelApplicationStatusForm({
       className="mt-3 grid gap-2 md:grid-cols-[200px_1fr_auto]"
     >
       <input type="hidden" name="application_id" value={applicationId} />
+      <input type="hidden" name="shop_id" value={shopId} />
+      <input type="hidden" name="shop_slug" value={shopSlug} />
       <Select
         name="status"
         aria-label="Estado de postulacion"

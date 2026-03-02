@@ -1,9 +1,9 @@
 import 'server-only';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
-import { SHOP_ID } from '@/lib/constants';
 
 interface RawAccountAppointmentRow {
   id: string | null;
+  shop_id: string | null;
   customer_id: string | null;
   staff_id: string | null;
   start_at: string | null;
@@ -22,6 +22,7 @@ interface RawAppointmentReviewRow {
 
 export interface AccountAppointmentItem {
   id: string;
+  shopId: string;
   customerId: string;
   staffId: string;
   startAt: string;
@@ -47,7 +48,7 @@ function mapAppointmentRow(
   row: RawAccountAppointmentRow,
   reviewsByAppointmentId: Map<string, RawAppointmentReviewRow>,
 ): AccountAppointmentItem | null {
-  if (!row.id || !row.customer_id || !row.staff_id || !row.start_at) {
+  if (!row.id || !row.shop_id || !row.customer_id || !row.staff_id || !row.start_at) {
     return null;
   }
 
@@ -55,6 +56,7 @@ function mapAppointmentRow(
 
   return {
     id: String(row.id),
+    shopId: String(row.shop_id),
     customerId: String(row.customer_id),
     staffId: String(row.staff_id),
     startAt: String(row.start_at),
@@ -73,8 +75,7 @@ async function fetchAccountAppointmentsRaw(userEmail: string) {
   const admin = createSupabaseAdminClient();
   const { data, error } = await admin
     .from('appointments')
-    .select('id, customer_id, staff_id, start_at, status, services(name), staff(name), customers!inner(email)')
-    .eq('shop_id', SHOP_ID)
+    .select('id, shop_id, customer_id, staff_id, start_at, status, services(name), staff(name), customers!inner(email)')
     .eq('customers.email', userEmail)
     .order('start_at', { ascending: false })
     .limit(50);
@@ -128,8 +129,7 @@ export async function getAppointmentReviewAccessForUser(
   const admin = createSupabaseAdminClient();
   const { data, error } = await admin
     .from('appointments')
-    .select('id, customer_id, staff_id, start_at, status, services(name), staff(name), customers!inner(email)')
-    .eq('shop_id', SHOP_ID)
+    .select('id, shop_id, customer_id, staff_id, start_at, status, services(name), staff(name), customers!inner(email)')
     .eq('id', appointmentId)
     .eq('customers.email', userEmail)
     .maybeSingle();

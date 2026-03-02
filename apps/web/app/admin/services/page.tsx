@@ -2,16 +2,22 @@ import { formatCurrency } from '@navaja/shared';
 import { Button } from '@heroui/button';
 import { Card, CardBody } from '@heroui/card';
 import { Input } from '@heroui/input';
-import { SHOP_ID } from '@/lib/constants';
+import { requireAdmin } from '@/lib/auth';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { upsertServiceAction } from '@/app/admin/actions';
 
-export default async function ServicesPage() {
+interface ServicesPageProps {
+  searchParams: Promise<{ shop?: string }>;
+}
+
+export default async function ServicesPage({ searchParams }: ServicesPageProps) {
+  const params = await searchParams;
+  const ctx = await requireAdmin({ shopSlug: params.shop });
   const supabase = await createSupabaseServerClient();
   const { data: services } = await supabase
     .from('services')
     .select('id, name, price_cents, duration_minutes, is_active')
-    .eq('shop_id', SHOP_ID)
+    .eq('shop_id', ctx.shopId)
     .order('name');
 
   const activeServices = (services || []).filter((item) => item.is_active).length;
@@ -67,7 +73,8 @@ export default async function ServicesPage() {
             Configura opciones para reserva publica.
           </p>
           <form action={upsertServiceAction} className="mt-4 grid gap-3 md:grid-cols-4">
-            <input type="hidden" name="shop_id" value={SHOP_ID} />
+            <input type="hidden" name="shop_id" value={ctx.shopId} />
+            <input type="hidden" name="shop_slug" value={ctx.shopSlug} />
             <Input name="name" label="Nombre del servicio" labelPlacement="inside" required />
             <Input
               name="price_cents"

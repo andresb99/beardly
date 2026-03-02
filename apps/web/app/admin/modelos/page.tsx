@@ -3,9 +3,10 @@ import { Button } from '@heroui/button';
 import { Card, CardBody } from '@heroui/card';
 import { Chip } from '@heroui/chip';
 import { Input, Textarea } from '@heroui/input';
-import { SHOP_ID } from '@/lib/constants';
+import { requireAdmin } from '@/lib/auth';
 import { updateModelInternalNotesAction } from '@/app/admin/actions';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { buildAdminHref } from '@/lib/workspace-routes';
 
 interface ModelosAdminPageProps {
   searchParams: Promise<{
@@ -13,6 +14,7 @@ interface ModelosAdminPageProps {
     model_id?: string;
     ok?: string;
     error?: string;
+    shop?: string;
   }>;
 }
 
@@ -29,6 +31,7 @@ function formatPreferences(input: unknown): string {
 
 export default async function ModelosAdminPage({ searchParams }: ModelosAdminPageProps) {
   const params = await searchParams;
+  const ctx = await requireAdmin({ shopSlug: params.shop });
   const q = (params.q || '').trim();
   const selectedId = params.model_id || '';
 
@@ -38,7 +41,7 @@ export default async function ModelosAdminPage({ searchParams }: ModelosAdminPag
     .select(
       'id, full_name, phone, email, instagram, attributes, notes_internal, marketing_opt_in, created_at',
     )
-    .eq('shop_id', SHOP_ID)
+    .eq('shop_id', ctx.shopId)
     .order('created_at', { ascending: false })
     .limit(150);
 
@@ -56,7 +59,7 @@ export default async function ModelosAdminPage({ searchParams }: ModelosAdminPag
       .select(
         'id, full_name, phone, email, instagram, attributes, notes_internal, marketing_opt_in, created_at',
       )
-      .eq('shop_id', SHOP_ID)
+      .eq('shop_id', ctx.shopId)
       .eq('id', selectedId)
       .maybeSingle();
     selectedModel = fallback || null;
@@ -109,6 +112,7 @@ export default async function ModelosAdminPage({ searchParams }: ModelosAdminPag
       {params.error ? <p className="status-banner error">{params.error}</p> : null}
 
       <form method="get" className="soft-panel flex gap-2 rounded-[1.8rem] border-0 p-4">
+        <input type="hidden" name="shop" value={ctx.shopSlug} />
         <Input
           name="q"
           label="Buscar modelo"
@@ -127,10 +131,10 @@ export default async function ModelosAdminPage({ searchParams }: ModelosAdminPag
             <h3 className="text-xl font-semibold text-ink dark:text-slate-100">Listado</h3>
             <ul className="mt-3 space-y-2 text-sm">
               {(models || []).map((model) => {
-                const href = `/admin/modelos?${new URLSearchParams({
+                const href = buildAdminHref('/admin/modelos', ctx.shopSlug, {
                   ...(q ? { q } : {}),
                   model_id: String(model.id),
-                }).toString()}`;
+                });
                 const active = String(model.id) === selectedId;
                 return (
                   <li key={String(model.id)}>
@@ -202,6 +206,8 @@ export default async function ModelosAdminPage({ searchParams }: ModelosAdminPag
 
                 <form action={updateModelInternalNotesAction} className="mt-5 space-y-2">
                   <input type="hidden" name="model_id" value={String(selectedModel.id)} />
+                  <input type="hidden" name="shop_id" value={ctx.shopId} />
+                  <input type="hidden" name="shop_slug" value={ctx.shopSlug} />
                   <Textarea
                     id="notes_internal"
                     name="notes_internal"

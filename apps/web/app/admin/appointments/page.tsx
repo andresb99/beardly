@@ -1,11 +1,11 @@
 import { formatCurrency } from '@navaja/shared';
 import { AdminAppointmentsFilters } from '@/components/admin/appointments-filters';
 import { AdminAppointmentsTable } from '@/components/admin/appointments-table';
-import { SHOP_ID } from '@/lib/constants';
+import { requireAdmin } from '@/lib/auth';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 interface AppointmentsPageProps {
-  searchParams: Promise<{ from?: string; to?: string; staff_id?: string; status?: string }>;
+  searchParams: Promise<{ from?: string; to?: string; staff_id?: string; status?: string; shop?: string }>;
 }
 
 function formatDateInput(date: Date, timeZone: string) {
@@ -25,14 +25,9 @@ function formatDateInput(date: Date, timeZone: string) {
 
 export default async function AppointmentsPage({ searchParams }: AppointmentsPageProps) {
   const params = await searchParams;
+  const ctx = await requireAdmin({ shopSlug: params.shop });
   const supabase = await createSupabaseServerClient();
-
-  const { data: shop } = await supabase
-    .from('shops')
-    .select('timezone')
-    .eq('id', SHOP_ID)
-    .maybeSingle();
-  const shopTimeZone = String(shop?.timezone || 'UTC');
+  const shopTimeZone = ctx.shopTimezone;
 
   const now = new Date();
   const defaultFrom = formatDateInput(now, shopTimeZone);
@@ -50,7 +45,7 @@ export default async function AppointmentsPage({ searchParams }: AppointmentsPag
     supabase
       .from('staff')
       .select('id, name')
-      .eq('shop_id', SHOP_ID)
+      .eq('shop_id', ctx.shopId)
       .eq('is_active', true)
       .order('name'),
     supabase
@@ -58,7 +53,7 @@ export default async function AppointmentsPage({ searchParams }: AppointmentsPag
       .select(
         'id, staff_id, start_at, end_at, status, price_cents, notes, customers(name, phone), services(name), staff(name)',
       )
-      .eq('shop_id', SHOP_ID)
+      .eq('shop_id', ctx.shopId)
       .gte('start_at', `${from}T00:00:00.000Z`)
       .lte('start_at', `${to}T23:59:59.999Z`)
       .order('start_at'),
@@ -121,6 +116,7 @@ export default async function AppointmentsPage({ searchParams }: AppointmentsPag
       </div>
 
       <AdminAppointmentsFilters
+        shopSlug={ctx.shopSlug}
         from={from}
         to={to}
         selectedStaffId={selectedStaffId}
@@ -132,6 +128,7 @@ export default async function AppointmentsPage({ searchParams }: AppointmentsPag
       />
 
       <AdminAppointmentsTable
+        shopId={ctx.shopId}
         appointments={appointments.map((item) => ({
           id: String(item.id),
           startAtLabel: new Date(String(item.start_at)).toLocaleString('es-UY', {

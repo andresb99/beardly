@@ -5,7 +5,9 @@ import { Card, CardBody } from '@heroui/card';
 import { HealthChip } from '@/components/admin/health-chip';
 import { KpiCard } from '@/components/admin/kpi-card';
 import { MetricBar } from '@/components/admin/metric-bar';
+import { requireAdmin } from '@/lib/auth';
 import { getStaffPerformanceDetail } from '@/lib/metrics';
+import { buildAdminHref } from '@/lib/workspace-routes';
 
 interface StaffPerformanceDetailPageProps {
   params: Promise<{ staffId: string }>;
@@ -13,6 +15,7 @@ interface StaffPerformanceDetailPageProps {
     range?: string;
     from?: string;
     to?: string;
+    shop?: string;
   }>;
 }
 
@@ -24,13 +27,11 @@ function formatHours(minutes: number) {
   return `${(minutes / 60).toFixed(1)} h`;
 }
 
-function buildBackHref(from: string, to: string) {
-  const search = new URLSearchParams({
+function buildBackHref(shopSlug: string, from: string, to: string) {
+  return buildAdminHref('/admin/metrics', shopSlug, {
     from,
     to,
   });
-
-  return `/admin/metrics?${search.toString()}`;
 }
 
 export default async function StaffPerformanceDetailPage({
@@ -38,7 +39,8 @@ export default async function StaffPerformanceDetailPage({
   searchParams,
 }: StaffPerformanceDetailPageProps) {
   const [{ staffId }, filters] = await Promise.all([params, searchParams]);
-  const detail = await getStaffPerformanceDetail(staffId, filters);
+  const ctx = await requireAdmin({ shopSlug: filters.shop });
+  const detail = await getStaffPerformanceDetail(staffId, filters, ctx.shopId);
 
   if (!detail) {
     notFound();
@@ -50,7 +52,10 @@ export default async function StaffPerformanceDetailPage({
     <section className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <Link href={buildBackHref(detail.dateRange.fromDate, detail.dateRange.toDate)} className="text-sm text-ink underline">
+          <Link
+            href={buildBackHref(ctx.shopSlug, detail.dateRange.fromDate, detail.dateRange.toDate)}
+            className="text-sm text-ink underline"
+          >
             Volver a metricas
           </Link>
           <h1 className="mt-2 font-[family-name:var(--font-heading)] text-3xl font-bold text-ink">

@@ -7,14 +7,21 @@ import { updateJobApplicationAction } from '@/app/admin/actions';
 
 interface ApplicantUpdateFormProps {
   applicationId: string;
+  shopId: string;
   status: string;
   notes: string;
 }
 
-export function ApplicantUpdateForm({ applicationId, status, notes }: ApplicantUpdateFormProps) {
+export function ApplicantUpdateForm({
+  applicationId,
+  shopId,
+  status,
+  notes,
+}: ApplicantUpdateFormProps) {
   return (
     <form action={updateJobApplicationAction} className="mt-4 space-y-2">
       <input type="hidden" name="application_id" value={applicationId} />
+      <input type="hidden" name="shop_id" value={shopId} />
       <Select
         name="status"
         aria-label="Estado de postulacion"

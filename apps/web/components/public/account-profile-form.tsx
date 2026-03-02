@@ -75,8 +75,7 @@ const editableInputClassNames = {
 const editButtonClassName =
   'inline-flex h-10 w-10 items-center justify-center rounded-full bg-transparent text-white/70 transition-colors md:hover:text-brass focus:outline-none focus-visible:text-brass';
 
-const editButtonActiveClassName =
-  'text-brass';
+const editButtonActiveClassName = 'text-brass';
 
 export function AccountProfileForm({
   initialFullName,
@@ -164,7 +163,7 @@ export function AccountProfileForm({
     const normalizedPhone = phone.trim();
     const normalizedAvatarUrl = avatarUrl.trim();
 
-    if (normalizedName && normalizedName.length < 2) {
+    if (normalizedName.length < 2) {
       setError('El nombre debe tener al menos 2 caracteres.');
       setMessage(null);
       return;
@@ -243,10 +242,8 @@ export function AccountProfileForm({
               fallback={initials}
               className="h-16 w-16 text-base font-semibold"
             />
-            <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/0 opacity-0 transition md:group-hover:bg-black/35 md:group-hover:opacity-100">
-              <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white/90 text-ink">
-                <Pencil className="h-3.5 w-3.5" />
-              </span>
+            <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/0 opacity-0 transition-[background-color,opacity] duration-150 md:group-hover:bg-black/35 md:group-hover:opacity-100">
+              <Pencil className="h-4 w-4 text-white/92" />
             </span>
           </button>
         </div>
@@ -267,6 +264,7 @@ export function AccountProfileForm({
               id="profile-full-name"
               label="Nombre"
               labelPlacement="inside"
+              isRequired
               value={fullName}
               onValueChange={setFullName}
               isDisabled={!isEditingName}

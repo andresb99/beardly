@@ -1,10 +1,18 @@
 import { formatCurrency } from '@navaja/shared';
 import Link from 'next/link';
 import { Card, CardBody } from '@heroui/card';
+import { requireAdmin } from '@/lib/auth';
 import { getDashboardMetrics } from '@/lib/metrics';
+import { buildAdminHref } from '@/lib/workspace-routes';
 
-export default async function AdminHomePage() {
-  const metrics = await getDashboardMetrics('today');
+interface AdminHomePageProps {
+  searchParams: Promise<{ shop?: string }>;
+}
+
+export default async function AdminHomePage({ searchParams }: AdminHomePageProps) {
+  const params = await searchParams;
+  const ctx = await requireAdmin({ shopSlug: params.shop });
+  const metrics = await getDashboardMetrics('today', ctx.shopId);
 
   return (
     <section className="space-y-6">
@@ -16,7 +24,7 @@ export default async function AdminHomePage() {
               Resumen administrativo
             </h1>
             <p className="mt-3 text-sm text-slate/80 dark:text-slate-300">
-              Resumen de hoy con una lectura mas clara y menos cajas pesadas.
+              Resumen de hoy de {ctx.shopName} con una lectura mas clara y menos cajas pesadas.
             </p>
           </div>
 
@@ -80,7 +88,7 @@ export default async function AdminHomePage() {
 
       <div className="grid gap-4 md:grid-cols-2">
         <Link
-          href="/admin/appointments"
+          href={buildAdminHref('/admin/appointments', ctx.shopSlug)}
           className="data-card rounded-2xl border-0 p-5 no-underline"
         >
           <h2 className="font-[family-name:var(--font-heading)] text-xl font-semibold text-ink">
@@ -90,7 +98,10 @@ export default async function AdminHomePage() {
             Filtra y actualiza estados de reservas de hoy y proximas.
           </p>
         </Link>
-        <Link href="/admin/metrics" className="data-card rounded-2xl border-0 p-5 no-underline">
+        <Link
+          href={buildAdminHref('/admin/metrics', ctx.shopSlug)}
+          className="data-card rounded-2xl border-0 p-5 no-underline"
+        >
           <h2 className="font-[family-name:var(--font-heading)] text-xl font-semibold text-ink">
             Metricas detalladas
           </h2>

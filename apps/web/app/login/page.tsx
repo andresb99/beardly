@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import { LoginForm } from '@/components/public/login-form';
 import { resolveSafeNextPath } from '@/lib/navigation';
-import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { isMockRuntime } from '@/lib/test-runtime';
 
 interface LoginPageProps {
   searchParams: Promise<{
@@ -23,7 +23,8 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   const nextPath = resolveSafeNextPath(params.next, '/cuenta');
   const initialMode = resolveInitialMode(params.mode);
 
-  if (initialMode !== 'reset') {
+  if (initialMode !== 'reset' && !isMockRuntime()) {
+    const { createSupabaseServerClient } = await import('@/lib/supabase/server');
     const supabase = await createSupabaseServerClient();
     const {
       data: { user },

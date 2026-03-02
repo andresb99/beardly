@@ -1,5 +1,6 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
+import { getRequestOrigin } from '@/lib/request-origin';
 
 type CookiePatch = { name: string; value: string; options?: CookieOptions };
 
@@ -22,7 +23,7 @@ export async function proxy(request: NextRequest) {
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || !supabaseAnonKey) {
-    return NextResponse.redirect(new URL('/login', request.url));
+    return NextResponse.redirect(new URL('/login', getRequestOrigin(request)));
   }
 
   const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
@@ -43,7 +44,7 @@ export async function proxy(request: NextRequest) {
   } = await supabase.auth.getSession();
 
   if (!session) {
-    const loginUrl = new URL('/login', request.url);
+    const loginUrl = new URL('/login', getRequestOrigin(request));
     loginUrl.searchParams.set('next', pathname);
     return NextResponse.redirect(loginUrl);
   }

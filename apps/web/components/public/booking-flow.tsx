@@ -216,7 +216,11 @@ export function BookingFlow({ shopId, services, staff, initialCustomerEmail }: B
           ))}
         </div>
 
-        {error ? <p className="status-banner error">{error}</p> : null}
+        {error ? (
+          <p className="status-banner error" role="alert" aria-live="assertive">
+            {error}
+          </p>
+        ) : null}
 
         <div className="grid gap-4 md:grid-cols-2">
           <div className={`surface-card spotlight-card ${step >= 1 ? '' : 'opacity-60'}`}>

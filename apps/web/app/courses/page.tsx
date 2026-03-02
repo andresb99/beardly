@@ -1,115 +1,152 @@
+import Link from 'next/link';
 import { formatCurrency } from '@navaja/shared';
-import { Button } from '@heroui/button';
-import { Card, CardBody } from '@heroui/card';
-import { SHOP_ID } from '@/lib/constants';
+import { PublicSectionEmptyState } from '@/components/public/public-section-empty-state';
+import { listMarketplaceShops } from '@/lib/shops';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 
-export default async function CoursesPage() {
-  const supabase = createSupabaseAdminClient();
+interface CourseRow {
+  id: string;
+  shop_id: string;
+  title: string;
+  description: string;
+  price_cents: number;
+  duration_hours: number;
+  level: string;
+}
 
+export default async function CoursesPage() {
+  const shops = await listMarketplaceShops();
+
+  if (!shops.length) {
+    return (
+      <PublicSectionEmptyState
+        eyebrow="Cursos"
+        title="Aqui deberia vivir el catalogo global de formacion"
+        description="En vez de redirigir a una barberia, esta ruta ahora lista todos los cursos activos del marketplace."
+      />
+    );
+  }
+
+  const supabase = createSupabaseAdminClient();
+  const shopIds = shops.map((shop) => shop.id);
   const { data: courses } = await supabase
     .from('courses')
-    .select('id, title, description, price_cents, duration_hours, level')
-    .eq('shop_id', SHOP_ID)
+    .select('id, shop_id, title, description, price_cents, duration_hours, level')
+    .in('shop_id', shopIds)
     .eq('is_active', true)
-    .order('title');
+    .order('created_at', { ascending: false });
+
+  const shopsById = new Map(shops.map((shop) => [shop.id, shop]));
+  const items = ((courses || []) as CourseRow[])
+    .map((course) => {
+      const shop = shopsById.get(String(course.shop_id));
+      if (!shop) {
+        return null;
+      }
+
+      return {
+        course,
+        shop,
+      };
+    })
+    .filter((item): item is { course: CourseRow; shop: (typeof shops)[number] } => item !== null);
 
   return (
     <section className="space-y-6">
       <div className="section-hero px-6 py-7 md:px-8 md:py-9">
-        <div className="relative z-10 grid gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-end">
+        <div className="relative z-10 grid gap-6 lg:grid-cols-[1.05fr_0.95fr] lg:items-end">
           <div>
-            <p className="hero-eyebrow">Academia Navaja</p>
+            <p className="hero-eyebrow">Academia marketplace</p>
             <h1 className="mt-3 font-[family-name:var(--font-heading)] text-3xl font-bold text-ink md:text-[2.35rem] dark:text-slate-100">
-              Cursos de barberia con una presentacion mas premium
+              Todos los cursos activos en un solo catalogo
             </h1>
             <p className="mt-3 max-w-2xl text-sm text-slate/80 dark:text-slate-300">
-              Encontraras formaciones activas, detalles de nivel y una inscripcion mas ordenada por
-              sesion.
+              Aqui comparas oferta educativa entre barberias y luego entras al detalle del tenant que publica el curso.
             </p>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-3">
             <div className="stat-tile">
               <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate/60 dark:text-slate-400">
-                Oferta
+                Cursos
               </p>
-              <p className="mt-2 text-2xl font-semibold text-ink dark:text-slate-100">
-                {(courses || []).length}
-              </p>
-              <p className="mt-1 text-xs text-slate/75 dark:text-slate-400">
-                Cursos visibles ahora.
-              </p>
+              <p className="mt-2 text-2xl font-semibold text-ink dark:text-slate-100">{items.length}</p>
             </div>
             <div className="stat-tile">
               <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate/60 dark:text-slate-400">
-                Formato
+                Barberias
               </p>
-              <p className="mt-2 text-lg font-semibold text-ink dark:text-slate-100">Sesiones</p>
-              <p className="mt-1 text-xs text-slate/75 dark:text-slate-400">
-                Cupos y ubicacion por fecha.
-              </p>
+              <p className="mt-2 text-2xl font-semibold text-ink dark:text-slate-100">{shops.length}</p>
             </div>
             <div className="stat-tile">
               <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate/60 dark:text-slate-400">
-                Flujo
+                Cobertura
               </p>
-              <p className="mt-2 text-lg font-semibold text-ink dark:text-slate-100">Directo</p>
-              <p className="mt-1 text-xs text-slate/75 dark:text-slate-400">
-                Del detalle a la reserva del cupo.
-              </p>
+              <p className="mt-2 text-sm font-semibold text-ink dark:text-slate-100">Catalogo global</p>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        {(courses || []).map((course) => (
-          <Card
-            key={String(course.id)}
-            className="soft-panel rounded-[1.8rem] border-0 shadow-none"
-          >
-            <CardBody className="space-y-4 p-5">
-              <div className="space-y-2">
+      {items.length === 0 ? (
+        <div className="soft-panel rounded-[1.8rem] p-6">
+          <p className="text-sm text-slate/80 dark:text-slate-300">
+            Todavia no hay cursos activos publicados.
+          </p>
+        </div>
+      ) : null}
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {items.map(({ course, shop }) => (
+          <article key={course.id} className="soft-panel rounded-[1.8rem] p-5">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate/60 dark:text-slate-400">
+              {shop.name}
+            </p>
+            <h2 className="mt-2 font-[family-name:var(--font-heading)] text-2xl font-semibold text-ink dark:text-slate-100">
+              {course.title}
+            </h2>
+            <p className="mt-3 line-clamp-3 text-sm text-slate/80 dark:text-slate-300">{course.description}</p>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              <div className="surface-card">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate/60 dark:text-slate-400">
-                  {String(course.level)}
+                  Nivel
                 </p>
-                <h2 className="font-[family-name:var(--font-heading)] text-2xl font-semibold text-ink dark:text-slate-100">
-                  {String(course.title)}
-                </h2>
-                <p className="line-clamp-3 text-sm text-slate/80 dark:text-slate-300">
-                  {String(course.description)}
+                <p className="mt-2 text-sm font-semibold text-ink dark:text-slate-100">{course.level}</p>
+              </div>
+              <div className="surface-card">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate/60 dark:text-slate-400">
+                  Duracion
+                </p>
+                <p className="mt-2 text-sm font-semibold text-ink dark:text-slate-100">
+                  {course.duration_hours}h
                 </p>
               </div>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="surface-card">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate/60 dark:text-slate-400">
-                    Duracion
-                  </p>
-                  <p className="mt-2 text-lg font-semibold text-ink dark:text-slate-100">
-                    {String(course.duration_hours)} horas
-                  </p>
-                </div>
-                <div className="surface-card">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate/60 dark:text-slate-400">
-                    Inversion
-                  </p>
-                  <p className="mt-2 text-lg font-semibold text-ink dark:text-slate-100">
-                    {formatCurrency(Number(course.price_cents || 0))}
-                  </p>
-                </div>
+              <div className="surface-card">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate/60 dark:text-slate-400">
+                  Inversion
+                </p>
+                <p className="mt-2 text-sm font-semibold text-ink dark:text-slate-100">
+                  {formatCurrency(course.price_cents)}
+                </p>
               </div>
+            </div>
 
-              <Button
-                as="a"
-                href={`/courses/${course.id}`}
-                className="action-primary w-fit px-5 text-sm font-semibold"
+            <div className="mt-4 flex flex-wrap gap-3">
+              <Link
+                href={`/shops/${shop.slug}/courses/${course.id}`}
+                className="action-primary rounded-2xl px-4 py-2 text-sm font-semibold"
               >
-                Ver detalle
-              </Button>
-            </CardBody>
-          </Card>
+                Ver curso
+              </Link>
+              <Link
+                href={`/shops/${shop.slug}/courses`}
+                className="action-secondary rounded-2xl px-4 py-2 text-sm font-semibold"
+              >
+                Ver academia
+              </Link>
+            </div>
+          </article>
         ))}
       </div>
     </section>

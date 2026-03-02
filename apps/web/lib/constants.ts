@@ -1,7 +1,4 @@
-import { env } from './env';
-
 export const APP_NAME = 'Beardly';
-export const SHOP_ID = env.NEXT_PUBLIC_SHOP_ID;
 
 export const METRIC_RANGES = {
   today: 'today',

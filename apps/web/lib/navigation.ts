@@ -13,20 +13,23 @@ export function resolveSafeNextPath(input: string | null | undefined, fallback =
     return fallback;
   }
 
-  try {
-    const parsed = new URL(input, 'https://navaja.local');
-    const resolved = `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  const queryIndex = input.indexOf('?');
+  const hashIndex = input.indexOf('#');
+  let pathnameEnd = input.length;
 
-    if (parsed.origin !== 'https://navaja.local') {
-      return fallback;
-    }
+  if (queryIndex >= 0) {
+    pathnameEnd = queryIndex;
+  }
 
-    if (!isAllowedPath(parsed.pathname)) {
-      return fallback;
-    }
+  if (hashIndex >= 0 && hashIndex < pathnameEnd) {
+    pathnameEnd = hashIndex;
+  }
 
-    return resolved;
-  } catch {
+  const pathname = input.slice(0, pathnameEnd);
+
+  if (!isAllowedPath(pathname)) {
     return fallback;
   }
+
+  return input;
 }

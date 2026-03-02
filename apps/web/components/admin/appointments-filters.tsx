@@ -10,6 +10,7 @@ interface StaffOption {
 }
 
 interface AdminAppointmentsFiltersProps {
+  shopSlug: string;
   from: string;
   to: string;
   selectedStaffId?: string | undefined;
@@ -18,6 +19,7 @@ interface AdminAppointmentsFiltersProps {
 }
 
 export function AdminAppointmentsFilters({
+  shopSlug,
   from,
   to,
   selectedStaffId,
@@ -39,6 +41,7 @@ export function AdminAppointmentsFilters({
       className="spotlight-card soft-panel grid gap-3 rounded-[1.8rem] border-0 p-4 md:grid-cols-5"
       method="get"
     >
+      <input type="hidden" name="shop" value={shopSlug} />
       <Input
         id="from"
         name="from"

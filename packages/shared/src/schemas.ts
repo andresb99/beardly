@@ -4,6 +4,10 @@ export const uuidSchema = z.string().uuid();
 export const isoDateTimeSchema = z.string().datetime({ offset: true });
 
 export const staffRoleSchema = z.enum(['admin', 'staff']);
+export const shopMembershipRoleSchema = z.enum(['owner', 'admin', 'staff']);
+export const shopStatusSchema = z.enum(['draft', 'setup_in_progress', 'active', 'suspended']);
+export const subscriptionPlanSchema = z.enum(['starter', 'pro', 'growth', 'enterprise']);
+export const subscriptionStatusSchema = z.enum(['trialing', 'active', 'past_due', 'cancelled']);
 export const appointmentStatusSchema = z.enum([
   'pending',
   'confirmed',
@@ -34,8 +38,56 @@ export const modelApplicationStatusSchema = z.enum([
 export const shopSchema = z.object({
   id: uuidSchema,
   name: z.string().min(2).max(120),
+  slug: z.string().min(3).max(120),
   timezone: z.string().min(3).max(100),
+  description: z.string().max(2000).nullable().optional(),
+  status: shopStatusSchema,
+  owner_user_id: uuidSchema.nullable().optional(),
+  phone: z.string().min(7).max(30).nullable().optional(),
+  is_verified: z.boolean(),
+  published_at: isoDateTimeSchema.nullable().optional(),
+  logo_url: z.string().url().nullable().optional(),
+  cover_image_url: z.string().url().nullable().optional(),
   created_at: isoDateTimeSchema,
+});
+
+export const shopMembershipSchema = z.object({
+  id: uuidSchema,
+  shop_id: uuidSchema,
+  user_id: uuidSchema,
+  role: shopMembershipRoleSchema,
+  membership_status: z.enum(['invited', 'active', 'disabled']),
+  created_at: isoDateTimeSchema,
+  updated_at: isoDateTimeSchema,
+});
+
+export const shopLocationSchema = z.object({
+  id: uuidSchema,
+  shop_id: uuidSchema,
+  label: z.string().max(160).nullable().optional(),
+  address_line_1: z.string().max(160).nullable().optional(),
+  address_line_2: z.string().max(160).nullable().optional(),
+  city: z.string().max(120).nullable().optional(),
+  region: z.string().max(120).nullable().optional(),
+  postal_code: z.string().max(40).nullable().optional(),
+  country_code: z.string().max(8).nullable().optional(),
+  latitude: z.number().min(-90).max(90).nullable().optional(),
+  longitude: z.number().min(-180).max(180).nullable().optional(),
+  is_public: z.boolean(),
+  created_at: isoDateTimeSchema,
+  updated_at: isoDateTimeSchema,
+});
+
+export const subscriptionSchema = z.object({
+  id: uuidSchema,
+  shop_id: uuidSchema,
+  plan: subscriptionPlanSchema,
+  status: subscriptionStatusSchema,
+  seats_included: z.number().int().positive(),
+  trial_ends_at: isoDateTimeSchema.nullable().optional(),
+  current_period_end: isoDateTimeSchema.nullable().optional(),
+  created_at: isoDateTimeSchema,
+  updated_at: isoDateTimeSchema,
 });
 
 export const staffSchema = z.object({
@@ -142,11 +194,22 @@ export const timeOffSchema = z.object({
 export const courseSchema = z.object({
   id: uuidSchema,
   shop_id: uuidSchema,
-  title: z.string().min(3).max(160),
-  description: z.string().min(10),
+  title: z
+    .string()
+    .trim()
+    .min(3, 'El titulo debe tener al menos 3 caracteres.')
+    .max(160, 'El titulo no puede superar los 160 caracteres.'),
+  description: z
+    .string()
+    .trim()
+    .min(6, 'La descripcion debe tener al menos 6 caracteres.'),
   price_cents: z.number().int().nonnegative(),
   duration_hours: z.number().int().positive(),
-  level: z.string().min(2).max(80),
+  level: z
+    .string()
+    .trim()
+    .min(2, 'Selecciona un nivel valido.')
+    .max(80, 'El nivel no puede superar los 80 caracteres.'),
   is_active: z.boolean(),
   image_url: z.string().url().nullable().optional(),
   created_at: isoDateTimeSchema.optional(),
@@ -199,6 +262,19 @@ export const modelSchema = z.object({
   photo_paths: z.array(z.string()).nullable().optional(),
   marketing_opt_in: z.boolean(),
   created_at: isoDateTimeSchema,
+});
+
+export const marketplaceModelSchema = z.object({
+  id: uuidSchema,
+  full_name: z.string().min(2).max(160),
+  phone: z.string().min(7).max(30),
+  email: z.string().email().nullable().optional(),
+  instagram: z.string().max(120).nullable().optional(),
+  attributes: z.record(z.any()).nullable().optional(),
+  photo_paths: z.array(z.string()).nullable().optional(),
+  marketing_opt_in: z.boolean(),
+  created_at: isoDateTimeSchema,
+  updated_at: isoDateTimeSchema,
 });
 
 export const modelRequirementsSchema = z.object({
@@ -281,12 +357,20 @@ export const workingHoursUpsertSchema = z
     id: uuidSchema.optional(),
     shop_id: uuidSchema,
     staff_id: uuidSchema,
-    day_of_week: z.number().int().min(0).max(6),
-    start_time: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/),
-    end_time: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/),
+    day_of_week: z
+      .number()
+      .int()
+      .min(0, 'Selecciona un dia valido.')
+      .max(6, 'Selecciona un dia valido.'),
+    start_time: z
+      .string()
+      .regex(/^([01]\d|2[0-3]):([0-5]\d)$/, 'Ingresa una hora de inicio valida.'),
+    end_time: z
+      .string()
+      .regex(/^([01]\d|2[0-3]):([0-5]\d)$/, 'Ingresa una hora de fin valida.'),
   })
   .refine((value) => value.start_time < value.end_time, {
-    message: 'start_time must be before end_time',
+    message: 'La hora de fin debe ser posterior a la hora de inicio.',
     path: ['end_time'],
   });
 
@@ -300,18 +384,29 @@ export const timeOffUpsertSchema = z
     reason: z.string().max(500).optional().nullable(),
   })
   .refine((value) => value.start_at < value.end_at, {
-    message: 'start_at must be before end_at',
+    message: 'La fecha de fin debe ser posterior al inicio.',
     path: ['end_at'],
   });
 
 export const courseUpsertSchema = z.object({
   id: uuidSchema.optional(),
   shop_id: uuidSchema,
-  title: z.string().min(3).max(160),
-  description: z.string().min(10),
+  title: z
+    .string()
+    .trim()
+    .min(3, 'El titulo debe tener al menos 3 caracteres.')
+    .max(160, 'El titulo no puede superar los 160 caracteres.'),
+  description: z
+    .string()
+    .trim()
+    .min(6, 'La descripcion debe tener al menos 6 caracteres.'),
   price_cents: z.number().int().nonnegative(),
   duration_hours: z.number().int().positive(),
-  level: z.string().min(2).max(80),
+  level: z
+    .string()
+    .trim()
+    .min(2, 'Selecciona un nivel valido.')
+    .max(80, 'El nivel no puede superar los 80 caracteres.'),
   is_active: z.boolean().default(true),
   image_url: z.string().url().optional().nullable(),
 });
@@ -351,7 +446,7 @@ export const jobApplicationUpdateSchema = z.object({
 export const modelPreferenceSchema = z.enum(['barba', 'pelo_largo', 'pelo_corto', 'rulos', 'coloracion']);
 
 export const modelRegistrationInputSchema = z.object({
-  shop_id: uuidSchema,
+  shop_id: uuidSchema.optional(),
   session_id: uuidSchema.optional(),
   full_name: z.string().min(2).max(160),
   phone: z.string().min(7).max(30),
@@ -399,6 +494,9 @@ export const waiverInputSchema = z.object({
 });
 
 export type Shop = z.infer<typeof shopSchema>;
+export type ShopMembership = z.infer<typeof shopMembershipSchema>;
+export type ShopLocation = z.infer<typeof shopLocationSchema>;
+export type Subscription = z.infer<typeof subscriptionSchema>;
 export type Staff = z.infer<typeof staffSchema>;
 export type Service = z.infer<typeof serviceSchema>;
 export type Customer = z.infer<typeof customerSchema>;
@@ -412,6 +510,7 @@ export type CourseSession = z.infer<typeof courseSessionSchema>;
 export type CourseEnrollment = z.infer<typeof courseEnrollmentSchema>;
 export type JobApplication = z.infer<typeof jobApplicationSchema>;
 export type Model = z.infer<typeof modelSchema>;
+export type MarketplaceModel = z.infer<typeof marketplaceModelSchema>;
 export type ModelRequirements = z.infer<typeof modelRequirementsSchema>;
 export type ModelApplication = z.infer<typeof modelApplicationSchema>;
 export type Waiver = z.infer<typeof waiverSchema>;
@@ -420,6 +519,10 @@ export type AvailabilityInput = z.infer<typeof availabilityInputSchema>;
 export type AppointmentStatus = z.infer<typeof appointmentStatusSchema>;
 export type AppointmentCancelledBy = z.infer<typeof appointmentCancelledBySchema>;
 export type StaffRole = z.infer<typeof staffRoleSchema>;
+export type ShopMembershipRole = z.infer<typeof shopMembershipRoleSchema>;
+export type ShopStatus = z.infer<typeof shopStatusSchema>;
+export type SubscriptionPlan = z.infer<typeof subscriptionPlanSchema>;
+export type SubscriptionStatus = z.infer<typeof subscriptionStatusSchema>;
 export type EnrollmentStatus = z.infer<typeof enrollmentStatusSchema>;
 export type JobApplicationStatus = z.infer<typeof jobApplicationStatusSchema>;
 export type ReviewStatus = z.infer<typeof reviewStatusSchema>;

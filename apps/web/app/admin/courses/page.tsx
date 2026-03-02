@@ -1,20 +1,25 @@
 import Link from 'next/link';
 import { formatCurrency } from '@navaja/shared';
-import { Button } from '@heroui/button';
 import { Card, CardBody } from '@heroui/card';
-import { Input, Textarea } from '@heroui/input';
+import { AdminCourseForm } from '@/components/admin/course-form';
 import { AdminCourseSessionForm } from '@/components/admin/course-session-form';
-import { SHOP_ID } from '@/lib/constants';
+import { requireAdmin } from '@/lib/auth';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
-import { upsertCourseAction } from '@/app/admin/actions';
+import { buildAdminHref } from '@/lib/workspace-routes';
 
-export default async function CoursesAdminPage() {
+interface CoursesAdminPageProps {
+  searchParams: Promise<{ shop?: string }>;
+}
+
+export default async function CoursesAdminPage({ searchParams }: CoursesAdminPageProps) {
+  const params = await searchParams;
+  const ctx = await requireAdmin({ shopSlug: params.shop });
   const supabase = await createSupabaseServerClient();
 
   const { data: courses } = await supabase
     .from('courses')
     .select('id, title, level, price_cents, duration_hours, is_active')
-    .eq('shop_id', SHOP_ID)
+    .eq('shop_id', ctx.shopId)
     .order('title');
 
   const courseIds = (courses || []).map((item) => item.id as string);
@@ -99,41 +104,7 @@ export default async function CoursesAdminPage() {
             <p className="text-sm text-slate/80 dark:text-slate-300">
               Agrega una capacitacion al catalogo publico.
             </p>
-            <form action={upsertCourseAction} className="mt-4 grid gap-3">
-              <input type="hidden" name="shop_id" value={SHOP_ID} />
-              <Input name="title" label="Titulo del curso" labelPlacement="inside" required />
-              <Textarea
-                name="description"
-                rows={4}
-                label="Descripcion"
-                labelPlacement="inside"
-                required
-              />
-              <div className="grid grid-cols-3 gap-3">
-                <Input
-                  name="price_cents"
-                  type="number"
-                  label="Precio en cents"
-                  labelPlacement="inside"
-                  required
-                />
-                <Input
-                  name="duration_hours"
-                  type="number"
-                  label="Horas"
-                  labelPlacement="inside"
-                  required
-                />
-                <Input name="level" label="Nivel" labelPlacement="inside" required />
-              </div>
-              <Input name="image_url" label="URL de imagen (opcional)" labelPlacement="inside" />
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" name="is_active" defaultChecked /> Activo
-              </label>
-              <Button type="submit" className="action-primary w-fit px-5 text-sm font-semibold">
-                Guardar curso
-              </Button>
-            </form>
+            <AdminCourseForm shopId={ctx.shopId} shopSlug={ctx.shopSlug} />
           </CardBody>
         </Card>
 
@@ -144,6 +115,8 @@ export default async function CoursesAdminPage() {
               Programa fechas y capacidad de cada curso.
             </p>
             <AdminCourseSessionForm
+              shopId={ctx.shopId}
+              shopSlug={ctx.shopSlug}
               courses={(courses || []).map((item) => ({
                 id: String(item.id),
                 title: String(item.title),
@@ -252,7 +225,7 @@ export default async function CoursesAdminPage() {
                             {String(session.capacity)} inscriptos
                           </p>
                           <Link
-                            href={`/admin/courses/sessions/${session.id}/modelos`}
+                            href={buildAdminHref(`/admin/courses/sessions/${session.id}/modelos`, ctx.shopSlug)}
                             className="inline-flex rounded-full border border-white/60 bg-white/46 px-3 py-1.5 no-underline text-[10px] font-semibold uppercase tracking-[0.16em] text-ink transition hover:bg-white/65 dark:border-transparent dark:bg-white/[0.04] dark:text-slate-100 dark:hover:bg-white/[0.06]"
                           >
                             Gestionar modelos

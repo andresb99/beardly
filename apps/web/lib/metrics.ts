@@ -1,7 +1,7 @@
 import { cache } from 'react';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
-import { env } from '@/lib/env';
-import { METRIC_RANGES, type MetricRangeKey, SHOP_ID } from '@/lib/constants';
+import { METRIC_RANGES, type MetricRangeKey } from '@/lib/constants';
+import { buildAdminHref } from '@/lib/workspace-routes';
 
 type RawSearchParam = string | string[] | undefined;
 
@@ -409,11 +409,16 @@ function mapSummaryRow(row: StaffPerformanceSummaryRow): StaffPerformanceMetric 
 }
 
 const loadStaffPerformanceSummary = cache(
-  async (startAtIso: string, endAtIso: string, staffIdsKey: string): Promise<StaffPerformanceMetric[]> => {
+  async (
+    shopId: string,
+    startAtIso: string,
+    endAtIso: string,
+    staffIdsKey: string,
+  ): Promise<StaffPerformanceMetric[]> => {
     const supabase = await createSupabaseServerClient();
     const staffIds = staffIdsKey ? staffIdsKey.split(',') : null;
     const { data, error } = await supabase.rpc('get_staff_performance_summary', {
-      p_shop_id: SHOP_ID,
+      p_shop_id: shopId,
       p_start: startAtIso,
       p_end: endAtIso,
       p_staff_ids: staffIds,
@@ -429,10 +434,15 @@ const loadStaffPerformanceSummary = cache(
 );
 
 const loadStaffRatingTrend = cache(
-  async (staffId: string, startAtIso: string, endAtIso: string): Promise<StaffRatingTrendPoint[]> => {
+  async (
+    shopId: string,
+    staffId: string,
+    startAtIso: string,
+    endAtIso: string,
+  ): Promise<StaffRatingTrendPoint[]> => {
     const supabase = await createSupabaseServerClient();
     const { data, error } = await supabase.rpc('get_staff_rating_trend', {
-      p_shop_id: SHOP_ID,
+      p_shop_id: shopId,
       p_staff_id: staffId,
       p_start: startAtIso,
       p_end: endAtIso,
@@ -519,19 +529,39 @@ function buildDashboardInsights(metrics: StaffPerformanceMetric[]): StaffPerform
   return insights.slice(0, 4);
 }
 
+function buildDashboardInsightsForShop(
+  metrics: StaffPerformanceMetric[],
+  shopSlug?: string,
+): StaffPerformanceInsight[] {
+  return buildDashboardInsights(metrics).map((item) => {
+    if (!item.href || !item.href.startsWith('/admin/performance/')) {
+      return item;
+    }
+
+    return {
+      ...item,
+      href: buildAdminHref(item.href, shopSlug),
+    };
+  });
+}
+
 export async function getStaffPerformanceDashboard(input?: {
   range?: RawSearchParam;
   from?: RawSearchParam;
   to?: RawSearchParam;
   compare?: RawSearchParam;
-}): Promise<StaffPerformanceDashboardData> {
+}, shopId?: string, shopSlug?: string): Promise<StaffPerformanceDashboardData> {
+  if (!shopId) {
+    throw new Error('No hay una barberia seleccionada para cargar metricas.');
+  }
+
   const dateRange = resolveMetricsRange({
     range: coerceSearchParam(input?.range),
     from: coerceSearchParam(input?.from),
     to: coerceSearchParam(input?.to),
   });
   const compareSelection = parseComparisonSelection(input?.compare);
-  const staff = await loadStaffPerformanceSummary(dateRange.startAtIso, dateRange.endAtIso, '');
+  const staff = await loadStaffPerformanceSummary(shopId, dateRange.startAtIso, dateRange.endAtIso, '');
 
   const compareMetrics =
     compareSelection.length >= 2
@@ -580,14 +610,19 @@ export async function getStaffPerformanceDashboard(input?: {
     staff,
     compareSelection,
     compareMetrics,
-    insights: buildDashboardInsights(staff),
+    insights: buildDashboardInsightsForShop(staff, shopSlug),
   };
 }
 
 export async function getStaffPerformanceDetail(
   staffId: string,
   input?: { range?: RawSearchParam; from?: RawSearchParam; to?: RawSearchParam },
+  shopId?: string,
 ): Promise<StaffPerformanceDetailData | null> {
+  if (!shopId) {
+    throw new Error('No hay una barberia seleccionada para cargar metricas.');
+  }
+
   const dateRange = resolveMetricsRange({
     range: coerceSearchParam(input?.range),
     from: coerceSearchParam(input?.from),
@@ -595,8 +630,8 @@ export async function getStaffPerformanceDetail(
   });
 
   const [metrics, ratingTrend] = await Promise.all([
-    loadStaffPerformanceSummary(dateRange.startAtIso, dateRange.endAtIso, staffId),
-    loadStaffRatingTrend(staffId, dateRange.startAtIso, dateRange.endAtIso),
+    loadStaffPerformanceSummary(shopId, dateRange.startAtIso, dateRange.endAtIso, staffId),
+    loadStaffRatingTrend(shopId, staffId, dateRange.startAtIso, dateRange.endAtIso),
   ]);
 
   const metric = metrics[0];
@@ -608,7 +643,7 @@ export async function getStaffPerformanceDetail(
   const { data: reviews, error } = await supabase
     .from('appointment_reviews')
     .select('id, rating, comment, submitted_at, customers(name)')
-    .eq('shop_id', SHOP_ID)
+    .eq('shop_id', shopId)
     .eq('staff_id', staffId)
     .eq('status', 'published')
     .gte('submitted_at', dateRange.startAtIso)
@@ -659,7 +694,10 @@ export async function getStaffPerformanceDetail(
   };
 }
 
-export async function getDashboardMetrics(range: MetricRangeKey): Promise<DashboardMetrics> {
+export async function getDashboardMetrics(
+  range: MetricRangeKey,
+  shopId: string,
+): Promise<DashboardMetrics> {
   const dateRange = resolveMetricsRange({ range });
   const supabase = await createSupabaseServerClient();
 
@@ -667,17 +705,17 @@ export async function getDashboardMetrics(range: MetricRangeKey): Promise<Dashbo
     supabase
       .from('appointments')
       .select('status, price_cents, start_at, end_at, services(name), staff(name)')
-      .eq('shop_id', env.NEXT_PUBLIC_SHOP_ID)
+      .eq('shop_id', shopId)
       .gte('start_at', dateRange.startAtIso)
       .lt('start_at', dateRange.endAtIso),
     supabase
       .from('working_hours')
       .select('staff_id, day_of_week, start_time, end_time')
-      .eq('shop_id', env.NEXT_PUBLIC_SHOP_ID),
+      .eq('shop_id', shopId),
     supabase
       .from('time_off')
       .select('staff_id, start_at, end_at')
-      .eq('shop_id', env.NEXT_PUBLIC_SHOP_ID)
+      .eq('shop_id', shopId)
       .lt('start_at', dateRange.endAtIso)
       .gt('end_at', dateRange.startAtIso),
   ]);

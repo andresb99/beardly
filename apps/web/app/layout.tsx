@@ -1,6 +1,8 @@
+import { Suspense } from 'react';
 import type { Metadata } from 'next';
 import { Plus_Jakarta_Sans, Sora } from 'next/font/google';
 import { navajaTheme } from '@navaja/shared';
+import 'maplibre-gl/dist/maplibre-gl.css';
 import './globals.css';
 import { APP_NAME } from '@/lib/constants';
 import { SiteHeader } from '@/components/public/site-header';
@@ -50,6 +52,14 @@ const rootThemeVars = {
   '--focus-dark': navajaTheme.rgb.focusDark,
 } as React.CSSProperties;
 
+function SiteHeaderFallback() {
+  return (
+    <div className="px-0 pt-3" aria-hidden="true">
+      <div className="glass-nav mx-auto h-[72px] w-[calc(100%-1rem)] max-w-[84rem] px-3 sm:px-4" />
+    </div>
+  );
+}
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html
@@ -64,7 +74,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-screen bg-[#f6f8ff] text-slate-900 antialiased font-[family-name:var(--font-body)] dark:bg-[#060012] dark:text-slate-100">
         <HeroUiProvider>
           <div className="relative min-h-screen">
-            <SiteHeader />
+            <Suspense fallback={<SiteHeaderFallback />}>
+              <SiteHeader />
+            </Suspense>
 
             <main className="main-shell page-enter">{children}</main>
           </div>

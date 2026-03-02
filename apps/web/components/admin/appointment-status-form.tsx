@@ -8,11 +8,13 @@ import { markAppointmentCompletedAction, updateAppointmentStatusAction } from '@
 interface AdminAppointmentStatusFormProps {
   appointmentId: string;
   status: string;
+  shopId: string;
 }
 
 export function AdminAppointmentStatusForm({
   appointmentId,
   status,
+  shopId,
 }: AdminAppointmentStatusFormProps) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -28,7 +30,7 @@ export function AdminAppointmentStatusForm({
         setError(null);
 
         if (nextStatus === 'done') {
-          const result = await markAppointmentCompletedAction({ appointmentId });
+          const result = await markAppointmentCompletedAction({ appointmentId, shopId });
           setReviewLink(result.reviewLink);
           return;
         }
@@ -47,6 +49,7 @@ export function AdminAppointmentStatusForm({
     <form onSubmit={handleSubmit} className="space-y-2">
       <div className="flex flex-wrap items-stretch gap-2">
         <input type="hidden" name="appointment_id" value={appointmentId} />
+        <input type="hidden" name="shop_id" value={shopId} />
         <Select
           name="status"
           aria-label="Actualizar estado"

@@ -7,12 +7,18 @@ import { updateOwnAppointmentStatusAction } from '@/app/admin/actions';
 interface StaffAppointmentStatusFormProps {
   appointmentId: string;
   status: string;
+  shopId: string;
 }
 
-export function StaffAppointmentStatusForm({ appointmentId, status }: StaffAppointmentStatusFormProps) {
+export function StaffAppointmentStatusForm({
+  appointmentId,
+  status,
+  shopId,
+}: StaffAppointmentStatusFormProps) {
   return (
     <form action={updateOwnAppointmentStatusAction} className="mt-3 flex flex-wrap items-center gap-2">
       <input type="hidden" name="appointment_id" value={appointmentId} />
+      <input type="hidden" name="shop_id" value={shopId} />
       <Select
         name="status"
         aria-label="Estado de la cita"

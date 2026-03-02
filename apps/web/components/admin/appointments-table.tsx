@@ -16,6 +16,7 @@ interface AppointmentRow {
 }
 
 interface AdminAppointmentsTableProps {
+  shopId: string;
   appointments: AppointmentRow[];
 }
 
@@ -35,7 +36,7 @@ const statusLabel: Record<string, string> = {
   done: 'Realizada',
 };
 
-export function AdminAppointmentsTable({ appointments }: AdminAppointmentsTableProps) {
+export function AdminAppointmentsTable({ shopId, appointments }: AdminAppointmentsTableProps) {
   return (
     <div className="soft-panel overflow-auto rounded-[1.8rem] border-0 p-2">
       <Table
@@ -78,7 +79,11 @@ export function AdminAppointmentsTable({ appointments }: AdminAppointmentsTableP
               </TableCell>
               <TableCell>{item.priceLabel}</TableCell>
               <TableCell>
-                <AdminAppointmentStatusForm appointmentId={item.id} status={item.status} />
+                <AdminAppointmentStatusForm
+                  appointmentId={item.id}
+                  status={item.status}
+                  shopId={shopId}
+                />
               </TableCell>
             </TableRow>
           ))}

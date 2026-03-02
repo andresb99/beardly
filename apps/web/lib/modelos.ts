@@ -1,5 +1,7 @@
+import 'server-only';
+
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
-import { SHOP_ID } from '@/lib/constants';
+import { getDefaultMarketplaceShop } from '@/lib/shops';
 
 export interface OpenModelCall {
   session_id: string;
@@ -10,6 +12,12 @@ export interface OpenModelCall {
   compensation_value_cents: number | null;
   notes_public: string | null;
   models_needed: number;
+}
+
+export interface MarketplaceOpenModelCall extends OpenModelCall {
+  shop_id: string;
+  shop_name: string;
+  shop_slug: string;
 }
 
 export function getModelsNeededFromRequirements(input: unknown): number {
@@ -24,7 +32,7 @@ export function getModelsNeededFromRequirements(input: unknown): number {
   return Math.trunc(parsed);
 }
 
-export async function getOpenModelCalls(shopId = SHOP_ID): Promise<OpenModelCall[]> {
+export async function listMarketplaceOpenModelCalls(): Promise<MarketplaceOpenModelCall[]> {
   const supabase = createSupabaseAdminClient();
 
   const { data: requirementsRows } = await supabase
@@ -52,11 +60,22 @@ export async function getOpenModelCalls(shopId = SHOP_ID): Promise<OpenModelCall
     .from('courses')
     .select('id, title, shop_id, is_active')
     .in('id', courseIds)
-    .eq('shop_id', shopId)
     .eq('is_active', true);
+
+  if (!courseRows?.length) {
+    return [];
+  }
+
+  const shopIds = [...new Set(courseRows.map((row) => String(row.shop_id)))];
+  const { data: shopRows } = await supabase
+    .from('shops')
+    .select('id, name, slug, status')
+    .in('id', shopIds)
+    .eq('status', 'active');
 
   const sessionsById = new Map(sessionRows.map((row) => [String(row.id), row]));
   const coursesById = new Map(courseRows?.map((row) => [String(row.id), row]) || []);
+  const shopsById = new Map((shopRows || []).map((row) => [String(row.id), row]));
 
   return requirementsRows
     .map((req) => {
@@ -70,8 +89,16 @@ export async function getOpenModelCalls(shopId = SHOP_ID): Promise<OpenModelCall
         return null;
       }
 
+      const shop = shopsById.get(String(course.shop_id));
+      if (!shop) {
+        return null;
+      }
+
       return {
         session_id: String(req.session_id),
+        shop_id: String(shop.id),
+        shop_name: String(shop.name),
+        shop_slug: String(shop.slug),
         course_title: String(course.title),
         start_at: String(session.start_at),
         location: String(session.location),
@@ -80,8 +107,35 @@ export async function getOpenModelCalls(shopId = SHOP_ID): Promise<OpenModelCall
           req.compensation_value_cents === null ? null : Number(req.compensation_value_cents || 0),
         notes_public: req.notes_public ? String(req.notes_public) : null,
         models_needed: getModelsNeededFromRequirements(req.requirements),
-      } satisfies OpenModelCall;
+      } satisfies MarketplaceOpenModelCall;
     })
-    .filter((item): item is OpenModelCall => item !== null)
+    .filter((item): item is MarketplaceOpenModelCall => item !== null)
     .sort((a, b) => (a.start_at < b.start_at ? -1 : 1));
+}
+
+export async function getOpenModelCalls(shopId?: string): Promise<OpenModelCall[]> {
+  let resolvedShopId = shopId;
+
+  if (!resolvedShopId) {
+    const defaultShop = await getDefaultMarketplaceShop();
+    resolvedShopId = defaultShop?.id;
+  }
+
+  if (!resolvedShopId) {
+    return [];
+  }
+
+  const calls = await listMarketplaceOpenModelCalls();
+  return calls
+    .filter((call) => call.shop_id === resolvedShopId)
+    .map((call) => ({
+      session_id: call.session_id,
+      course_title: call.course_title,
+      start_at: call.start_at,
+      location: call.location,
+      compensation_type: call.compensation_type,
+      compensation_value_cents: call.compensation_value_cents,
+      notes_public: call.notes_public,
+      models_needed: call.models_needed,
+    }));
 }

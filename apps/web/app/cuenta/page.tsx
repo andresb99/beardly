@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import { Button } from '@heroui/button';
 import { Card, CardBody } from '@heroui/card';
 import { Chip } from '@heroui/chip';
 import { AccountProfileForm } from '@/components/public/account-profile-form';
@@ -27,6 +26,19 @@ export default async function CuentaPage() {
   const ctx = await requireAuthenticated('/cuenta');
   const supabase = await createSupabaseServerClient();
   const admin = createSupabaseAdminClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const metadata = (user?.user_metadata as Record<string, unknown> | undefined) ?? undefined;
+  const metadataFullName =
+    (typeof metadata?.full_name === 'string' && metadata.full_name.trim()) ||
+    (typeof metadata?.name === 'string' && metadata.name.trim()) ||
+    null;
+  const metadataAvatarUrl =
+    (typeof metadata?.avatar_url === 'string' && metadata.avatar_url.trim()) ||
+    (typeof metadata?.picture === 'string' && metadata.picture.trim()) ||
+    null;
 
   const { data: profile } = await supabase
     .from('user_profiles')
@@ -34,15 +46,34 @@ export default async function CuentaPage() {
     .eq('auth_user_id', ctx.userId as string)
     .maybeSingle();
 
-  let resolvedProfile = profile;
-  if (!resolvedProfile && ctx.userId) {
+  const savedFullName =
+    (typeof profile?.full_name === 'string' && profile.full_name.trim()) || null;
+  const savedPhone = (typeof profile?.phone === 'string' && profile.phone.trim()) || null;
+  const savedAvatarUrl =
+    (typeof profile?.avatar_url === 'string' && profile.avatar_url.trim()) || null;
+
+  let resolvedProfile = {
+    full_name: savedFullName || metadataFullName,
+    phone: savedPhone,
+    avatar_url: savedAvatarUrl || metadataAvatarUrl,
+  };
+
+  const shouldSyncProfile =
+    Boolean(ctx.userId) &&
+    (!profile || (!savedFullName && metadataFullName) || (!savedAvatarUrl && metadataAvatarUrl));
+
+  if (shouldSyncProfile && ctx.userId) {
     await admin
       .from('user_profiles')
       .upsert(
-        { auth_user_id: ctx.userId, full_name: null, phone: null, avatar_url: null },
+        {
+          auth_user_id: ctx.userId,
+          full_name: resolvedProfile.full_name,
+          phone: resolvedProfile.phone,
+          avatar_url: resolvedProfile.avatar_url,
+        },
         { onConflict: 'auth_user_id' },
       );
-    resolvedProfile = { full_name: null, phone: null, avatar_url: null };
   }
 
   const appointments =
@@ -54,51 +85,6 @@ export default async function CuentaPage() {
 
   return (
     <section className="space-y-6">
-      <Card className="soft-panel rounded-[1.9rem] border-0 shadow-none">
-        <CardBody className="p-5">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h3 className="text-xl font-semibold text-ink dark:text-slate-100">Mi cuenta</h3>
-              <p className="text-sm text-slate/80 dark:text-slate-300">
-                Sesion activa y accesos segun tu rol.
-              </p>
-            </div>
-            {ctx.role !== 'guest' ? (
-              <Chip size="sm" radius="full" variant="flat" color="default">
-                {roleLabel[ctx.role]}
-              </Chip>
-            ) : null}
-          </div>
-
-          <dl className="mt-4 grid gap-2 text-sm">
-            <div className="surface-card">
-              <dt className="font-medium text-slate/80">Email</dt>
-              <dd className="mt-1">{ctx.email || 'No disponible'}</dd>
-            </div>
-            <div className="surface-card">
-              <dt className="font-medium text-slate/80">Nombre</dt>
-              <dd className="mt-1">{String(resolvedProfile?.full_name || 'No configurado')}</dd>
-            </div>
-            <div className="surface-card">
-              <dt className="font-medium text-slate/80">Telefono</dt>
-              <dd className="mt-1">{String(resolvedProfile?.phone || 'No configurado')}</dd>
-            </div>
-          </dl>
-
-          <div className="mt-4 flex flex-wrap gap-2">
-            <Button
-              as="a"
-              href="/book"
-              variant="flat"
-              color="default"
-              className="action-secondary px-5 text-sm font-semibold"
-            >
-              Agendar cita
-            </Button>
-          </div>
-        </CardBody>
-      </Card>
-
       <Card className="soft-panel rounded-[1.9rem] border-0 shadow-none">
         <CardBody className="space-y-4 p-5">
           <div>

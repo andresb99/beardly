@@ -1,9 +1,9 @@
 'use client';
 
 import NextLink from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState, type Key } from 'react';
-import { Moon, Sun } from 'lucide-react';
+import { ChevronRight, Moon, Store, Sun } from 'lucide-react';
 import {
   Avatar,
   Button,
@@ -11,7 +11,6 @@ import {
   DropdownItem,
   DropdownMenu,
   DropdownTrigger,
-  Link,
   Navbar,
   NavbarBrand,
   NavbarContent,
@@ -22,11 +21,22 @@ import {
 } from '@heroui/react';
 import { HeaderBrand } from '@/components/public/header-brand';
 import { cn } from '@/lib/cn';
-import { SHOP_ID } from '@/lib/constants';
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
+import { buildAdminHref, buildStaffHref } from '@/lib/workspace-routes';
 
 type NavRole = 'guest' | 'user' | 'staff' | 'admin';
 type ThemeMode = 'light' | 'dark';
+type NavigationContext = 'public' | 'staff' | 'admin';
+type HeaderLink = {
+  href: string;
+  label: string;
+  key: string;
+};
+type AccessibleWorkspaceMeta = {
+  id: string;
+  slug: string;
+  name: string;
+};
 
 const roleLabel: Record<Exclude<NavRole, 'guest'>, string> = {
   user: 'Usuario',
@@ -34,12 +44,12 @@ const roleLabel: Record<Exclude<NavRole, 'guest'>, string> = {
   admin: 'Admin',
 };
 
-const headerLinks = [
-  { href: '/', label: 'Inicio' },
-  { href: '/book', label: 'Agendar' },
-  { href: '/courses', label: 'Cursos' },
-  { href: '/modelos', label: 'Modelos' },
-  { href: '/jobs', label: 'Empleo' },
+const publicHeaderItems = [
+  { segment: '', label: 'Inicio' },
+  { segment: 'book', label: 'Agendar' },
+  { segment: 'courses', label: 'Cursos' },
+  { segment: 'modelos', label: 'Modelos' },
+  { segment: 'jobs', label: 'Empleo' },
 ] as const;
 
 const adminHeaderLinks = [
@@ -62,6 +72,9 @@ const staffHeaderLinks = [
 const actionButtonClassName =
   'h-10 rounded-2xl border border-white/75 bg-white/58 px-4 text-xs font-semibold text-ink no-underline shadow-[0_16px_24px_-20px_rgba(15,23,42,0.24)] transition-[background-color,transform,box-shadow,color,border-color] duration-150 data-[hover=true]:border-white/90 data-[hover=true]:bg-white/84 data-[pressed=true]:scale-[0.98] data-[pressed=true]:bg-white/92 data-[focus-visible=true]:ring-2 data-[focus-visible=true]:ring-sky-400/55 data-[focus-visible=true]:ring-offset-1 data-[focus-visible=true]:ring-offset-transparent dark:border-white/10 dark:bg-white/[0.05] dark:text-slate-100 dark:data-[hover=true]:bg-white/[0.08] dark:data-[pressed=true]:bg-white/[0.09]';
 
+const workspaceSwitcherClassName =
+  'group hidden lg:flex items-center gap-3 rounded-2xl border border-white/70 bg-white/56 px-3 py-2 text-ink no-underline shadow-[0_16px_24px_-20px_rgba(15,23,42,0.24)] transition-[background-color,border-color,transform,box-shadow] duration-150 hover:border-white/90 hover:bg-white/82 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/55 focus-visible:ring-offset-1 focus-visible:ring-offset-transparent dark:border-white/10 dark:bg-white/[0.05] dark:text-slate-100 dark:hover:bg-white/[0.08]';
+
 function getAvatarInitials(name: string | null, email: string | null) {
   const source = (name || email || '').trim();
   if (!source) {
@@ -80,19 +93,69 @@ function getAvatarInitials(name: string | null, email: string | null) {
 }
 
 function isActivePath(pathname: string, href: string): boolean {
-  if (href === '/') {
+  const resolvedHref = new URL(href, 'http://localhost');
+  const targetPathname = resolvedHref.pathname;
+
+  if (targetPathname === '/') {
     return pathname === '/';
   }
-  return pathname === href || pathname.startsWith(`${href}/`);
+  return pathname === targetPathname || pathname.startsWith(`${targetPathname}/`);
+}
+
+function getCurrentShopSlug(pathname: string): string | null {
+  const segments = pathname.split('/').filter(Boolean);
+
+  if (segments[0] !== 'shops' || !segments[1]) {
+    return null;
+  }
+
+  return segments[1];
+}
+
+function buildPublicHeaderHref(segment: string, shopSlug: string | null) {
+  if (!shopSlug) {
+    if (!segment) {
+      return '/shops';
+    }
+
+    return `/${segment}`;
+  }
+
+  const basePath = `/shops/${shopSlug}`;
+  if (!segment) {
+    return basePath;
+  }
+
+  return `${basePath}/${segment}`;
+}
+
+function getHomeHref(role: NavRole, shopSlug: string | null) {
+  if (role === 'admin') {
+    return '/admin';
+  }
+
+  if (role === 'staff') {
+    return '/staff';
+  }
+
+  return buildPublicHeaderHref('', shopSlug);
 }
 
 export function SiteHeader() {
   const pathname = usePathname();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const currentShopSlug = useMemo(() => getCurrentShopSlug(pathname), [pathname]);
+  const activeWorkspaceSlug = useMemo(
+    () => searchParams.get('shop')?.trim() || null,
+    [searchParams],
+  );
   const [role, setRole] = useState<NavRole>('guest');
   const [profileName, setProfileName] = useState<string | null>(null);
   const [profileAvatarUrl, setProfileAvatarUrl] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [hasWorkspaceAccess, setHasWorkspaceAccess] = useState(false);
+  const [workspaceDirectory, setWorkspaceDirectory] = useState<AccessibleWorkspaceMeta[]>([]);
   const [theme, setTheme] = useState<ThemeMode>('light');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -105,17 +168,63 @@ export function SiteHeader() {
     () => (profileAvatarUrl ? { src: profileAvatarUrl } : {}),
     [profileAvatarUrl],
   );
-  const activeHeaderLinks = useMemo(() => {
-    if (role === 'admin') {
-      return adminHeaderLinks;
+  const navigationContext = useMemo<NavigationContext>(() => {
+    if (pathname === '/admin' || pathname.startsWith('/admin/')) {
+      return 'admin';
     }
 
-    if (role === 'staff') {
-      return staffHeaderLinks;
+    if (pathname === '/staff' || pathname.startsWith('/staff/')) {
+      return 'staff';
     }
 
-    return headerLinks;
-  }, [role]);
+    return 'public';
+  }, [pathname]);
+  const activeHeaderLinks = useMemo<HeaderLink[]>(() => {
+    if (navigationContext === 'admin') {
+      return adminHeaderLinks.map((item) => ({
+        href: buildAdminHref(item.href, activeWorkspaceSlug),
+        label: item.label,
+        key: `${item.href}:${item.label}`,
+      }));
+    }
+
+    if (navigationContext === 'staff') {
+      return staffHeaderLinks.map((item) => ({
+        href: buildStaffHref(item.href, activeWorkspaceSlug),
+        label: item.label,
+        key: `${item.href}:${item.label}`,
+      }));
+    }
+
+    return publicHeaderItems.map((item) => ({
+      href: buildPublicHeaderHref(item.segment, currentShopSlug),
+      label: item.label,
+      key: `${item.segment || 'home'}:${item.label}`,
+    }));
+  }, [activeWorkspaceSlug, currentShopSlug, navigationContext]);
+  const homeHref = useMemo(
+    () =>
+      getHomeHref(
+        navigationContext === 'admin'
+          ? 'admin'
+          : navigationContext === 'staff'
+            ? 'staff'
+            : 'guest',
+        currentShopSlug,
+      ),
+    [currentShopSlug, navigationContext],
+  );
+  const contextualHomeHref = useMemo(() => {
+    if (navigationContext === 'admin') {
+      return buildAdminHref('/admin', activeWorkspaceSlug);
+    }
+
+    if (navigationContext === 'staff') {
+      return buildStaffHref('/staff', activeWorkspaceSlug);
+    }
+
+    return homeHref;
+  }, [activeWorkspaceSlug, homeHref, navigationContext]);
   const activeHeaderHref = useMemo(() => {
     let bestMatch: string | null = null;
 
@@ -131,6 +240,18 @@ export function SiteHeader() {
 
     return bestMatch;
   }, [activeHeaderLinks, pathname]);
+  const activeWorkspaceName = useMemo(() => {
+    const normalizedSlug = activeWorkspaceSlug?.trim().toLowerCase();
+
+    if (!normalizedSlug) {
+      return null;
+    }
+
+    return (
+      workspaceDirectory.find((workspace) => workspace.slug.toLowerCase() === normalizedSlug)?.name || null
+    );
+  }, [activeWorkspaceSlug, workspaceDirectory]);
+  const activeWorkspaceLabel = activeWorkspaceName || activeWorkspaceSlug;
 
   const applyTheme = useCallback((nextTheme: ThemeMode) => {
     document.documentElement.classList.toggle('dark', nextTheme === 'dark');
@@ -152,20 +273,27 @@ export function SiteHeader() {
       setProfileName(null);
       setProfileAvatarUrl(null);
       setUserEmail(null);
+      setHasWorkspaceAccess(false);
+      setWorkspaceDirectory([]);
       setLoading(false);
       return;
     }
 
     setUserEmail(user.email ?? null);
 
-    const [{ data: staffRow }, { data: profileRow }] = await Promise.all([
+    const [{ data: membershipRows }, { data: staffRows }, { data: profileRow }] = await Promise.all([
+      supabase
+        .from('shop_memberships')
+        .select('role, shop_id')
+        .eq('user_id', user.id)
+        .eq('membership_status', 'active')
+        .limit(5),
       supabase
         .from('staff')
-        .select('role')
-        .eq('shop_id', SHOP_ID)
+        .select('role, shop_id')
         .eq('auth_user_id', user.id)
         .eq('is_active', true)
-        .maybeSingle(),
+        .limit(5),
       supabase
         .from('user_profiles')
         .select('full_name, avatar_url')
@@ -173,18 +301,52 @@ export function SiteHeader() {
         .maybeSingle(),
     ]);
 
-    if (staffRow?.role === 'admin') {
+    const membershipRoles = (membershipRows || []).map((item) => String(item.role));
+    const staffRoles = (staffRows || []).map((item) => String(item.role));
+    const accessibleShopIds = Array.from(
+      new Set(
+        [...(membershipRows || []), ...(staffRows || [])]
+          .map((item) => (item?.shop_id ? String(item.shop_id) : ''))
+          .filter(Boolean),
+      ),
+    );
+    const { data: shopRows } = accessibleShopIds.length
+      ? await supabase.from('shops').select('id, slug, name').in('id', accessibleShopIds)
+      : { data: [] as { id: string; slug: string; name: string }[] };
+    const hasAdminRole =
+      membershipRoles.includes('owner') ||
+      membershipRoles.includes('admin') ||
+      staffRoles.includes('admin');
+    const hasStaffRole = membershipRoles.includes('staff') || staffRoles.includes('staff');
+    setHasWorkspaceAccess(accessibleShopIds.length > 0);
+    setWorkspaceDirectory(
+      (shopRows || []).map((row) => ({
+        id: String(row.id),
+        slug: String(row.slug),
+        name: String(row.name),
+      })),
+    );
+
+    if (hasAdminRole) {
       setRole('admin');
-    } else if (staffRow?.role === 'staff') {
+    } else if (hasStaffRole) {
       setRole('staff');
     } else {
       setRole('user');
     }
 
+    const metadata = (user.user_metadata as Record<string, unknown> | undefined) ?? undefined;
     const metadataName =
-      typeof user.user_metadata?.full_name === 'string' ? user.user_metadata.full_name : null;
+      (typeof metadata?.full_name === 'string' && metadata.full_name.trim()) ||
+      (typeof metadata?.name === 'string' && metadata.name.trim()) ||
+      null;
+    const metadataAvatarUrl =
+      (typeof metadata?.avatar_url === 'string' && metadata.avatar_url.trim()) ||
+      (typeof metadata?.picture === 'string' && metadata.picture.trim()) ||
+      null;
+
     setProfileName((profileRow?.full_name as string | null) || metadataName || null);
-    setProfileAvatarUrl((profileRow?.avatar_url as string | null) || null);
+    setProfileAvatarUrl((profileRow?.avatar_url as string | null) || metadataAvatarUrl || null);
     setLoading(false);
   }, [supabase]);
 
@@ -252,8 +414,10 @@ export function SiteHeader() {
     setProfileName(null);
     setProfileAvatarUrl(null);
     setUserEmail(null);
+    setHasWorkspaceAccess(false);
+    setWorkspaceDirectory([]);
     setIsMenuOpen(false);
-    router.replace('/');
+    router.replace('/shops');
     router.refresh();
   }, [router, supabase]);
 
@@ -264,6 +428,12 @@ export function SiteHeader() {
       if (action === 'account') {
         setIsMenuOpen(false);
         router.push('/cuenta');
+        return;
+      }
+
+      if (action === 'workspaces') {
+        setIsMenuOpen(false);
+        router.push('/mis-barberias');
         return;
       }
 
@@ -289,7 +459,7 @@ export function SiteHeader() {
     >
       <NavbarContent justify="start">
         <NavbarBrand className="h-full items-center py-0 md:w-[14rem]">
-          <NextLink href="/" className="flex h-full items-center no-underline md:w-full">
+          <NextLink href={contextualHomeHref} className="flex h-full items-center no-underline md:w-full">
             <HeaderBrand />
           </NextLink>
         </NavbarBrand>
@@ -299,24 +469,22 @@ export function SiteHeader() {
         {activeHeaderLinks.map((item) => {
           const isActive = item.href === activeHeaderHref;
           return (
-            <NavbarItem key={item.href} isActive={isActive}>
-              <Link
-                as={NextLink}
+            <NavbarItem key={item.key} isActive={isActive}>
+              <NextLink
                 href={item.href}
-                color="foreground"
                 aria-current={isActive ? 'page' : undefined}
                 className="nav-link-pill no-underline"
                 data-active={String(isActive)}
               >
                 {item.label}
-              </Link>
+              </NextLink>
             </NavbarItem>
           );
         })}
       </NavbarContent>
 
       <NavbarContent justify="end">
-        {role === 'guest' ? (
+        {!loading && role === 'guest' ? (
           <NavbarItem className="hidden md:flex">
             <Button
               as={NextLink}
@@ -327,6 +495,42 @@ export function SiteHeader() {
             >
               Ingresar
             </Button>
+          </NavbarItem>
+        ) : null}
+
+        {!loading && hasWorkspaceAccess && navigationContext === 'public' ? (
+          <NavbarItem className="hidden md:flex">
+            <Button
+              as={NextLink}
+              href="/mis-barberias"
+              variant="ghost"
+              size="sm"
+              className={actionButtonClassName}
+            >
+              Mis barberias
+            </Button>
+          </NavbarItem>
+        ) : null}
+
+        {activeWorkspaceLabel && navigationContext !== 'public' ? (
+          <NavbarItem className="hidden lg:flex">
+            <NextLink href="/mis-barberias" className={workspaceSwitcherClassName}>
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-white/65 bg-white/60 text-ink shadow-[inset_0_1px_0_rgba(255,255,255,0.45)] dark:border-white/10 dark:bg-white/[0.06] dark:text-slate-100">
+                <Store className="h-4 w-4" />
+              </span>
+              <span className="flex min-w-0 flex-col">
+                <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/60 dark:text-slate-300/70">
+                  {navigationContext === 'admin' ? 'Admin activo' : 'Staff activo'}
+                </span>
+                <span className="max-w-[9rem] truncate text-sm font-semibold leading-tight">
+                  {activeWorkspaceLabel}
+                </span>
+              </span>
+              <span className="flex items-center gap-1 text-[11px] font-semibold text-ink/65 transition-colors group-hover:text-ink dark:text-slate-300/70 dark:group-hover:text-slate-100">
+                Cambiar
+                <ChevronRight className="h-3.5 w-3.5" />
+              </span>
+            </NextLink>
           </NavbarItem>
         ) : null}
 
@@ -359,6 +563,7 @@ export function SiteHeader() {
                   {profileName || 'Mi perfil'}
                 </DropdownItem>
                 <DropdownItem key="account">Mi cuenta</DropdownItem>
+                {hasWorkspaceAccess ? <DropdownItem key="workspaces">Mis barberias</DropdownItem> : null}
                 <DropdownItem key="logout" className="text-danger" color="danger">
                   Salir
                 </DropdownItem>
@@ -394,23 +599,45 @@ export function SiteHeader() {
         {activeHeaderLinks.map((item) => {
           const isActive = item.href === activeHeaderHref;
           return (
-            <NavbarMenuItem key={item.href} isActive={isActive}>
-              <Link
-                as={NextLink}
+            <NavbarMenuItem key={item.key} isActive={isActive}>
+              <NextLink
                 href={item.href}
-                color="foreground"
                 aria-current={isActive ? 'page' : undefined}
                 onClick={() => setIsMenuOpen(false)}
                 className="nav-link-pill flex w-full justify-start no-underline"
                 data-active={String(isActive)}
               >
                 {item.label}
-              </Link>
+              </NextLink>
             </NavbarMenuItem>
           );
         })}
 
-        {role === 'guest' ? (
+        {!loading && hasWorkspaceAccess && navigationContext === 'public' ? (
+          <NavbarMenuItem>
+            <NextLink
+              href="/mis-barberias"
+              onClick={() => setIsMenuOpen(false)}
+              className="nav-link-pill flex w-full justify-start no-underline"
+            >
+              Mis barberias
+            </NextLink>
+          </NavbarMenuItem>
+        ) : null}
+
+        {navigationContext !== 'public' ? (
+          <NavbarMenuItem>
+            <NextLink
+              href="/mis-barberias"
+              onClick={() => setIsMenuOpen(false)}
+              className="nav-link-pill flex w-full justify-start no-underline"
+            >
+              Cambiar barberia
+            </NextLink>
+          </NavbarMenuItem>
+        ) : null}
+
+        {!loading && role === 'guest' ? (
           <NavbarMenuItem>
             <Button
               as={NextLink}

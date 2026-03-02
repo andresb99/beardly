@@ -4,7 +4,6 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { requireAuthenticated } from '@/lib/auth';
 import { getAppointmentReviewAccessForUser } from '@/lib/account-reviews';
-import { SHOP_ID } from '@/lib/constants';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 
 const submitOwnAppointmentReviewSchema = z.object({
@@ -52,7 +51,7 @@ export async function submitOwnAppointmentReviewAction(
   const admin = createSupabaseAdminClient();
   const submittedAt = new Date().toISOString();
   const { error } = await admin.from('appointment_reviews').insert({
-    shop_id: SHOP_ID,
+    shop_id: access.appointment.shopId,
     appointment_id: access.appointment.id,
     staff_id: access.appointment.staffId,
     customer_id: access.appointment.customerId,

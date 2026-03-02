@@ -1,11 +1,12 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { resolveSafeNextPath } from '@/lib/navigation';
+import { getRequestOrigin } from '@/lib/request-origin';
 
 type CookiePatch = { name: string; value: string; options?: CookieOptions };
 
 function redirectToLogin(request: NextRequest, message: string, next?: string) {
-  const loginUrl = new URL('/login', request.url);
+  const loginUrl = new URL('/login', getRequestOrigin(request));
   loginUrl.searchParams.set('message', message);
 
   if (next && next !== '/cuenta' && !next.startsWith('/login')) {
@@ -20,8 +21,9 @@ export async function GET(request: NextRequest) {
   const code = requestUrl.searchParams.get('code');
   const next = resolveSafeNextPath(requestUrl.searchParams.get('next'), '/cuenta');
   const providerError = requestUrl.searchParams.get('error_description');
+  const publicOrigin = getRequestOrigin(request);
 
-  const response = NextResponse.redirect(new URL(next, request.url));
+  const response = NextResponse.redirect(new URL(next, publicOrigin));
 
   if (providerError) {
     return redirectToLogin(request, providerError, next);

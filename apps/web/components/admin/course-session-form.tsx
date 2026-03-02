@@ -10,6 +10,12 @@ interface CourseOption {
   title: string;
 }
 
+interface AdminCourseSessionFormProps {
+  shopId: string;
+  shopSlug: string;
+  courses: CourseOption[];
+}
+
 const adminSelectClassNames = {
   trigger:
     'min-h-14 rounded-2xl border border-white/8 bg-white/[0.03] shadow-none data-[hover=true]:border-white/12 data-[hover=true]:bg-white/[0.05] data-[focus=true]:border-white/12 data-[focus=true]:bg-white/[0.05] data-[open=true]:border-white/12 data-[open=true]:bg-white/[0.05]',
@@ -19,9 +25,11 @@ const adminSelectClassNames = {
   popoverContent: 'rounded-2xl border border-white/10 bg-[#091120]/92 p-1',
 } as const;
 
-export function AdminCourseSessionForm({ courses }: { courses: CourseOption[] }) {
+export function AdminCourseSessionForm({ shopId, shopSlug, courses }: AdminCourseSessionFormProps) {
   return (
     <form action={upsertCourseSessionAction} className="mt-4 grid gap-3">
+      <input type="hidden" name="shop_id" value={shopId} />
+      <input type="hidden" name="shop_slug" value={shopSlug} />
       <Select
         name="course_id"
         aria-label="Curso"

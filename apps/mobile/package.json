@@ -8,7 +8,7 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "lint": "eslint app lib --ext .ts,.tsx",
+    "lint": "node ../../node_modules/eslint/bin/eslint.js app lib --ext .ts,.tsx",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "echo \"No mobile tests yet\""
   },

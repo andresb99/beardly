@@ -1,15 +1,54 @@
 -- Deterministic seed data for local/dev
 
-insert into public.shops (id, name, timezone)
-values ('11111111-1111-1111-1111-111111111111', 'Navaja Barber Downtown', 'America/New_York')
+insert into public.shops (
+  id,
+  name,
+  slug,
+  timezone,
+  description,
+  status,
+  phone,
+  is_verified,
+  published_at
+)
+values
+  (
+    '11111111-1111-1111-1111-111111111111',
+    'Navaja Barber Pocitos',
+    'navaja-pocitos',
+    'America/Montevideo',
+    'Cortes premium, fades y academia con foco en Montevideo.',
+    'active',
+    '+598-91-000-001',
+    true,
+    now()
+  ),
+  (
+    '11111111-1111-1111-1111-111111111112',
+    'Navaja Barber Punta',
+    'navaja-punta',
+    'America/Montevideo',
+    'Una segunda sede enfocada en reservas rapidas y grooming en Maldonado.',
+    'active',
+    '+598-91-000-002',
+    false,
+    now()
+  )
 on conflict (id) do update
 set name = excluded.name,
-    timezone = excluded.timezone;
+    slug = excluded.slug,
+    timezone = excluded.timezone,
+    description = excluded.description,
+    status = excluded.status,
+    phone = excluded.phone,
+    is_verified = excluded.is_verified,
+    published_at = excluded.published_at;
 
 insert into public.staff (id, shop_id, auth_user_id, name, role, phone, is_active)
 values
   ('22222222-2222-2222-2222-222222222221', '11111111-1111-1111-1111-111111111111', null, 'Andre Owner', 'admin', '+1-555-0101', true),
-  ('22222222-2222-2222-2222-222222222222', '11111111-1111-1111-1111-111111111111', null, 'Luis Barber', 'staff', '+1-555-0102', true)
+  ('22222222-2222-2222-2222-222222222222', '11111111-1111-1111-1111-111111111111', null, 'Luis Barber', 'staff', '+1-555-0102', true),
+  ('22222222-2222-2222-2222-222222222223', '11111111-1111-1111-1111-111111111112', null, 'Mia Fade', 'admin', '+1-555-0103', true)
 on conflict (id) do update
 set name = excluded.name,
     role = excluded.role,
@@ -22,25 +61,100 @@ values
   ('33333333-3333-3333-3333-333333333302', '11111111-1111-1111-1111-111111111111', 'Skin Fade', 4200, 45, true),
   ('33333333-3333-3333-3333-333333333303', '11111111-1111-1111-1111-111111111111', 'Beard Trim', 2200, 25, true),
   ('33333333-3333-3333-3333-333333333304', '11111111-1111-1111-1111-111111111111', 'Cut + Beard Combo', 5200, 60, true),
-  ('33333333-3333-3333-3333-333333333305', '11111111-1111-1111-1111-111111111111', 'Hot Towel Shave', 3500, 40, true)
+  ('33333333-3333-3333-3333-333333333305', '11111111-1111-1111-1111-111111111111', 'Hot Towel Shave', 3500, 40, true),
+  ('33333333-3333-3333-3333-333333333306', '11111111-1111-1111-1111-111111111112', 'Express Fade', 2800, 25, true),
+  ('33333333-3333-3333-3333-333333333307', '11111111-1111-1111-1111-111111111112', 'Outline + Beard', 2600, 20, true)
 on conflict (id) do update
 set name = excluded.name,
     price_cents = excluded.price_cents,
     duration_minutes = excluded.duration_minutes,
     is_active = excluded.is_active;
 
--- Default working hours: Monday-Friday 09:00-17:00 for both staff
+insert into public.shop_locations (
+  shop_id,
+  label,
+  city,
+  region,
+  country_code,
+  latitude,
+  longitude,
+  is_public
+)
+values
+  (
+    '11111111-1111-1111-1111-111111111111',
+    'Pocitos',
+    'Montevideo',
+    'Montevideo',
+    'UY',
+    -34.919575,
+    -56.151739,
+    true
+  ),
+  (
+    '11111111-1111-1111-1111-111111111112',
+    'Punta del Este',
+    'Punta del Este',
+    'Maldonado',
+    'UY',
+    -34.962986,
+    -54.946247,
+    true
+  )
+on conflict (shop_id) do update
+set label = excluded.label,
+    city = excluded.city,
+    region = excluded.region,
+    country_code = excluded.country_code,
+    latitude = excluded.latitude,
+    longitude = excluded.longitude,
+    is_public = excluded.is_public;
+
+insert into public.subscriptions (
+  shop_id,
+  plan,
+  status,
+  seats_included,
+  trial_ends_at,
+  current_period_end
+)
+values
+  (
+    '11111111-1111-1111-1111-111111111111',
+    'pro',
+    'active',
+    6,
+    now() + interval '30 days',
+    now() + interval '30 days'
+  ),
+  (
+    '11111111-1111-1111-1111-111111111112',
+    'starter',
+    'trialing',
+    3,
+    now() + interval '14 days',
+    now() + interval '14 days'
+  )
+on conflict (shop_id) do update
+set plan = excluded.plan,
+    status = excluded.status,
+    seats_included = excluded.seats_included,
+    trial_ends_at = excluded.trial_ends_at,
+    current_period_end = excluded.current_period_end;
+
+-- Default working hours: Monday-Friday 09:00-17:00 for all seeded staff
 insert into public.working_hours (shop_id, staff_id, day_of_week, start_time, end_time)
 select
-  '11111111-1111-1111-1111-111111111111',
+  s.shop_id,
   s.staff_id,
   d.day_of_week,
   '09:00'::time,
   '17:00'::time
 from (values
-  ('22222222-2222-2222-2222-222222222221'::uuid),
-  ('22222222-2222-2222-2222-222222222222'::uuid)
-) as s(staff_id)
+  ('11111111-1111-1111-1111-111111111111'::uuid, '22222222-2222-2222-2222-222222222221'::uuid),
+  ('11111111-1111-1111-1111-111111111111'::uuid, '22222222-2222-2222-2222-222222222222'::uuid),
+  ('11111111-1111-1111-1111-111111111112'::uuid, '22222222-2222-2222-2222-222222222223'::uuid)
+) as s(shop_id, staff_id)
 cross join (values (1), (2), (3), (4), (5)) as d(day_of_week)
 on conflict (staff_id, day_of_week, start_time, end_time) do nothing;
 

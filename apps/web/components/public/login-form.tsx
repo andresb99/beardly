@@ -9,6 +9,7 @@ import { resolveSafeNextPath } from '@/lib/navigation';
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
 
 type AuthMode = 'login' | 'register' | 'recover' | 'reset';
+type AuthAction = 'login' | 'register' | 'magic-link' | 'recover' | 'reset' | 'google';
 
 interface LoginFormProps {
   initialMode?: AuthMode;
@@ -16,11 +17,11 @@ interface LoginFormProps {
   initialMessage?: string | null;
 }
 
-function isEmailValid(value: string) {
+export function isEmailValid(value: string) {
   return /\S+@\S+\.\S+/.test(value);
 }
 
-function mapAuthError(message: string) {
+export function mapAuthError(message: string) {
   const normalized = message.toLowerCase();
 
   if (normalized.includes('invalid login credentials')) {
@@ -37,6 +38,10 @@ function mapAuthError(message: string) {
 
   if (normalized.includes('weak password')) {
     return 'La contrasena es muy debil. Usa al menos 8 caracteres.';
+  }
+
+  if (normalized.includes('unsupported provider') || normalized.includes('provider is not enabled')) {
+    return 'Google no esta habilitado en Supabase para este proyecto. Activalo en Authentication > Providers.';
   }
 
   return message;
@@ -56,7 +61,7 @@ export function LoginForm({
   const [password, setPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [activeAction, setActiveAction] = useState<AuthAction | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(initialMessage);
   const [hasRecoverySession, setHasRecoverySession] = useState(initialMode !== 'reset');
@@ -84,15 +89,17 @@ export function LoginForm({
     };
   }, [mode, supabase]);
 
-  function beginRequest() {
-    setLoading(true);
+  function beginRequest(action: AuthAction) {
+    setActiveAction(action);
     setError(null);
     setMessage(null);
   }
 
   function completeRequest() {
-    setLoading(false);
+    setActiveAction(null);
   }
+
+  const isBusy = activeAction !== null;
 
   function getNetworkAwareError(input: unknown): string {
     if (input instanceof Error && /Failed to fetch/i.test(input.message)) {
@@ -104,9 +111,23 @@ export function LoginForm({
     return 'Ocurrio un error inesperado.';
   }
 
+  function getPublicOrigin() {
+    const { origin, protocol, hostname, port } = window.location;
+
+    if (hostname !== '0.0.0.0') {
+      return origin;
+    }
+
+    return `${protocol}//localhost${port ? `:${port}` : ''}`;
+  }
+
+  function redirectAfterAuthSuccess() {
+    window.location.replace(`${getPublicOrigin()}${safeNextPath}`);
+  }
+
   async function loginWithPassword(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    beginRequest();
+    beginRequest('login');
 
     const normalizedEmail = email.trim().toLowerCase();
     if (!isEmailValid(normalizedEmail)) {
@@ -120,23 +141,23 @@ export function LoginForm({
         email: normalizedEmail,
         password,
       });
-      completeRequest();
 
       if (signInError) {
+        completeRequest();
         setError(mapAuthError(signInError.message));
         return;
       }
 
-      window.location.assign(safeNextPath);
+      redirectAfterAuthSuccess();
     } catch (requestError: unknown) {
-      setLoading(false);
+      completeRequest();
       setError(getNetworkAwareError(requestError));
     }
   }
 
   async function registerWithPassword(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    beginRequest();
+    beginRequest('register');
 
     const normalizedEmail = email.trim().toLowerCase();
     if (!isEmailValid(normalizedEmail)) {
@@ -151,7 +172,7 @@ export function LoginForm({
       return;
     }
 
-    const redirectUrl = `${window.location.origin}/auth/callback?next=${encodeURIComponent(safeNextPath)}`;
+    const redirectUrl = `${getPublicOrigin()}/auth/callback?next=${encodeURIComponent(safeNextPath)}`;
     const signUpOptions = fullName
       ? { emailRedirectTo: redirectUrl, data: { full_name: fullName.trim() } }
       : { emailRedirectTo: redirectUrl };
@@ -178,8 +199,7 @@ export function LoginForm({
           { onConflict: 'auth_user_id' },
         );
 
-        completeRequest();
-        window.location.assign(safeNextPath);
+        redirectAfterAuthSuccess();
         return;
       }
 
@@ -194,7 +214,7 @@ export function LoginForm({
 
   async function sendMagicLink(event: React.MouseEvent<Element>) {
     event.preventDefault();
-    beginRequest();
+    beginRequest('magic-link');
 
     const normalizedEmail = email.trim().toLowerCase();
     if (!isEmailValid(normalizedEmail)) {
@@ -203,7 +223,7 @@ export function LoginForm({
       return;
     }
 
-    const redirectUrl = `${window.location.origin}/auth/callback?next=${encodeURIComponent(safeNextPath)}`;
+    const redirectUrl = `${getPublicOrigin()}/auth/callback?next=${encodeURIComponent(safeNextPath)}`;
     try {
       const { error: otpError } = await supabase.auth.signInWithOtp({
         email: normalizedEmail,
@@ -226,7 +246,7 @@ export function LoginForm({
 
   async function sendPasswordRecovery(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    beginRequest();
+    beginRequest('recover');
 
     const normalizedEmail = email.trim().toLowerCase();
     if (!isEmailValid(normalizedEmail)) {
@@ -236,7 +256,7 @@ export function LoginForm({
     }
 
     const resetPath = '/login?mode=reset';
-    const redirectUrl = `${window.location.origin}/auth/callback?next=${encodeURIComponent(resetPath)}`;
+    const redirectUrl = `${getPublicOrigin()}/auth/callback?next=${encodeURIComponent(resetPath)}`;
 
     try {
       const { error: recoveryError } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
@@ -259,7 +279,7 @@ export function LoginForm({
 
   async function updatePassword(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    beginRequest();
+    beginRequest('reset');
 
     if (!hasRecoverySession) {
       completeRequest();
@@ -290,8 +310,37 @@ export function LoginForm({
 
       setMessage('Contrasena actualizada. Redirigiendo...');
       window.setTimeout(() => {
-        window.location.assign(safeNextPath);
+        redirectAfterAuthSuccess();
       }, 900);
+    } catch (requestError: unknown) {
+      completeRequest();
+      setError(getNetworkAwareError(requestError));
+    }
+  }
+
+  async function signInWithGoogle() {
+    beginRequest('google');
+
+    const redirectUrl = `${getPublicOrigin()}/auth/callback?next=${encodeURIComponent(safeNextPath)}`;
+
+    try {
+      const { data, error: oauthError } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: redirectUrl,
+        },
+      });
+
+      if (oauthError) {
+        completeRequest();
+        setError(mapAuthError(oauthError.message));
+        return;
+      }
+
+      if (!data.url) {
+        completeRequest();
+        setError('No se pudo iniciar la autenticacion con Google.');
+      }
     } catch (requestError: unknown) {
       completeRequest();
       setError(getNetworkAwareError(requestError));
@@ -351,24 +400,39 @@ export function LoginForm({
           <button
             type="button"
             className="pill-toggle"
+            data-testid="auth-mode-login"
             data-active={String(mode === 'login')}
-            onClick={() => setMode('login')}
+            onClick={() => {
+              if (!isBusy) {
+                setMode('login');
+              }
+            }}
           >
             Ingresar
           </button>
           <button
             type="button"
             className="pill-toggle"
+            data-testid="auth-mode-register"
             data-active={String(mode === 'register')}
-            onClick={() => setMode('register')}
+            onClick={() => {
+              if (!isBusy) {
+                setMode('register');
+              }
+            }}
           >
             Registro
           </button>
           <button
             type="button"
             className="pill-toggle"
+            data-testid="auth-mode-recover"
             data-active={String(mode === 'recover')}
-            onClick={() => setMode('recover')}
+            onClick={() => {
+              if (!isBusy) {
+                setMode('recover');
+              }
+            }}
           >
             Recuperar
           </button>
@@ -389,8 +453,16 @@ export function LoginForm({
         </h2>
         <p className="mt-1 text-sm text-slate/80 dark:text-slate-300">{subtitleByMode[mode]}</p>
 
-        {error ? <p className="status-banner error mt-4">{error}</p> : null}
-        {message ? <p className="status-banner success mt-4">{message}</p> : null}
+        {error ? (
+          <p className="status-banner error mt-4" role="alert" aria-live="assertive">
+            {error}
+          </p>
+        ) : null}
+        {message ? (
+          <p className="status-banner success mt-4" role="status" aria-live="polite">
+            {message}
+          </p>
+        ) : null}
 
         {mode === 'recover' ? (
           <form className="mt-4 space-y-3" onSubmit={sendPasswordRecovery}>
@@ -405,10 +477,11 @@ export function LoginForm({
             />
             <Button
               type="submit"
-              disabled={loading}
+              isLoading={activeAction === 'recover'}
+              isDisabled={isBusy}
               className="action-primary px-5 text-sm font-semibold"
             >
-              {loading ? 'Enviando...' : 'Enviar enlace de recuperacion'}
+              {activeAction === 'recover' ? 'Enviando enlace...' : 'Enviar enlace de recuperacion'}
             </Button>
           </form>
         ) : null}
@@ -443,10 +516,11 @@ export function LoginForm({
             <div className="flex flex-wrap gap-2">
               <Button
                 type="submit"
-                disabled={loading || !hasRecoverySession}
+                isLoading={activeAction === 'reset'}
+                isDisabled={isBusy || !hasRecoverySession}
                 className="action-primary px-5 text-sm font-semibold"
               >
-                {loading ? 'Actualizando...' : 'Guardar nueva contrasena'}
+                {activeAction === 'reset' ? 'Actualizando...' : 'Guardar nueva contrasena'}
               </Button>
               <Button
                 type="button"
@@ -455,7 +529,7 @@ export function LoginForm({
                 onClick={() => {
                   setMode('recover');
                 }}
-                disabled={loading}
+                isDisabled={isBusy}
               >
                 Solicitar otro enlace
               </Button>
@@ -509,33 +583,56 @@ export function LoginForm({
             <div className="flex flex-wrap gap-2">
               <Button
                 type="submit"
-                disabled={loading}
+                isLoading={activeAction === (mode === 'login' ? 'login' : 'register')}
+                isDisabled={isBusy}
                 className="action-primary px-5 text-sm font-semibold"
               >
-                {loading ? 'Procesando...' : mode === 'login' ? 'Ingresar' : 'Crear cuenta'}
+                {activeAction === 'login'
+                  ? 'Ingresando...'
+                  : activeAction === 'register'
+                    ? 'Creando cuenta...'
+                    : mode === 'login'
+                      ? 'Ingresar'
+                      : 'Crear cuenta'}
               </Button>
               {mode === 'login' ? (
                 <Button
                   type="button"
                   variant="ghost"
                   className="action-secondary px-5 text-sm font-semibold"
-                  disabled={loading || !email}
+                  isLoading={activeAction === 'magic-link'}
+                  isDisabled={isBusy || !email}
                   onClick={(event) => {
                     void sendMagicLink(event);
                   }}
                 >
-                  Enlace magico
+                  {activeAction === 'magic-link' ? 'Enviando enlace...' : 'Enlace magico'}
                 </Button>
               ) : null}
             </div>
+
+            <Button
+              type="button"
+              variant="ghost"
+              className="action-secondary w-full justify-center px-5 text-sm font-semibold"
+              isLoading={activeAction === 'google'}
+              isDisabled={isBusy}
+              onClick={() => {
+                void signInWithGoogle();
+              }}
+            >
+              {activeAction === 'google' ? 'Redirigiendo a Google...' : 'Continuar con Google'}
+            </Button>
 
             {mode === 'login' ? (
               <button
                 type="button"
                 className="inline-flex items-center gap-2 text-xs font-semibold text-slate/80 transition-colors md:hover:text-ink dark:text-slate-300 dark:md:hover:text-slate-100"
                 onClick={() => {
-                  setMode('recover');
-                  setPassword('');
+                  if (!isBusy) {
+                    setMode('recover');
+                    setPassword('');
+                  }
                 }}
               >
                 <LockKeyhole className="h-3.5 w-3.5" />

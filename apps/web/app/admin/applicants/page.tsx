@@ -1,10 +1,16 @@
 import { Card, CardBody } from '@heroui/card';
 import { ApplicantUpdateForm } from '@/components/admin/applicant-update-form';
-import { SHOP_ID } from '@/lib/constants';
+import { requireAdmin } from '@/lib/auth';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
-export default async function ApplicantsPage() {
+interface ApplicantsPageProps {
+  searchParams: Promise<{ shop?: string }>;
+}
+
+export default async function ApplicantsPage({ searchParams }: ApplicantsPageProps) {
+  const params = await searchParams;
+  const ctx = await requireAdmin({ shopSlug: params.shop });
   const supabase = await createSupabaseServerClient();
   const admin = createSupabaseAdminClient();
 
@@ -13,7 +19,7 @@ export default async function ApplicantsPage() {
     .select(
       'id, name, phone, email, instagram, experience_years, availability, cv_path, status, notes, created_at',
     )
-    .eq('shop_id', SHOP_ID)
+    .eq('shop_id', ctx.shopId)
     .order('created_at', { ascending: false });
 
   const signedUrls = new Map<string, string>();
@@ -111,6 +117,7 @@ export default async function ApplicantsPage() {
 
               <ApplicantUpdateForm
                 applicationId={String(application.id)}
+                shopId={ctx.shopId}
                 status={String(application.status)}
                 notes={String(application.notes || '')}
               />
