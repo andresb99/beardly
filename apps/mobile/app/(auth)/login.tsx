@@ -1,9 +1,22 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { ActionButton, Card, ErrorText, Field, Label, Screen } from '../../components/ui/primitives';
+import {
+  ActionButton,
+  Card,
+  ErrorText,
+  Field,
+  HeroPanel,
+  Label,
+  Screen,
+} from '../../components/ui/primitives';
+import {
+  signInWithFacebookOnMobile,
+  getPasswordRecoveryRedirectUrl,
+  signInWithGoogleOnMobile,
+} from '../../lib/auth-links';
 import { supabase } from '../../lib/supabase';
-import { palette } from '../../lib/theme';
+import { useNavajaTheme } from '../../lib/theme';
 
 type Mode = 'login' | 'register' | 'recover' | 'reset';
 
@@ -34,12 +47,20 @@ function mapAuthError(message: string) {
     return 'Demasiados intentos. Espera unos minutos e intenta de nuevo.';
   }
 
+  if (normalized.includes('unsupported provider') || normalized.includes('provider is not enabled')) {
+    return 'El provider social no esta habilitado en Supabase para este proyecto. Activalo en Authentication > Providers.';
+  }
+
   return message;
 }
 
 export default function LoginScreen() {
+  const { colors } = useNavajaTheme();
   const params = useLocalSearchParams<{ mode?: string }>();
-  const initialMode = useMemo(() => normalizeMode(typeof params.mode === 'string' ? params.mode : undefined), [params.mode]);
+  const initialMode = useMemo(
+    () => normalizeMode(typeof params.mode === 'string' ? params.mode : undefined),
+    [params.mode],
+  );
 
   const [mode, setMode] = useState<Mode>(initialMode);
   const [fullName, setFullName] = useState('');
@@ -98,7 +119,10 @@ export default function LoginScreen() {
           return;
         }
 
-        const { error: signInError } = await supabase.auth.signInWithPassword({ email: normalizedEmail, password });
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email: normalizedEmail,
+          password,
+        });
         if (signInError) {
           endRequest();
           setError(mapAuthError(signInError.message));
@@ -151,7 +175,9 @@ export default function LoginScreen() {
         }
 
         endRequest();
-        setMessage(data.session ? 'Cuenta creada e iniciada.' : 'Cuenta creada. Revisa tu email para confirmar.');
+        setMessage(
+          data.session ? 'Cuenta creada e iniciada.' : 'Cuenta creada. Revisa tu email para confirmar.',
+        );
         if (data.session) {
           router.replace('/(tabs)/cuenta');
         } else {
@@ -168,9 +194,12 @@ export default function LoginScreen() {
           return;
         }
 
-        const { error: recoveryError } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
-          redirectTo: 'navajastaff://login?mode=reset',
-        });
+        const { error: recoveryError } = await supabase.auth.resetPasswordForEmail(
+          normalizedEmail,
+          {
+            redirectTo: getPasswordRecoveryRedirectUrl(),
+          },
+        );
 
         endRequest();
 
@@ -220,6 +249,28 @@ export default function LoginScreen() {
     }
   }
 
+  async function continueWithSocial(provider: 'google' | 'facebook') {
+    beginRequest();
+    const providerLabel = provider === 'google' ? 'Google' : 'Facebook';
+
+    try {
+      const result =
+        provider === 'google' ? await signInWithGoogleOnMobile() : await signInWithFacebookOnMobile();
+
+      if (result.error) {
+        endRequest();
+        setError(mapAuthError(result.error));
+        return;
+      }
+
+      endRequest();
+      router.replace(result.nextPath);
+    } catch {
+      endRequest();
+      setError(`No se pudo completar el login con ${providerLabel}.`);
+    }
+  }
+
   const modeLabel: Record<Mode, string> = {
     login: 'Ingresar',
     register: 'Registrarme',
@@ -228,27 +279,34 @@ export default function LoginScreen() {
   };
 
   return (
-    <Screen title="Acceso" subtitle="Ingresa, registrate o continua como invitado">
-      <Card>
+    <Screen
+      eyebrow="Acceso"
+      title="Ingresa, registrate o recupera tu clave"
+      subtitle="El acceso mobile ahora usa el mismo lenguaje de superficies y acciones que el resto de la app."
+    >
+      <HeroPanel
+        eyebrow="Cuenta"
+        title="Acceso y recuperacion"
+        description="Mantiene el mismo flujo base de la web y te deja seguir como invitado cuando no necesitas una cuenta."
+      />
+
+      <Card elevated>
         <View style={styles.modeRow}>
-          <Pressable
-            style={[styles.modeButton, mode === 'login' ? styles.modeButtonActive : null]}
+          <ModeButton
+            label="Ingresar"
+            active={mode === 'login'}
             onPress={() => setMode('login')}
-          >
-            <Text style={[styles.modeText, mode === 'login' ? styles.modeTextActive : null]}>Ingresar</Text>
-          </Pressable>
-          <Pressable
-            style={[styles.modeButton, mode === 'register' ? styles.modeButtonActive : null]}
+          />
+          <ModeButton
+            label="Registrarme"
+            active={mode === 'register'}
             onPress={() => setMode('register')}
-          >
-            <Text style={[styles.modeText, mode === 'register' ? styles.modeTextActive : null]}>Registrarme</Text>
-          </Pressable>
-          <Pressable
-            style={[styles.modeButton, mode === 'recover' ? styles.modeButtonActive : null]}
+          />
+          <ModeButton
+            label="Recuperar"
+            active={mode === 'recover'}
             onPress={() => setMode('recover')}
-          >
-            <Text style={[styles.modeText, mode === 'recover' ? styles.modeTextActive : null]}>Recuperar</Text>
-          </Pressable>
+          />
         </View>
 
         {mode === 'register' ? (
@@ -261,7 +319,12 @@ export default function LoginScreen() {
         {mode !== 'reset' ? (
           <>
             <Label>Email</Label>
-            <Field value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
+            <Field
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
           </>
         ) : null}
 
@@ -275,7 +338,24 @@ export default function LoginScreen() {
         {mode === 'reset' ? (
           <>
             {!hasRecoverySession ? (
-              <Text style={styles.helper}>Tu enlace no esta activo. Solicita uno nuevo desde "Recuperar".</Text>
+              <Text
+                style={[
+                  styles.helper,
+                  {
+                    color: colors.mode === 'dark' ? '#fde68a' : '#a16207',
+                    backgroundColor:
+                      colors.mode === 'dark'
+                        ? 'rgba(120, 53, 15, 0.26)'
+                        : 'rgba(254,243,199,0.82)',
+                    borderColor:
+                      colors.mode === 'dark'
+                        ? 'rgba(120, 53, 15, 0.42)'
+                        : 'rgba(250,204,21,0.4)',
+                  },
+                ]}
+              >
+                Tu enlace no esta activo. Solicita uno nuevo desde "Recuperar".
+              </Text>
             ) : null}
             <Label>Nueva contrasena</Label>
             <Field value={newPassword} onChangeText={setNewPassword} secureTextEntry />
@@ -285,7 +365,7 @@ export default function LoginScreen() {
         ) : null}
 
         <ErrorText message={error} />
-        {message ? <Text style={styles.success}>{message}</Text> : null}
+        {message ? <Text style={[styles.success, { color: colors.success }]}>{message}</Text> : null}
 
         <ActionButton
           label={loading ? 'Procesando...' : mode === 'register' ? 'Crear cuenta' : modeLabel[mode]}
@@ -299,67 +379,119 @@ export default function LoginScreen() {
           }
           loading={loading}
         />
+        {mode === 'login' || mode === 'register' ? (
+          <ActionButton
+            label="Continuar con Google"
+            variant="secondary"
+            onPress={() => {
+              void continueWithSocial('google');
+            }}
+            disabled={loading}
+            style={styles.socialButton}
+          />
+        ) : null}
+        {mode === 'login' || mode === 'register' ? (
+          <ActionButton
+            label="Continuar con Facebook"
+            variant="secondary"
+            onPress={() => {
+              void continueWithSocial('facebook');
+            }}
+            disabled={loading}
+            style={styles.socialButton}
+          />
+        ) : null}
         {mode === 'login' ? (
           <Pressable
             onPress={() => setMode('recover')}
             accessibilityRole="button"
             accessibilityLabel="Recuperar contrasena"
           >
-            <Text style={styles.recoverLink}>Olvide mi contrasena</Text>
+            <Text style={[styles.recoverLink, { color: colors.textAccent }]}>
+              Olvide mi contrasena
+            </Text>
           </Pressable>
         ) : null}
-        <ActionButton label="Continuar como invitado" variant="secondary" onPress={() => router.replace('/(tabs)/inicio')} />
+        <ActionButton
+          label="Continuar como invitado"
+          variant="secondary"
+          onPress={() => router.replace('/(tabs)/inicio')}
+        />
       </Card>
     </Screen>
+  );
+}
+
+function ModeButton({
+  label,
+  active,
+  onPress,
+}: {
+  label: string;
+  active: boolean;
+  onPress: () => void;
+}) {
+  const { colors } = useNavajaTheme();
+
+  return (
+    <Pressable
+      style={[
+        styles.modeButton,
+        {
+          borderColor: active ? colors.borderActive : colors.borderMuted,
+          backgroundColor: active ? colors.pillActive : colors.panelMuted,
+        },
+      ]}
+      onPress={onPress}
+    >
+      <Text
+        style={[
+          styles.modeText,
+          { color: active ? colors.textAccent : colors.text },
+        ]}
+      >
+        {label}
+      </Text>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   modeRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
     marginBottom: 6,
   },
   modeButton: {
     flex: 1,
     borderWidth: 1,
-    borderColor: '#cfd7e2',
-    borderRadius: 10,
-    paddingVertical: 9,
+    minWidth: 92,
+    borderRadius: 16,
+    paddingVertical: 10,
     alignItems: 'center',
-    backgroundColor: '#fff',
-  },
-  modeButtonActive: {
-    backgroundColor: palette.text,
-    borderColor: palette.text,
   },
   modeText: {
-    color: '#334155',
     fontWeight: '700',
     fontSize: 12,
   },
-  modeTextActive: {
-    color: '#fff',
-  },
   helper: {
-    color: '#a16207',
-    backgroundColor: '#fef3c7',
-    borderColor: '#facc15',
     borderWidth: 1,
-    borderRadius: 10,
+    borderRadius: 14,
     paddingHorizontal: 10,
     paddingVertical: 8,
     fontSize: 12,
   },
   success: {
-    color: '#0f766e',
     fontSize: 13,
+  },
+  socialButton: {
+    marginTop: 4,
   },
   recoverLink: {
     marginTop: 2,
     fontSize: 12,
     fontWeight: '700',
-    color: '#32465f',
     textAlign: 'center',
   },
 });

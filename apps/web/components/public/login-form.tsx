@@ -9,7 +9,15 @@ import { resolveSafeNextPath } from '@/lib/navigation';
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
 
 type AuthMode = 'login' | 'register' | 'recover' | 'reset';
-type AuthAction = 'login' | 'register' | 'magic-link' | 'recover' | 'reset' | 'google';
+type AuthAction =
+  | 'login'
+  | 'register'
+  | 'magic-link'
+  | 'recover'
+  | 'reset'
+  | 'google'
+  | 'facebook';
+type SocialProvider = 'google' | 'facebook';
 
 interface LoginFormProps {
   initialMode?: AuthMode;
@@ -41,7 +49,7 @@ export function mapAuthError(message: string) {
   }
 
   if (normalized.includes('unsupported provider') || normalized.includes('provider is not enabled')) {
-    return 'Google no esta habilitado en Supabase para este proyecto. Activalo en Authentication > Providers.';
+    return 'El provider social no esta habilitado en Supabase para este proyecto. Activalo en Authentication > Providers.';
   }
 
   return message;
@@ -318,16 +326,31 @@ export function LoginForm({
     }
   }
 
-  async function signInWithGoogle() {
-    beginRequest('google');
+  function getSocialProviderLabel(provider: SocialProvider) {
+    return provider === 'google' ? 'Google' : 'Facebook';
+  }
+
+  async function signInWithSocialProvider(provider: SocialProvider) {
+    beginRequest(provider);
 
     const redirectUrl = `${getPublicOrigin()}/auth/callback?next=${encodeURIComponent(safeNextPath)}`;
+    const providerLabel = getSocialProviderLabel(provider);
 
     try {
       const { data, error: oauthError } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
+        provider,
         options: {
           redirectTo: redirectUrl,
+          ...(provider === 'google'
+            ? {
+                queryParams: {
+                  access_type: 'offline',
+                  prompt: 'select_account',
+                },
+              }
+            : {
+                scopes: 'email,public_profile',
+              }),
         },
       });
 
@@ -339,7 +362,7 @@ export function LoginForm({
 
       if (!data.url) {
         completeRequest();
-        setError('No se pudo iniciar la autenticacion con Google.');
+        setError(`No se pudo iniciar la autenticacion con ${providerLabel}.`);
       }
     } catch (requestError: unknown) {
       completeRequest();
@@ -611,18 +634,34 @@ export function LoginForm({
               ) : null}
             </div>
 
-            <Button
-              type="button"
-              variant="ghost"
-              className="action-secondary w-full justify-center px-5 text-sm font-semibold"
-              isLoading={activeAction === 'google'}
-              isDisabled={isBusy}
-              onClick={() => {
-                void signInWithGoogle();
-              }}
-            >
-              {activeAction === 'google' ? 'Redirigiendo a Google...' : 'Continuar con Google'}
-            </Button>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Button
+                type="button"
+                variant="ghost"
+                className="action-secondary w-full justify-center px-5 text-sm font-semibold"
+                isLoading={activeAction === 'google'}
+                isDisabled={isBusy}
+                onClick={() => {
+                  void signInWithSocialProvider('google');
+                }}
+              >
+                {activeAction === 'google' ? 'Redirigiendo a Google...' : 'Continuar con Google'}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                className="action-secondary w-full justify-center px-5 text-sm font-semibold"
+                isLoading={activeAction === 'facebook'}
+                isDisabled={isBusy}
+                onClick={() => {
+                  void signInWithSocialProvider('facebook');
+                }}
+              >
+                {activeAction === 'facebook'
+                  ? 'Redirigiendo a Facebook...'
+                  : 'Continuar con Facebook'}
+              </Button>
+            </div>
 
             {mode === 'login' ? (
               <button

@@ -1,13 +1,36 @@
-import { useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
+import { useFocusEffect } from 'expo-router';
 import { jobApplicationCreateSchema } from '@navaja/shared';
-import { ActionButton, Card, ErrorText, Field, Label, MultilineField, Screen } from '../../components/ui/primitives';
-import { env } from '../../lib/env';
+import {
+  ActionButton,
+  Card,
+  ErrorText,
+  Field,
+  HeroPanel,
+  Label,
+  MultilineField,
+  Screen,
+  SurfaceCard,
+} from '../../components/ui/primitives';
+import {
+  hasExternalApi,
+  submitDirectJobApplicationViaApi,
+  submitNetworkJobApplicationViaApi,
+} from '../../lib/api';
+import {
+  formatMarketplaceLocation,
+  listMarketplaceShops,
+  resolvePreferredMarketplaceShopId,
+  saveMarketplaceShopId,
+  type MarketplaceShop,
+} from '../../lib/marketplace';
 import { supabase } from '../../lib/supabase';
-import { palette } from '../../lib/theme';
+import { useNavajaTheme } from '../../lib/theme';
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
+const NETWORK_SCOPE = 'network';
 
 function randomId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
@@ -18,6 +41,9 @@ function sanitizeFilename(name: string) {
 }
 
 export default function EmpleoScreen() {
+  const { colors } = useNavajaTheme();
+  const [shops, setShops] = useState<MarketplaceShop[]>([]);
+  const [target, setTarget] = useState<string>(NETWORK_SCOPE);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
@@ -30,9 +56,57 @@ export default function EmpleoScreen() {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+
+      void (async () => {
+        const marketplaceShops = await listMarketplaceShops();
+        if (!active) {
+          return;
+        }
+
+        setShops(marketplaceShops);
+        const preferredShopId = await resolvePreferredMarketplaceShopId(marketplaceShops);
+        if (!active) {
+          return;
+        }
+
+        if (hasExternalApi) {
+          setTarget((current) =>
+            current === NETWORK_SCOPE ? current : preferredShopId || NETWORK_SCOPE,
+          );
+        } else {
+          setTarget(preferredShopId || '');
+        }
+      })();
+
+      return () => {
+        active = false;
+      };
+    }, []),
+  );
+
+  const targetLabel = useMemo(() => {
+    if (target === NETWORK_SCOPE) {
+      return 'Bolsa general del marketplace';
+    }
+
+    const selectedShop = shops.find((shop) => shop.id === target);
+    if (!selectedShop) {
+      return 'Barberia seleccionada';
+    }
+
+    return `${selectedShop.name} - ${formatMarketplaceLocation(selectedShop)}`;
+  }, [shops, target]);
+
   async function pickCv() {
     const result = await DocumentPicker.getDocumentAsync({
-      type: ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+      type: [
+        'application/pdf',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      ],
       multiple: false,
       copyToCacheDirectory: true,
     });
@@ -45,7 +119,15 @@ export default function EmpleoScreen() {
     if (!asset) {
       return;
     }
+
     setCvAsset(asset);
+  }
+
+  async function updateTarget(nextTarget: string) {
+    setTarget(nextTarget);
+    if (nextTarget && nextTarget !== NETWORK_SCOPE) {
+      await saveMarketplaceShopId(nextTarget);
+    }
   }
 
   async function submitApplication() {
@@ -62,8 +144,50 @@ export default function EmpleoScreen() {
       return;
     }
 
+    if (target === NETWORK_SCOPE) {
+      if (!hasExternalApi) {
+        setError(
+          'La bolsa general requiere EXPO_PUBLIC_API_BASE_URL para usar las rutas web desde la app.',
+        );
+        return;
+      }
+
+      setSubmitting(true);
+      let sent = false;
+
+      try {
+        await submitNetworkJobApplicationViaApi(
+          {
+            name,
+            phone,
+            email,
+            instagram: instagram || null,
+            experience_years: Number(experienceYears),
+            availability,
+          },
+          cvAsset,
+        );
+
+        setMessage('Tu CV ya esta en la bolsa general del marketplace.');
+        sent = true;
+      } catch (submitError) {
+        setError(
+          submitError instanceof Error
+            ? submitError.message
+            : 'No se pudo enviar la postulacion.',
+        );
+      } finally {
+        setSubmitting(false);
+      }
+
+      if (sent) {
+        resetForm();
+      }
+      return;
+    }
+
     const parsed = jobApplicationCreateSchema.safeParse({
-      shop_id: env.EXPO_PUBLIC_SHOP_ID,
+      shop_id: target,
       name,
       phone,
       email,
@@ -79,87 +203,157 @@ export default function EmpleoScreen() {
 
     setSubmitting(true);
 
-    const ext = cvAsset.name?.includes('.') ? cvAsset.name.split('.').pop() : 'pdf';
-    const safeName = sanitizeFilename(cvAsset.name || `cv.${ext}`);
-    const path = `${parsed.data.shop_id}/${new Date().toISOString().slice(0, 10)}/${randomId()}-${safeName}`;
-
     try {
-      const fileResponse = await fetch(cvAsset.uri);
-      const fileBuffer = await fileResponse.arrayBuffer();
+      const apiResult = await submitDirectJobApplicationViaApi(parsed.data, cvAsset);
+      if (!apiResult) {
+        const ext = cvAsset.name?.includes('.') ? cvAsset.name.split('.').pop() : 'pdf';
+        const safeName = sanitizeFilename(cvAsset.name || `cv.${ext}`);
+        const path = `${parsed.data.shop_id}/${new Date().toISOString().slice(0, 10)}/${randomId()}-${safeName}`;
 
-      const { error: uploadError } = await supabase.storage.from('cvs').upload(path, fileBuffer, {
-        contentType: cvAsset.mimeType || 'application/octet-stream',
-        upsert: false,
-      });
+        const fileResponse = await fetch(cvAsset.uri);
+        const fileBuffer = await fileResponse.arrayBuffer();
 
-      if (uploadError) {
-        setSubmitting(false);
-        setError(uploadError.message);
-        return;
+        const { error: uploadError } = await supabase.storage
+          .from('cvs')
+          .upload(path, fileBuffer, {
+            contentType: cvAsset.mimeType || 'application/octet-stream',
+            upsert: false,
+          });
+
+        if (uploadError) {
+          setError(uploadError.message);
+          setSubmitting(false);
+          return;
+        }
+
+        const { error: insertError } = await supabase.from('job_applications').insert({
+          shop_id: parsed.data.shop_id,
+          name: parsed.data.name,
+          phone: parsed.data.phone,
+          email: parsed.data.email,
+          instagram: parsed.data.instagram || null,
+          experience_years: parsed.data.experience_years,
+          availability: parsed.data.availability,
+          cv_path: path,
+          status: 'new',
+        });
+
+        if (insertError) {
+          await supabase.storage.from('cvs').remove([path]);
+          setError(insertError.message);
+          setSubmitting(false);
+          return;
+        }
       }
 
-      const { error: insertError } = await supabase.from('job_applications').insert({
-        shop_id: parsed.data.shop_id,
-        name: parsed.data.name,
-        phone: parsed.data.phone,
-        email: parsed.data.email,
-        instagram: parsed.data.instagram || null,
-        experience_years: parsed.data.experience_years,
-        availability: parsed.data.availability,
-        cv_path: path,
-        status: 'new',
-      });
-
-      if (insertError) {
-        await supabase.storage.from('cvs').remove([path]);
-        setSubmitting(false);
-        setError(insertError.message);
-        return;
-      }
-
+      setMessage('Postulacion enviada. Te vamos a contactar.');
+      resetForm();
+    } catch (submitError) {
+      setError(
+        submitError instanceof Error ? submitError.message : 'No se pudo enviar la postulacion.',
+      );
+    } finally {
       setSubmitting(false);
-      setMessage('Postulación enviada. Te vamos a contactar.');
-      setName('');
-      setPhone('');
-      setEmail('');
-      setInstagram('');
-      setExperienceYears('1');
-      setAvailability('');
-      setCvAsset(null);
-    } catch {
-      setSubmitting(false);
-      setError('No se pudo enviar la postulación.');
     }
   }
 
+  function resetForm() {
+    setName('');
+    setPhone('');
+    setEmail('');
+    setInstagram('');
+    setExperienceYears('1');
+    setAvailability('');
+    setCvAsset(null);
+  }
+
   return (
-    <Screen title="Empleo" subtitle="Postulate con tu CV para sumarte al equipo">
-      <Card>
+    <Screen
+      eyebrow="Empleo"
+      title="Postulate a una barberia o deja tu CV en la red"
+      subtitle="La app replica el selector de destino de la web. Si tienes API externa, puedes enviar tu CV al marketplace completo sin salir de mobile."
+    >
+      <HeroPanel
+        eyebrow="Empleo marketplace"
+        title={targetLabel}
+        description={
+          hasExternalApi
+            ? 'Puedes enviar una vez a la bolsa general o apuntar directo a una barberia.'
+            : 'Sin API externa, el flujo mobile mantiene la postulacion directa a barberia.'
+        }
+      />
+
+      <Card elevated>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Enviar mi CV a</Text>
+        <View style={styles.targetList}>
+          {hasExternalApi ? (
+            <SurfaceCard
+              active={target === NETWORK_SCOPE}
+              onPress={() => {
+                void updateTarget(NETWORK_SCOPE);
+              }}
+              style={styles.targetCard}
+            >
+              <Text style={[styles.targetTitle, { color: colors.text }]}>
+                Bolsa general del marketplace
+              </Text>
+              <Text style={[styles.targetSubtitle, { color: colors.textMuted }]}>
+                Una sola postulacion para toda la red.
+              </Text>
+            </SurfaceCard>
+          ) : null}
+
+          {shops.map((shop) => (
+            <SurfaceCard
+              key={shop.id}
+              active={target === shop.id}
+              onPress={() => {
+                void updateTarget(shop.id);
+              }}
+              style={styles.targetCard}
+            >
+              <Text style={[styles.targetTitle, { color: colors.text }]}>{shop.name}</Text>
+              <Text style={[styles.targetSubtitle, { color: colors.textMuted }]}>
+                {formatMarketplaceLocation(shop)}
+              </Text>
+            </SurfaceCard>
+          ))}
+        </View>
+      </Card>
+
+      <Card elevated>
         <Label>Nombre y apellido</Label>
         <Field value={name} onChangeText={setName} />
-        <Label>Teléfono</Label>
+        <Label>Telefono</Label>
         <Field value={phone} onChangeText={setPhone} />
         <Label>Email</Label>
-        <Field value={email} onChangeText={setEmail} keyboardType="email-address" />
+        <Field
+          value={email}
+          onChangeText={setEmail}
+          keyboardType="email-address"
+          autoCapitalize="none"
+        />
         <Label>Instagram (opcional)</Label>
         <Field value={instagram} onChangeText={setInstagram} />
-        <Label>Experiencia (años)</Label>
+        <Label>Experiencia (anios)</Label>
         <Field value={experienceYears} onChangeText={setExperienceYears} keyboardType="numeric" />
         <Label>Disponibilidad</Label>
         <MultilineField value={availability} onChangeText={setAvailability} />
 
-        <View style={styles.cvBox}>
-          <Text style={styles.cvTitle}>CV (PDF/DOC hasta 5MB)</Text>
-          <Text style={styles.cvName}>{cvAsset?.name || 'No seleccionaste archivo'}</Text>
+        <SurfaceCard style={styles.cvBox}>
+          <Text style={[styles.cvTitle, { color: colors.text }]}>CV (PDF/DOC hasta 5MB)</Text>
+          <Text style={[styles.cvName, { color: colors.textMuted }]}>
+            {cvAsset?.name || 'No seleccionaste archivo'}
+          </Text>
           <ActionButton label="Elegir CV" variant="secondary" onPress={pickCv} />
-        </View>
+        </SurfaceCard>
 
         <ErrorText message={error} />
-        {message ? <Text style={styles.success}>{message}</Text> : null}
+        {message ? <Text style={[styles.success, { color: colors.success }]}>{message}</Text> : null}
         <ActionButton
-          label={submitting ? 'Enviando...' : 'Enviar postulación'}
+          label={submitting ? 'Enviando...' : 'Enviar postulacion'}
           onPress={submitApplication}
-          disabled={!name || !phone || !email || !availability || submitting}
+          disabled={!name || !phone || !email || !availability || !target || submitting}
           loading={submitting}
         />
       </Card>
@@ -168,25 +362,40 @@ export default function EmpleoScreen() {
 }
 
 const styles = StyleSheet.create({
+  sectionTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+  },
+  targetList: {
+    gap: 8,
+  },
+  targetCard: {
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 12,
+    gap: 4,
+  },
+  targetTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  targetSubtitle: {
+    fontSize: 12,
+  },
   cvBox: {
     borderWidth: 1,
-    borderColor: '#dbe4ee',
-    backgroundColor: '#f8fafc',
-    borderRadius: 12,
-    padding: 10,
+    borderRadius: 18,
+    padding: 12,
     gap: 6,
   },
   cvTitle: {
-    color: palette.text,
     fontSize: 13,
     fontWeight: '700',
   },
   cvName: {
-    color: '#64748b',
     fontSize: 12,
   },
   success: {
-    color: '#0f766e',
     fontSize: 13,
   },
 });

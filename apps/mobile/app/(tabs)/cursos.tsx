@@ -1,71 +1,155 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
-import { Card, MutedText, Screen } from '../../components/ui/primitives';
-import { env } from '../../lib/env';
+import {
+  Card,
+  HeroPanel,
+  MutedText,
+  PillToggle,
+  Screen,
+  StatTile,
+} from '../../components/ui/primitives';
 import { formatCurrency } from '../../lib/format';
-import { supabase } from '../../lib/supabase';
-import { palette } from '../../lib/theme';
-
-interface CourseItem {
-  id: string;
-  title: string;
-  description: string;
-  price_cents: number;
-  duration_hours: number;
-  level: string;
-}
+import {
+  listMarketplaceCourses,
+  listMarketplaceShops,
+  resolvePreferredMarketplaceShopId,
+  type MarketplaceCourse,
+  type MarketplaceShop,
+} from '../../lib/marketplace';
+import { useNavajaTheme } from '../../lib/theme';
 
 export default function CursosScreen() {
-  const [courses, setCourses] = useState<CourseItem[]>([]);
+  const { colors } = useNavajaTheme();
+  const [shops, setShops] = useState<MarketplaceShop[]>([]);
+  const [courses, setCourses] = useState<MarketplaceCourse[]>([]);
+  const [preferredShopId, setPreferredShopId] = useState('');
+  const [activeFilter, setActiveFilter] = useState<'all' | string>('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const loadCourses = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-
-    const { data, error: fetchError } = await supabase
-      .from('courses')
-      .select('id, title, description, price_cents, duration_hours, level')
-      .eq('shop_id', env.EXPO_PUBLIC_SHOP_ID)
-      .eq('is_active', true)
-      .order('title');
-
-    if (fetchError) {
-      setLoading(false);
-      setCourses([]);
-      setError(fetchError.message);
-      return;
-    }
-
-    setCourses(
-      (data || []).map((item) => ({
-        id: String(item.id),
-        title: String(item.title),
-        description: String(item.description || ''),
-        price_cents: Number(item.price_cents || 0),
-        duration_hours: Number(item.duration_hours || 0),
-        level: String(item.level || ''),
-      })),
-    );
-    setLoading(false);
-  }, []);
-
   useFocusEffect(
     useCallback(() => {
-      void loadCourses();
-    }, [loadCourses]),
+      let active = true;
+
+      void (async () => {
+        setLoading(true);
+        setError(null);
+
+        const [marketplaceShops, marketplaceCourses] = await Promise.all([
+          listMarketplaceShops(),
+          listMarketplaceCourses(),
+        ]);
+
+        if (!active) {
+          return;
+        }
+
+        setShops(marketplaceShops);
+        setCourses(marketplaceCourses);
+
+        const nextPreferredShopId = await resolvePreferredMarketplaceShopId(marketplaceShops);
+        if (!active) {
+          return;
+        }
+
+        setPreferredShopId(nextPreferredShopId);
+        setLoading(false);
+      })().catch(() => {
+        if (!active) {
+          return;
+        }
+
+        setLoading(false);
+        setError('No se pudo cargar el catalogo de cursos.');
+      });
+
+      return () => {
+        active = false;
+      };
+    }, []),
   );
 
+  const preferredShop = useMemo(
+    () => shops.find((shop) => shop.id === preferredShopId) || null,
+    [preferredShopId, shops],
+  );
+  const activeFilterShop = useMemo(
+    () => shops.find((shop) => shop.id === activeFilter) || null,
+    [activeFilter, shops],
+  );
+  const visibleCourses = useMemo(() => {
+    if (activeFilter === 'all') {
+      return courses;
+    }
+
+    return courses.filter((course) => course.shopId === activeFilter);
+  }, [activeFilter, courses]);
+
   return (
-    <Screen title="Cursos" subtitle="Capacitación profesional de barbería">
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-      {loading ? <MutedText>Cargando cursos...</MutedText> : null}
-      {!loading && courses.length === 0 ? <MutedText>No hay cursos activos.</MutedText> : null}
+    <Screen
+      eyebrow="Cursos"
+      title="Catalogo global de formacion"
+      subtitle="La vista replica el marketplace de la web: todo el catalogo activo en una sola pantalla, con filtros por barberia y tarjetas tipo HeroUI."
+    >
+      <HeroPanel
+        eyebrow="Academia marketplace"
+        title="Todos los cursos activos en un solo lugar"
+        description="Compara academia entre barberias y filtra por tenant cuando quieras afinar la vista."
+      >
+        <View style={styles.statsRow}>
+          <StatTile label="Cursos" value={String(courses.length)} />
+          <StatTile label="Barberias" value={String(shops.length)} />
+          <StatTile
+            label="Filtro"
+            value={
+              activeFilter === 'all'
+                ? 'Global'
+                : activeFilterShop?.name || preferredShop?.name || 'Tenant'
+            }
+          />
+        </View>
+      </HeroPanel>
+
+      <Card elevated>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Filtrar cursos</Text>
+        <View style={styles.filterWrap}>
+          <PillToggle
+            label="Todo el marketplace"
+            active={activeFilter === 'all'}
+            onPress={() => setActiveFilter('all')}
+          />
+          {shops.map((shop) => (
+            <PillToggle
+              key={shop.id}
+              label={shop.name}
+              active={activeFilter === shop.id}
+              onPress={() => setActiveFilter(shop.id)}
+            />
+          ))}
+        </View>
+      </Card>
+
+      {error ? (
+        <Card>
+          <Text style={[styles.error, { color: colors.danger }]}>{error}</Text>
+        </Card>
+      ) : null}
+
+      {loading ? (
+        <Card>
+          <MutedText>Cargando cursos...</MutedText>
+        </Card>
+      ) : null}
+
+      {!loading && !visibleCourses.length ? (
+        <Card>
+          <MutedText>No hay cursos activos para el filtro seleccionado.</MutedText>
+        </Card>
+      ) : null}
 
       <View style={styles.list}>
-        {courses.map((course) => (
+        {visibleCourses.map((course) => (
           <Pressable
             key={course.id}
             onPress={() =>
@@ -75,15 +159,23 @@ export default function CursosScreen() {
               })
             }
           >
-            <Card>
-              <Text style={styles.title}>{course.title}</Text>
-              <Text style={styles.description} numberOfLines={3}>
+            <Card elevated>
+              <Text style={[styles.shopName, { color: colors.textMuted }]}>{course.shopName}</Text>
+              <Text style={[styles.courseTitle, { color: colors.text }]}>{course.title}</Text>
+              <Text style={[styles.description, { color: colors.textSoft }]} numberOfLines={3}>
                 {course.description}
               </Text>
-              <Text style={styles.meta}>
-                {course.duration_hours} h - Nivel {course.level}
-              </Text>
-              <Text style={styles.price}>{formatCurrency(course.price_cents)}</Text>
+              <View style={styles.metaGrid}>
+                <Text style={[styles.metaItem, { color: colors.text }]}>
+                  Nivel: {course.level}
+                </Text>
+                <Text style={[styles.metaItem, { color: colors.text }]}>
+                  Duracion: {course.durationHours} h
+                </Text>
+                <Text style={[styles.metaItem, { color: colors.text }]}>
+                  Inversion: {formatCurrency(course.priceCents)}
+                </Text>
+              </View>
             </Card>
           </Pressable>
         ))}
@@ -93,29 +185,44 @@ export default function CursosScreen() {
 }
 
 const styles = StyleSheet.create({
-  list: {
+  statsRow: {
+    flexDirection: 'row',
     gap: 8,
   },
-  title: {
-    color: palette.text,
+  sectionTitle: {
+    fontSize: 17,
     fontWeight: '800',
-    fontSize: 16,
   },
-  description: {
-    color: '#475569',
-    fontSize: 13,
-  },
-  meta: {
-    color: '#64748b',
-    fontSize: 12,
-  },
-  price: {
-    color: palette.text,
-    fontWeight: '700',
-    fontSize: 15,
+  filterWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
   },
   error: {
-    color: '#b91c1c',
     fontSize: 13,
+  },
+  list: {
+    gap: 10,
+  },
+  shopName: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+  },
+  courseTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  description: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  metaGrid: {
+    gap: 4,
+  },
+  metaItem: {
+    fontSize: 12,
+    fontWeight: '600',
   },
 });

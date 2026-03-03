@@ -1,23 +1,33 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { modelRegistrationInputSchema } from '@navaja/shared';
-import { ActionButton, Card, Chip, ErrorText, Field, Label, MutedText, Screen } from '../../components/ui/primitives';
-import { env } from '../../lib/env';
-import { formatCurrency, formatDateTime } from '../../lib/format';
-import { supabase } from '../../lib/supabase';
-import { palette } from '../../lib/theme';
 import { useFocusEffect } from 'expo-router';
-
-interface OpenCall {
-  session_id: string;
-  course_title: string;
-  start_at: string;
-  location: string;
-  compensation_type: 'gratis' | 'descuento' | 'pago';
-  compensation_value_cents: number | null;
-  notes_public: string | null;
-  models_needed: number;
-}
+import { modelRegistrationInputSchema } from '@navaja/shared';
+import {
+  ActionButton,
+  Card,
+  Chip,
+  ErrorText,
+  Field,
+  HeroPanel,
+  Label,
+  MutedText,
+  PillToggle,
+  Screen,
+  StatTile,
+  SurfaceCard,
+} from '../../components/ui/primitives';
+import { hasExternalApi, submitModelRegistrationViaApi } from '../../lib/api';
+import { formatCurrency, formatDateTime } from '../../lib/format';
+import {
+  listMarketplaceOpenModelCalls,
+  listMarketplaceShops,
+  resolvePreferredMarketplaceShopId,
+  saveMarketplaceShopId,
+  type MarketplaceOpenModelCall,
+  type MarketplaceShop,
+} from '../../lib/marketplace';
+import { supabase } from '../../lib/supabase';
+import { useNavajaTheme } from '../../lib/theme';
 
 const preferenceOptions = [
   { value: 'barba', label: 'Barba' },
@@ -28,7 +38,11 @@ const preferenceOptions = [
 ] as const;
 
 export default function ModelosScreen() {
-  const [openCalls, setOpenCalls] = useState<OpenCall[]>([]);
+  const { colors } = useNavajaTheme();
+  const [shops, setShops] = useState<MarketplaceShop[]>([]);
+  const [openCalls, setOpenCalls] = useState<MarketplaceOpenModelCall[]>([]);
+  const [selectedShopId, setSelectedShopId] = useState('');
+  const [activeFilter, setActiveFilter] = useState<'all' | string>('all');
   const [loadingCalls, setLoadingCalls] = useState(true);
   const [loadingSubmit, setLoadingSubmit] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,92 +57,63 @@ export default function ModelosScreen() {
   const [consentPhotos, setConsentPhotos] = useState(false);
   const [marketingOptIn, setMarketingOptIn] = useState(false);
 
-  const selectedCall = useMemo(
-    () => openCalls.find((item) => item.session_id === selectedSessionId) || null,
-    [openCalls, selectedSessionId],
-  );
-
-  const loadOpenCalls = useCallback(async () => {
-    setLoadingCalls(true);
-    setError(null);
-
-    const { data: requirementsRows, error: requirementsError } = await supabase
-      .from('model_requirements')
-      .select('session_id, requirements, compensation_type, compensation_value_cents, notes_public, is_open')
-      .eq('is_open', true);
-
-    if (requirementsError) {
-      setOpenCalls([]);
-      setLoadingCalls(false);
-      setError(requirementsError.message);
-      return;
-    }
-
-    const sessionIds = (requirementsRows || []).map((row) => String(row.session_id));
-    if (!sessionIds.length) {
-      setOpenCalls([]);
-      setLoadingCalls(false);
-      return;
-    }
-
-    const { data: sessionRows } = await supabase
-      .from('course_sessions')
-      .select('id, course_id, start_at, location, status')
-      .in('id', sessionIds)
-      .eq('status', 'scheduled');
-
-    const courseIds = (sessionRows || []).map((row) => String(row.course_id));
-    const { data: courseRows } = courseIds.length
-      ? await supabase
-          .from('courses')
-          .select('id, title, is_active')
-          .in('id', courseIds)
-          .eq('is_active', true)
-      : { data: [] as Array<Record<string, unknown>> };
-
-    const sessionsById = new Map((sessionRows || []).map((row) => [String(row.id), row]));
-    const coursesById = new Map((courseRows || []).map((row) => [String(row.id), row]));
-
-    const calls = (requirementsRows || [])
-      .map((row) => {
-        const session = sessionsById.get(String(row.session_id));
-        if (!session) {
-          return null;
-        }
-        const course = coursesById.get(String(session.course_id));
-        if (!course) {
-          return null;
-        }
-
-        const req = (row.requirements as Record<string, unknown> | null) || {};
-        return {
-          session_id: String(row.session_id),
-          course_title: String(course.title || 'Curso'),
-          start_at: String(session.start_at),
-          location: String(session.location || ''),
-          compensation_type: row.compensation_type as OpenCall['compensation_type'],
-          compensation_value_cents:
-            row.compensation_value_cents == null ? null : Number(row.compensation_value_cents || 0),
-          notes_public: row.notes_public ? String(row.notes_public) : null,
-          models_needed: Number(req.models_needed || 0),
-        } satisfies OpenCall;
-      })
-      .filter((item): item is OpenCall => item !== null)
-      .sort((a, b) => (a.start_at < b.start_at ? -1 : 1));
-
-    setOpenCalls(calls);
-    const firstCall = calls[0];
-    if (firstCall && !selectedSessionId) {
-      setSelectedSessionId(firstCall.session_id);
-    }
-    setLoadingCalls(false);
-  }, [selectedSessionId]);
-
   useFocusEffect(
     useCallback(() => {
-      void loadOpenCalls();
-    }, [loadOpenCalls]),
+      let active = true;
+
+      void (async () => {
+        setLoadingCalls(true);
+        setError(null);
+
+        const [marketplaceShops, calls] = await Promise.all([
+          listMarketplaceShops(),
+          listMarketplaceOpenModelCalls(),
+        ]);
+
+        if (!active) {
+          return;
+        }
+
+        setShops(marketplaceShops);
+        setOpenCalls(calls);
+
+        const preferredShopId = await resolvePreferredMarketplaceShopId(marketplaceShops);
+        if (!active) {
+          return;
+        }
+
+        setSelectedShopId(preferredShopId);
+        setLoadingCalls(false);
+      })().catch(() => {
+        if (!active) {
+          return;
+        }
+
+        setLoadingCalls(false);
+        setError('No se pudieron cargar las convocatorias.');
+      });
+
+      return () => {
+        active = false;
+      };
+    }, []),
   );
+
+  const selectedCall = useMemo(
+    () => openCalls.find((item) => item.sessionId === selectedSessionId) || null,
+    [openCalls, selectedSessionId],
+  );
+  const selectedShop = useMemo(
+    () => shops.find((shop) => shop.id === selectedShopId) || null,
+    [selectedShopId, shops],
+  );
+  const visibleCalls = useMemo(() => {
+    if (activeFilter === 'all') {
+      return openCalls;
+    }
+
+    return openCalls.filter((call) => call.shopId === activeFilter);
+  }, [activeFilter, openCalls]);
 
   function togglePreference(value: string) {
     setPreferences((current) =>
@@ -136,9 +121,15 @@ export default function ModelosScreen() {
     );
   }
 
+  async function selectShop(shopId: string) {
+    setSelectedShopId(shopId);
+    await saveMarketplaceShopId(shopId);
+  }
+
   async function submitModelRegistration() {
+    const resolvedShopId = selectedCall?.shopId || selectedShopId || undefined;
     const parsed = modelRegistrationInputSchema.safeParse({
-      shop_id: env.EXPO_PUBLIC_SHOP_ID,
+      shop_id: resolvedShopId,
       session_id: selectedSessionId || undefined,
       full_name: fullName,
       phone,
@@ -158,156 +149,248 @@ export default function ModelosScreen() {
     setError(null);
     setSuccess(null);
 
-    const { data: model, error: modelError } = await supabase
-      .from('models')
-      .insert({
-        shop_id: parsed.data.shop_id,
-        full_name: parsed.data.full_name,
-        phone: parsed.data.phone,
-        email: parsed.data.email || null,
-        instagram: parsed.data.instagram || null,
-        attributes: {
-          preferences: parsed.data.preferences,
-          consent_photos_videos: parsed.data.consent_photos_videos,
-        },
-        marketing_opt_in: parsed.data.marketing_opt_in,
-      })
-      .select('id')
-      .single();
+    try {
+      const apiResult = await submitModelRegistrationViaApi(parsed.data);
+      if (apiResult) {
+        setSuccess('Perfil guardado. Te vamos a contactar por WhatsApp.');
+      } else {
+        if (!resolvedShopId) {
+          setError('Selecciona una barberia para guardar tu perfil desde la app.');
+          setLoadingSubmit(false);
+          return;
+        }
 
-    if (modelError || !model) {
-      setLoadingSubmit(false);
-      setError(modelError?.message || 'No se pudo registrar el modelo.');
-      return;
-    }
+        const { data: model, error: modelError } = await supabase
+          .from('models')
+          .insert({
+            shop_id: resolvedShopId,
+            full_name: parsed.data.full_name,
+            phone: parsed.data.phone,
+            email: parsed.data.email || null,
+            instagram: parsed.data.instagram || null,
+            attributes: {
+              preferences: parsed.data.preferences,
+              consent_photos_videos: parsed.data.consent_photos_videos,
+            },
+            marketing_opt_in: parsed.data.marketing_opt_in,
+          })
+          .select('id')
+          .single();
 
-    if (parsed.data.session_id) {
-      const { error: appError } = await supabase.from('model_applications').insert({
-        session_id: parsed.data.session_id,
-        model_id: model.id,
-        status: 'applied',
-      });
+        if (modelError || !model) {
+          setError(modelError?.message || 'No se pudo registrar el perfil.');
+          setLoadingSubmit(false);
+          return;
+        }
 
-      if (appError) {
-        setLoadingSubmit(false);
-        setError(appError.message);
-        return;
-      }
-
-      if (parsed.data.consent_photos_videos) {
-        await supabase.from('waivers').upsert(
-          {
+        if (parsed.data.session_id) {
+          const { error: applicationError } = await supabase.from('model_applications').insert({
             session_id: parsed.data.session_id,
             model_id: model.id,
-            waiver_version: 'v1',
-            accepted_name: parsed.data.full_name,
-          },
-          { onConflict: 'session_id,model_id' },
+            status: 'applied',
+          });
+
+          if (applicationError) {
+            setError(applicationError.message);
+            setLoadingSubmit(false);
+            return;
+          }
+
+          if (parsed.data.consent_photos_videos) {
+            await supabase.from('waivers').upsert(
+              {
+                session_id: parsed.data.session_id,
+                model_id: model.id,
+                waiver_version: 'v1',
+                accepted_name: parsed.data.full_name,
+              },
+              { onConflict: 'session_id,model_id' },
+            );
+          }
+        }
+
+        setSuccess(
+          'Perfil guardado en la barberia actual. Configura EXPO_PUBLIC_API_BASE_URL para tener sincronizacion marketplace completa.',
         );
       }
-    }
 
-    setLoadingSubmit(false);
-    setSuccess('¡Listo! Te vamos a contactar por WhatsApp.');
-    setFullName('');
-    setPhone('');
-    setEmail('');
-    setInstagram('');
-    setPreferences([]);
-    setConsentPhotos(false);
-    setMarketingOptIn(false);
+      setFullName('');
+      setPhone('');
+      setEmail('');
+      setInstagram('');
+      setPreferences([]);
+      setConsentPhotos(false);
+      setMarketingOptIn(false);
+      setSelectedSessionId('');
+    } catch (submitError) {
+      setError(
+        submitError instanceof Error ? submitError.message : 'No se pudo guardar el registro.',
+      );
+    } finally {
+      setLoadingSubmit(false);
+    }
   }
 
   return (
-    <Screen title="Modelos" subtitle="Convocatoria para prácticas de cursos">
-      <Card>
-        <Text style={styles.heroTitle}>Anotate como modelo</Text>
-        <Text style={styles.heroText}>
-          Si queres colaborar en prácticas reales de barbería, completa tus datos y te contactamos.
+    <Screen
+      eyebrow="Modelos"
+      title="Convocatorias abiertas de distintas barberias"
+      subtitle="Replica la capa visual del marketplace web: filtros por tenant, cards de convocatorias y un formulario con el mismo tono de UI."
+    >
+      <HeroPanel
+        eyebrow="Modelos marketplace"
+        title="Postulate a convocatorias abiertas"
+        description={
+          hasExternalApi
+            ? 'Con API externa, tu perfil queda sincronizado con el pool global y con la barberia del curso.'
+            : 'Sin API externa, la app guarda el perfil en la barberia actual y mantiene el flujo funcional desde mobile.'
+        }
+      >
+        <View style={styles.statsRow}>
+          <StatTile label="Convocatorias" value={String(openCalls.length)} />
+          <StatTile label="Barberias" value={String(shops.length)} />
+        </View>
+      </HeroPanel>
+
+      <Card elevated>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Contexto de barberia</Text>
+        <Text style={[styles.sectionCopy, { color: colors.textMuted }]}>
+          Esta barberia se usa como destino por defecto cuando no eliges una sesion concreta.
         </Text>
+        <View style={styles.chipWrap}>
+          {shops.map((shop) => (
+            <PillToggle
+              key={shop.id}
+              label={shop.name}
+              active={shop.id === (selectedShop?.id || '')}
+              onPress={() => {
+                void selectShop(shop.id);
+              }}
+            />
+          ))}
+        </View>
       </Card>
 
-      <Card>
-        <Text style={styles.sectionTitle}>Sesiones con convocatoria abierta</Text>
+      <Card elevated>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Convocatorias activas</Text>
+        <View style={styles.chipWrap}>
+          <PillToggle
+            label="Todo el marketplace"
+            active={activeFilter === 'all'}
+            onPress={() => setActiveFilter('all')}
+          />
+          {shops.map((shop) => (
+            <PillToggle
+              key={shop.id}
+              label={shop.name}
+              active={activeFilter === shop.id}
+              onPress={() => setActiveFilter(shop.id)}
+            />
+          ))}
+        </View>
+
         {loadingCalls ? <MutedText>Cargando convocatorias...</MutedText> : null}
-        {!loadingCalls && openCalls.length === 0 ? (
-          <MutedText>No hay convocatorias abiertas en este momento.</MutedText>
+        {!loadingCalls && !visibleCalls.length ? (
+          <MutedText>No hay convocatorias abiertas para ese filtro.</MutedText>
         ) : null}
+
         <View style={styles.list}>
-          {openCalls.map((call) => {
-            const selected = selectedSessionId === call.session_id;
+          {visibleCalls.map((call) => {
+            const selected = selectedSessionId === call.sessionId;
+            const compensation =
+              call.compensationType === 'gratis'
+                ? 'Gratis'
+                : call.compensationValueCents
+                  ? formatCurrency(call.compensationValueCents)
+                  : call.compensationType;
+
             return (
-              <Pressable
-                key={call.session_id}
-                onPress={() => setSelectedSessionId(call.session_id)}
-                style={[styles.callCard, selected ? styles.callCardActive : null]}
+              <SurfaceCard
+                key={call.sessionId}
+                active={selected}
+                onPress={() => {
+                  setSelectedSessionId(call.sessionId);
+                  if (call.shopId !== selectedShopId) {
+                    void selectShop(call.shopId);
+                  }
+                }}
+                style={styles.callCard}
               >
-                <Text style={styles.callTitle}>{call.course_title}</Text>
-                <Text style={styles.callMeta}>{formatDateTime(call.start_at)} - {call.location}</Text>
-                <Text style={styles.callMeta}>
-                  Cupos: {call.models_needed || 'Sin definir'} -{' '}
-                  {call.compensation_type === 'gratis'
-                    ? 'Gratis'
-                    : call.compensation_value_cents
-                      ? formatCurrency(call.compensation_value_cents)
-                      : call.compensation_type}
+                <Text style={[styles.callShop, { color: colors.textMuted }]}>{call.shopName}</Text>
+                <Text style={[styles.callTitle, { color: colors.text }]}>{call.courseTitle}</Text>
+                <Text style={[styles.callMeta, { color: colors.textMuted }]}>
+                  {formatDateTime(call.startAt)} - {call.location}
                 </Text>
-                {call.notes_public ? <Text style={styles.callMeta}>{call.notes_public}</Text> : null}
-              </Pressable>
+                <Text style={[styles.callMeta, { color: colors.textMuted }]}>
+                  Cupos: {call.modelsNeeded || 'Sin definir'} - {compensation}
+                </Text>
+                {call.notesPublic ? (
+                  <Text style={[styles.callMeta, { color: colors.textMuted }]}>
+                    {call.notesPublic}
+                  </Text>
+                ) : null}
+              </SurfaceCard>
             );
           })}
         </View>
       </Card>
 
-      <Card>
-        <Text style={styles.sectionTitle}>Formulario</Text>
+      <Card elevated>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Tu perfil</Text>
         <Label>Nombre y apellido</Label>
         <Field value={fullName} onChangeText={setFullName} />
-        <Label>Teléfono</Label>
+        <Label>Telefono</Label>
         <Field value={phone} onChangeText={setPhone} />
         <Label>Email (opcional)</Label>
-        <Field value={email} onChangeText={setEmail} keyboardType="email-address" />
+        <Field
+          value={email}
+          onChangeText={setEmail}
+          keyboardType="email-address"
+          autoCapitalize="none"
+        />
         <Label>Instagram (opcional)</Label>
         <Field value={instagram} onChangeText={setInstagram} />
 
-        <Label>Sesión seleccionada</Label>
-        <Text style={styles.selectedSessionText}>
+        <Label>Sesion seleccionada</Label>
+        <Text style={[styles.selectedSessionText, { color: colors.text }]}>
           {selectedCall
-            ? `${selectedCall.course_title} - ${formatDateTime(selectedCall.start_at)}`
-            : 'Sin sesión (quedo para próximas convocatorias)'}
+            ? `${selectedCall.shopName} - ${selectedCall.courseTitle} - ${formatDateTime(selectedCall.startAt)}`
+            : selectedShop
+              ? `Sin sesion. El perfil quedara asociado a ${selectedShop.name}.`
+              : 'Sin sesion y sin barberia activa.'}
         </Text>
 
         <Label>Preferencias (opcional)</Label>
         <View style={styles.chipWrap}>
-          {preferenceOptions.map((option) => {
-            const active = preferences.includes(option.value);
-            return (
-              <Pressable
-                key={option.value}
-                style={[styles.prefChip, active ? styles.prefChipActive : null]}
-                onPress={() => togglePreference(option.value)}
-              >
-                <Text style={[styles.prefChipText, active ? styles.prefChipTextActive : null]}>
-                  {option.label}
-                </Text>
-              </Pressable>
-            );
-          })}
+          {preferenceOptions.map((option) => (
+            <PillToggle
+              key={option.value}
+              label={option.label}
+              active={preferences.includes(option.value)}
+              onPress={() => togglePreference(option.value)}
+            />
+          ))}
         </View>
 
         <View style={styles.inline}>
-          <Pressable onPress={() => setConsentPhotos((v) => !v)}>
-            <Chip label={consentPhotos ? 'Acepta fotos/video' : 'Sin consentimiento multimedia'} tone={consentPhotos ? 'success' : 'neutral'} />
+          <Pressable onPress={() => setConsentPhotos((value) => !value)}>
+            <Chip
+              label={consentPhotos ? 'Acepta fotos/video' : 'Sin consentimiento multimedia'}
+              tone={consentPhotos ? 'success' : 'neutral'}
+            />
           </Pressable>
-          <Pressable onPress={() => setMarketingOptIn((v) => !v)}>
-            <Chip label={marketingOptIn ? 'Acepta novedades' : 'Sin novedades'} tone={marketingOptIn ? 'success' : 'neutral'} />
+          <Pressable onPress={() => setMarketingOptIn((value) => !value)}>
+            <Chip
+              label={marketingOptIn ? 'Acepta novedades' : 'Sin novedades'}
+              tone={marketingOptIn ? 'success' : 'neutral'}
+            />
           </Pressable>
         </View>
 
         <ErrorText message={error} />
-        {success ? <Text style={styles.success}>{success}</Text> : null}
+        {success ? <Text style={[styles.success, { color: colors.success }]}>{success}</Text> : null}
         <ActionButton
-          label={loadingSubmit ? 'Enviando...' : 'Anotarme como modelo'}
+          label={loadingSubmit ? 'Enviando...' : 'Guardar mi perfil'}
           onPress={submitModelRegistration}
           disabled={!fullName || !phone || loadingSubmit}
           loading={loadingSubmit}
@@ -318,73 +401,48 @@ export default function ModelosScreen() {
 }
 
 const styles = StyleSheet.create({
-  heroTitle: {
-    color: palette.text,
-    fontSize: 19,
-    fontWeight: '800',
-  },
-  heroText: {
-    color: '#475569',
-    fontSize: 13,
-  },
-  sectionTitle: {
-    color: palette.text,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  list: {
+  statsRow: {
+    flexDirection: 'row',
     gap: 8,
   },
-  callCard: {
-    borderWidth: 1,
-    borderColor: '#dbe4ee',
-    borderRadius: 12,
-    padding: 10,
-    backgroundColor: '#f8fafc',
-    gap: 2,
+  sectionTitle: {
+    fontSize: 17,
+    fontWeight: '800',
   },
-  callCardActive: {
-    borderColor: palette.accent,
-    backgroundColor: '#fff7e6',
-  },
-  callTitle: {
-    color: palette.text,
-    fontWeight: '700',
-    fontSize: 14,
-  },
-  callMeta: {
-    color: '#64748b',
-    fontSize: 12,
-  },
-  selectedSessionText: {
-    color: '#334155',
+  sectionCopy: {
     fontSize: 13,
-    marginBottom: 4,
+    lineHeight: 18,
   },
   chipWrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
   },
-  prefChip: {
+  list: {
+    gap: 8,
+  },
+  callCard: {
     borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: '#fff',
+    borderRadius: 18,
+    padding: 12,
+    gap: 3,
   },
-  prefChipActive: {
-    backgroundColor: palette.text,
-    borderColor: palette.text,
+  callShop: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
   },
-  prefChipText: {
-    color: '#334155',
+  callTitle: {
+    fontWeight: '800',
+    fontSize: 15,
+  },
+  callMeta: {
     fontSize: 12,
-    fontWeight: '600',
   },
-  prefChipTextActive: {
-    color: '#fff',
+  selectedSessionText: {
+    fontSize: 13,
+    marginBottom: 2,
   },
   inline: {
     flexDirection: 'row',
@@ -392,7 +450,6 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   success: {
-    color: '#0f766e',
     fontSize: 13,
   },
 });

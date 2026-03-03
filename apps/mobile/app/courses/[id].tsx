@@ -2,13 +2,24 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { courseEnrollmentCreateSchema } from '@navaja/shared';
-import { ActionButton, Card, ErrorText, Field, Label, MutedText, Screen } from '../../components/ui/primitives';
+import {
+  ActionButton,
+  Card,
+  ErrorText,
+  Field,
+  HeroPanel,
+  Label,
+  MutedText,
+  Screen,
+} from '../../components/ui/primitives';
 import { formatCurrency, formatDateTime } from '../../lib/format';
 import { supabase } from '../../lib/supabase';
-import { palette } from '../../lib/theme';
+import { useNavajaTheme } from '../../lib/theme';
 
 interface CourseData {
   id: string;
+  shop_id: string;
+  shop_name: string;
   title: string;
   description: string;
   price_cents: number;
@@ -21,10 +32,10 @@ interface SessionData {
   start_at: string;
   capacity: number;
   location: string;
-  status: string;
 }
 
 export default function CourseDetailsScreen() {
+  const { colors } = useNavajaTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const [course, setCourse] = useState<CourseData | null>(null);
@@ -32,7 +43,7 @@ export default function CourseDetailsScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [activeSessionId, setActiveSessionId] = useState<string>('');
+  const [activeSessionId, setActiveSessionId] = useState('');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
@@ -48,22 +59,24 @@ export default function CourseDetailsScreen() {
     if (!id) {
       return;
     }
+
     setLoading(true);
     setError(null);
 
-    const [{ data: courseRow, error: courseError }, { data: sessionRows, error: sessionsError }] = await Promise.all([
-      supabase
-        .from('courses')
-        .select('id, title, description, price_cents, duration_hours, level, is_active')
-        .eq('id', id)
-        .maybeSingle(),
-      supabase
-        .from('course_sessions')
-        .select('id, start_at, capacity, location, status')
-        .eq('course_id', id)
-        .eq('status', 'scheduled')
-        .order('start_at'),
-    ]);
+    const [{ data: courseRow, error: courseError }, { data: sessionRows, error: sessionsError }] =
+      await Promise.all([
+        supabase
+          .from('courses')
+          .select('id, shop_id, title, description, price_cents, duration_hours, level, is_active')
+          .eq('id', id)
+          .maybeSingle(),
+        supabase
+          .from('course_sessions')
+          .select('id, start_at, capacity, location')
+          .eq('course_id', id)
+          .eq('status', 'scheduled')
+          .order('start_at'),
+      ]);
 
     if (courseError || !courseRow || !courseRow.is_active) {
       setLoading(false);
@@ -81,8 +94,17 @@ export default function CourseDetailsScreen() {
       return;
     }
 
+    const { data: shopRow } = await supabase
+      .from('shops')
+      .select('name')
+      .eq('id', courseRow.shop_id)
+      .eq('status', 'active')
+      .maybeSingle();
+
     setCourse({
       id: String(courseRow.id),
+      shop_id: String(courseRow.shop_id),
+      shop_name: String(shopRow?.name || 'Barberia'),
       title: String(courseRow.title),
       description: String(courseRow.description || ''),
       price_cents: Number(courseRow.price_cents || 0),
@@ -95,15 +117,14 @@ export default function CourseDetailsScreen() {
       start_at: String(session.start_at),
       capacity: Number(session.capacity || 0),
       location: String(session.location || ''),
-      status: String(session.status || ''),
     }));
+
     setSessions(mappedSessions);
-    const firstSession = mappedSessions[0];
-    if (firstSession) {
-      setActiveSessionId((current) => current || firstSession.id);
+    if (!mappedSessions.find((session) => session.id === activeSessionId)) {
+      setActiveSessionId(mappedSessions[0]?.id || '');
     }
     setLoading(false);
-  }, [id]);
+  }, [activeSessionId, id]);
 
   useEffect(() => {
     void loadData();
@@ -111,7 +132,7 @@ export default function CourseDetailsScreen() {
 
   async function submitEnrollment() {
     if (!activeSession) {
-      setError('Selecciona una sesión.');
+      setError('Selecciona una sesion.');
       return;
     }
 
@@ -123,7 +144,7 @@ export default function CourseDetailsScreen() {
     });
 
     if (!parsed.success) {
-      setError('Revisa los datos de inscripción.');
+      setError('Revisa los datos de inscripcion.');
       return;
     }
 
@@ -146,56 +167,98 @@ export default function CourseDetailsScreen() {
     }
 
     setSending(false);
-    setMessage('Inscripción enviada. Te vamos a confirmar por WhatsApp.');
+    setMessage('Inscripcion enviada. Te vamos a confirmar por WhatsApp.');
     setName('');
     setPhone('');
     setEmail('');
   }
 
   return (
-    <Screen title="Detalle de curso" subtitle="Información y reserva de cupo">
-      {loading ? <MutedText>Cargando curso...</MutedText> : null}
+    <Screen
+      eyebrow="Detalle"
+      title="Informacion del curso y reserva de cupo"
+      subtitle="Mantiene la misma estructura de la web: resumen del curso, sesiones activas y formulario de inscripcion."
+    >
+      {loading ? (
+        <Card>
+          <MutedText>Cargando curso...</MutedText>
+        </Card>
+      ) : null}
+
       <ErrorText message={error} />
-      {!loading && !course ? <MutedText>No hay información para este curso.</MutedText> : null}
+
+      {!loading && !course ? (
+        <Card>
+          <MutedText>No hay informacion para este curso.</MutedText>
+        </Card>
+      ) : null}
 
       {course ? (
         <>
-          <Card>
-            <Text style={styles.title}>{course.title}</Text>
-            <Text style={styles.description}>{course.description}</Text>
-            <Text style={styles.meta}>
-              {course.duration_hours} h - Nivel {course.level}
+          <HeroPanel
+            eyebrow={course.shop_name}
+            title={course.title}
+            description={course.description}
+          >
+            <Text style={[styles.metaItem, { color: colors.text }]}>Nivel: {course.level}</Text>
+            <Text style={[styles.metaItem, { color: colors.text }]}>
+              Duracion: {course.duration_hours} h
             </Text>
-            <Text style={styles.price}>{formatCurrency(course.price_cents)}</Text>
-          </Card>
+            <Text style={[styles.metaItem, { color: colors.text }]}>
+              Inversion: {formatCurrency(course.price_cents)}
+            </Text>
+          </HeroPanel>
 
-          <Card>
-            <Text style={styles.sectionTitle}>Sesiones programadas</Text>
-            {sessions.length === 0 ? <MutedText>No hay sesiones activas en este momento.</MutedText> : null}
+          <Card elevated>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Sesiones programadas</Text>
+            {sessions.length === 0 ? (
+              <MutedText>No hay sesiones activas en este momento.</MutedText>
+            ) : null}
             <View style={styles.list}>
               {sessions.map((session) => (
                 <Pressable
                   key={session.id}
-                  style={[styles.sessionRow, activeSessionId === session.id ? styles.sessionRowActive : null]}
+                  style={[
+                    styles.sessionRow,
+                    {
+                      backgroundColor:
+                        activeSessionId === session.id ? colors.panelRaised : colors.panelMuted,
+                      borderColor:
+                        activeSessionId === session.id
+                          ? colors.borderActive
+                          : colors.borderMuted,
+                    },
+                  ]}
                   onPress={() => setActiveSessionId(session.id)}
                 >
-                  <Text style={styles.sessionTitle}>{formatDateTime(session.start_at)}</Text>
-                  <Text style={styles.sessionMeta}>{session.location}</Text>
-                  <Text style={styles.sessionMeta}>Capacidad: {session.capacity}</Text>
+                  <Text style={[styles.sessionTitle, { color: colors.text }]}>
+                    {formatDateTime(session.start_at)}
+                  </Text>
+                  <Text style={[styles.sessionMeta, { color: colors.textMuted }]}>
+                    {session.location}
+                  </Text>
+                  <Text style={[styles.sessionMeta, { color: colors.textMuted }]}>
+                    Capacidad: {session.capacity}
+                  </Text>
                 </Pressable>
               ))}
             </View>
           </Card>
 
-          <Card>
-            <Text style={styles.sectionTitle}>Anotarme a la sesión</Text>
+          <Card elevated>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Anotarme a la sesion</Text>
             <Label>Nombre y apellido</Label>
             <Field value={name} onChangeText={setName} />
-            <Label>Teléfono</Label>
+            <Label>Telefono</Label>
             <Field value={phone} onChangeText={setPhone} />
             <Label>Email</Label>
-            <Field value={email} onChangeText={setEmail} keyboardType="email-address" />
-            {message ? <Text style={styles.success}>{message}</Text> : null}
+            <Field
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+            {message ? <Text style={[styles.success, { color: colors.success }]}>{message}</Text> : null}
             <ActionButton
               label={sending ? 'Enviando...' : 'Anotarme'}
               onPress={submitEnrollment}
@@ -210,55 +273,31 @@ export default function CourseDetailsScreen() {
 }
 
 const styles = StyleSheet.create({
-  title: {
-    color: palette.text,
-    fontSize: 20,
-    fontWeight: '800',
-  },
-  description: {
-    color: '#475569',
-    fontSize: 13,
-  },
-  meta: {
-    color: '#64748b',
+  metaItem: {
     fontSize: 12,
-  },
-  price: {
-    color: palette.text,
-    fontSize: 15,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   sectionTitle: {
-    color: palette.text,
-    fontWeight: '700',
-    fontSize: 16,
+    fontWeight: '800',
+    fontSize: 17,
   },
   list: {
     gap: 8,
   },
   sessionRow: {
     borderWidth: 1,
-    borderColor: '#dbe4ee',
-    borderRadius: 12,
-    padding: 10,
-    gap: 1,
-    backgroundColor: '#f8fafc',
-  },
-  sessionRowActive: {
-    borderColor: palette.accent,
-    backgroundColor: '#fff7e6',
+    borderRadius: 18,
+    padding: 12,
+    gap: 3,
   },
   sessionTitle: {
-    color: palette.text,
     fontWeight: '700',
     fontSize: 13,
   },
   sessionMeta: {
-    color: '#64748b',
     fontSize: 12,
   },
   success: {
-    color: '#0f766e',
     fontSize: 13,
   },
 });

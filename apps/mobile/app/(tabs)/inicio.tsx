@@ -1,249 +1,668 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
+import MapView, { Marker } from 'react-native-maps';
+import {
+  ActionButton,
+  Card,
+  Chip,
+  ErrorText,
+  Field,
+  HeroPanel,
+  MutedText,
+  Screen,
+  StatTile,
+  SurfaceCard,
+} from '../../components/ui/primitives';
 import { AppRole, getAuthContext } from '../../lib/auth';
-import { Card, Chip, Screen } from '../../components/ui/primitives';
 import { envValidation } from '../../lib/env';
-import { palette } from '../../lib/theme';
+import { formatCurrency } from '../../lib/format';
+import {
+  type GeoPoint,
+  getDistanceKm,
+  getMapTheme,
+  getPointRegion,
+  getShopRegion,
+  openDirectionsToShop,
+  openShopInGoogleMaps,
+  requestCurrentDeviceLocation,
+  URUGUAY_REGION,
+} from '../../lib/maps';
+import {
+  formatMarketplaceLocation,
+  listMarketplaceShops,
+  resolvePreferredMarketplaceShopId,
+  saveMarketplaceShopId,
+  type MarketplaceShop,
+} from '../../lib/marketplace';
+import { useNavajaTheme } from '../../lib/theme';
 
 const roleLabel: Record<AppRole, string> = {
   guest: 'Invitado',
-  user: 'Usuario',
+  user: 'Cliente',
   staff: 'Staff',
   admin: 'Admin',
 };
 
-const rotatingFeatures = ['Reservas', 'Cursos', 'Modelos', 'Empleo'] as const;
+const roleTone: Record<AppRole, 'neutral' | 'success' | 'warning' | 'danger'> = {
+  guest: 'neutral',
+  user: 'neutral',
+  staff: 'warning',
+  admin: 'success',
+};
 
 export default function InicioScreen() {
+  const { colors } = useNavajaTheme();
+  const mapRef = useRef<MapView | null>(null);
+  const [shops, setShops] = useState<MarketplaceShop[]>([]);
+  const [selectedShopId, setSelectedShopId] = useState('');
   const [role, setRole] = useState<AppRole>('guest');
-  const [name, setName] = useState<string | null>(null);
+  const [displayName, setDisplayName] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [userLocation, setUserLocation] = useState<GeoPoint | null>(null);
+  const [locating, setLocating] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [locationError, setLocationError] = useState<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
       let active = true;
-      getAuthContext().then((ctx) => {
+
+      void (async () => {
+        setLoading(true);
+        setError(null);
+
+        const [ctx, marketplaceShops] = await Promise.all([getAuthContext(), listMarketplaceShops()]);
+
         if (!active) {
           return;
         }
+
         setRole(ctx.role);
-        setName(ctx.staffName || ctx.email || null);
+        setDisplayName(ctx.staffName || ctx.email || '');
+        setShops(marketplaceShops);
+
+        const preferredShopId = await resolvePreferredMarketplaceShopId(marketplaceShops);
+        if (!active) {
+          return;
+        }
+
+        setSelectedShopId(preferredShopId);
+        setLoading(false);
+      })().catch(() => {
+        if (!active) {
+          return;
+        }
+
+        setLoading(false);
+        setError('No se pudo cargar el marketplace.');
       });
+
       return () => {
         active = false;
       };
     }, []),
   );
 
+  const filteredShops = useMemo(() => {
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+    const searchFiltered = normalizedQuery
+      ? shops.filter((shop) =>
+          [shop.name, shop.description, shop.city, shop.region, shop.locationLabel]
+            .filter(Boolean)
+            .some((value) => String(value).toLowerCase().includes(normalizedQuery)),
+        )
+      : shops;
+
+    const withDistance = searchFiltered.map((shop) => {
+      const distanceKm =
+        userLocation && shop.latitude != null && shop.longitude != null
+          ? getDistanceKm(userLocation.latitude, userLocation.longitude, shop.latitude, shop.longitude)
+          : null;
+
+      return { shop, distanceKm };
+    });
+
+    return withDistance.sort((left, right) => {
+      if (left.distanceKm != null && right.distanceKm != null) {
+        return left.distanceKm - right.distanceKm;
+      }
+
+      if (left.distanceKm != null) {
+        return -1;
+      }
+
+      if (right.distanceKm != null) {
+        return 1;
+      }
+
+      const leftScore = (left.shop.averageRating || 0) * 100 + left.shop.reviewCount;
+      const rightScore = (right.shop.averageRating || 0) * 100 + right.shop.reviewCount;
+      return rightScore - leftScore;
+    });
+  }, [searchQuery, shops, userLocation]);
+
+  const visibleShops = useMemo(() => filteredShops.map((entry) => entry.shop), [filteredShops]);
+  const selectedShop = useMemo(
+    () =>
+      visibleShops.find((shop) => shop.id === selectedShopId) ||
+      shops.find((shop) => shop.id === selectedShopId) ||
+      visibleShops[0] ||
+      shops[0] ||
+      null,
+    [selectedShopId, shops, visibleShops],
+  );
+  const mappableShops = useMemo(
+    () => visibleShops.filter((shop) => shop.latitude != null && shop.longitude != null),
+    [visibleShops],
+  );
+  const totalServices = useMemo(() => shops.reduce((sum, shop) => sum + shop.activeServiceCount, 0), [shops]);
+  const ratedShops = useMemo(() => shops.filter((shop) => shop.averageRating != null), [shops]);
+  const averageRating = useMemo(() => {
+    if (!ratedShops.length) {
+      return null;
+    }
+
+    const total = ratedShops.reduce((sum, shop) => sum + Number(shop.averageRating || 0), 0);
+    return total / ratedShops.length;
+  }, [ratedShops]);
+  const initialMapRegion = useMemo(() => {
+    if (selectedShop?.latitude != null && selectedShop.longitude != null) {
+      return getShopRegion(selectedShop);
+    }
+
+    if (userLocation) {
+      return getPointRegion(userLocation);
+    }
+
+    return URUGUAY_REGION;
+  }, [selectedShop, userLocation]);
+  const platformMapThemeProps = useMemo(
+    () => (Platform.OS === 'ios' ? { userInterfaceStyle: colors.mode as 'light' | 'dark' } : {}),
+    [colors.mode],
+  );
+
+  useEffect(() => {
+    if (!visibleShops.length) {
+      return;
+    }
+
+    const firstVisibleShop = visibleShops[0];
+    if (!firstVisibleShop) {
+      return;
+    }
+
+    const hasActiveShop = visibleShops.some((shop) => shop.id === selectedShopId);
+    if (!hasActiveShop) {
+      setSelectedShopId(firstVisibleShop.id);
+    }
+  }, [selectedShopId, visibleShops]);
+
+  useEffect(() => {
+    if (!mapRef.current) {
+      return;
+    }
+
+    if (selectedShop?.latitude != null && selectedShop.longitude != null) {
+      mapRef.current.animateToRegion(getShopRegion(selectedShop), 300);
+      return;
+    }
+
+    if (userLocation) {
+      mapRef.current.animateToRegion(getPointRegion(userLocation), 300);
+    }
+  }, [selectedShop, userLocation]);
+
+  async function selectShop(shopId: string) {
+    setSelectedShopId(shopId);
+    await saveMarketplaceShopId(shopId);
+  }
+
+  async function locateNearbyShops() {
+    setLocating(true);
+    setLocationError(null);
+
+    try {
+      const result = await requestCurrentDeviceLocation();
+
+      if (result.error || !result.coords) {
+        setLocationError(result.error || 'No se pudo obtener tu ubicacion actual.');
+        return;
+      }
+
+      setUserLocation(result.coords);
+    } catch {
+      setLocationError('No se pudo obtener tu ubicacion actual.');
+    } finally {
+      setLocating(false);
+    }
+  }
+
   return (
     <Screen
-      title="Navaja Barber"
-      subtitle="App nativa completa: reservas, cursos, modelos, empleo, staff y admin."
+      eyebrow="Marketplace"
+      title="Explora barberias con el mismo mapa y contexto visual de la web"
+      subtitle="Busqueda, cercania, mapa y acciones hacia Google Maps viven ahora dentro de la experiencia nativa."
     >
       {!envValidation.isValid ? (
-        <Card style={styles.envCard}>
-          <Text style={styles.envTitle}>Configura apps/mobile/.env</Text>
-          <Text style={styles.envText}>
-            Faltan variables: {envValidation.invalidKeys.join(', ')}.
+        <Card
+          style={{
+            borderColor: 'rgba(245, 158, 11, 0.28)',
+            backgroundColor:
+              colors.mode === 'dark' ? 'rgba(120, 53, 15, 0.22)' : 'rgba(255, 251, 235, 0.92)',
+          }}
+        >
+          <Text style={[styles.warningTitle, { color: colors.mode === 'dark' ? '#fde68a' : '#92400e' }]}>
+            Configura apps/mobile/.env
+          </Text>
+          <Text style={[styles.warningText, { color: colors.mode === 'dark' ? '#fde68a' : '#78350f' }]}>
+            Faltan variables base: {envValidation.invalidKeys.join(', ')}.
           </Text>
         </Card>
       ) : null}
 
-      <Card style={styles.hero}>
-        <Text style={styles.heroTitle}>Operación en una sola app</Text>
-        <Text style={styles.heroText}>
-          Gestiona el negocio completo desde mobile con permisos por rol sobre Supabase.
+      <HeroPanel
+        eyebrow="Tu contexto activo"
+        title={selectedShop ? selectedShop.name : 'Selecciona una barberia'}
+        description={
+          selectedShop
+            ? selectedShop.description || formatMarketplaceLocation(selectedShop)
+            : 'Elige una barberia para mantener el mismo contexto en toda la app.'
+        }
+      >
+        <View style={styles.metaRow}>
+          <Chip label={roleLabel[role]} tone={roleTone[role]} />
+          {displayName ? <Text style={[styles.metaText, { color: colors.textMuted }]}>{displayName}</Text> : null}
+        </View>
+
+        <View style={styles.statsRow}>
+          <StatTile label="Barberias" value={String(shops.length)} />
+          <StatTile label="Servicios" value={String(totalServices)} />
+          <StatTile label="Rating" value={averageRating ? averageRating.toFixed(1) : 'Sin data'} />
+        </View>
+
+        <View style={styles.quickGrid}>
+          <QuickAction title="Reservas" subtitle="Agenda en 4 pasos" onPress={() => router.push('/(tabs)/reservas')} />
+          <QuickAction title="Cursos" subtitle="Catalogo global" onPress={() => router.push('/(tabs)/cursos')} />
+          <QuickAction title="Modelos" subtitle="Convocatorias" onPress={() => router.push('/(tabs)/modelos')} />
+          <QuickAction title="Empleo" subtitle="CV por shop o red" onPress={() => router.push('/(tabs)/empleo')} />
+        </View>
+      </HeroPanel>
+
+      <ErrorText message={error} />
+
+      <Card elevated>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Mapa marketplace</Text>
+        <Text style={[styles.sectionCopy, { color: colors.textMuted }]}>
+          Replica la vista mobile de la web: puedes filtrar, ubicarte, tocar una barberia y saltar directo a Google Maps.
         </Text>
-        <RotatingFeatureTicker />
-        <View style={styles.heroFooter}>
-          <Chip label={roleLabel[role]} tone={role === 'admin' ? 'success' : 'neutral'} />
-          <Text style={styles.heroUser}>{name || 'Sin sesión iniciada'}</Text>
+
+        <Field
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          placeholder="Buscar por barrio, ciudad o nombre"
+          autoCapitalize="none"
+        />
+
+        <View style={styles.inlineButtons}>
+          <ActionButton
+            label={locating ? 'Buscando...' : 'Cerca de mi'}
+            variant="secondary"
+            onPress={locateNearbyShops}
+            disabled={locating}
+            style={styles.flexButton}
+          />
+          <ActionButton
+            label="Abrir Google Maps"
+            variant="secondary"
+            onPress={() => {
+              if (selectedShop) {
+                void openShopInGoogleMaps(selectedShop);
+              }
+            }}
+            disabled={!selectedShop}
+            style={styles.flexButton}
+          />
+        </View>
+
+        {locationError ? <Text style={[styles.locationError, { color: colors.danger }]}>{locationError}</Text> : null}
+
+        <View
+          style={[
+            styles.mapShell,
+            {
+              borderColor: colors.border,
+              backgroundColor: colors.panelStrong,
+            },
+          ]}
+        >
+          {mappableShops.length ? (
+            <>
+              <MapView
+                key={`market-map-${colors.mode}`}
+                ref={mapRef}
+                style={styles.map}
+                initialRegion={initialMapRegion}
+                customMapStyle={getMapTheme(colors.mode)}
+                {...platformMapThemeProps}
+                showsCompass={false}
+                toolbarEnabled={false}
+              >
+                {mappableShops.map((shop) => {
+                  const isActive = shop.id === selectedShop?.id;
+
+                  return (
+                    <Marker
+                      key={shop.id}
+                      coordinate={{
+                        latitude: Number(shop.latitude),
+                        longitude: Number(shop.longitude),
+                      }}
+                      title={shop.name}
+                      description={formatMarketplaceLocation(shop)}
+                      pinColor={
+                        isActive
+                          ? '#ef4444'
+                          : colors.mode === 'dark'
+                            ? '#e2e8f0'
+                            : '#1e293b'
+                      }
+                      onPress={() => {
+                        void selectShop(shop.id);
+                      }}
+                    />
+                  );
+                })}
+                {userLocation ? (
+                  <Marker
+                    coordinate={{
+                      latitude: userLocation.latitude,
+                      longitude: userLocation.longitude,
+                    }}
+                    title="Tu ubicacion"
+                    pinColor="#38bdf8"
+                  />
+                ) : null}
+              </MapView>
+
+              <View
+                style={[
+                  styles.mapChip,
+                  {
+                    backgroundColor: colors.panelStrong,
+                    borderColor: colors.border,
+                  },
+                ]}
+              >
+                <Text style={[styles.mapChipText, { color: colors.textMuted }]}>
+                  Marketplace Uruguay · {mappableShops.length} pins
+                </Text>
+              </View>
+
+              {selectedShop ? (
+                <SurfaceCard active style={styles.mapOverlay}>
+                  <Text style={[styles.mapOverlayTitle, { color: colors.text }]}>{selectedShop.name}</Text>
+                  <Text style={[styles.mapOverlayMeta, { color: colors.textMuted }]}>
+                    {formatMarketplaceLocation(selectedShop)}
+                  </Text>
+                  <View style={styles.mapOverlayActions}>
+                    <ActionButton
+                      label="Abrir mapa"
+                      variant="secondary"
+                      onPress={() => {
+                        void openShopInGoogleMaps(selectedShop);
+                      }}
+                      style={styles.overlayButton}
+                    />
+                    <ActionButton
+                      label="Como llegar"
+                      onPress={() => {
+                        void openDirectionsToShop(selectedShop, userLocation);
+                      }}
+                      style={styles.overlayButton}
+                    />
+                  </View>
+                </SurfaceCard>
+              ) : null}
+            </>
+          ) : (
+            <View style={styles.mapEmpty}>
+              <MutedText>No hay barberias con coordenadas para ese filtro.</MutedText>
+            </View>
+          )}
         </View>
       </Card>
 
-      <Card>
-        <Text style={styles.sectionTitle}>Flujos públicos</Text>
-        <View style={styles.grid}>
-          <QuickCard title="Agendar" subtitle="Reserva por servicio y horario real." onPress={() => router.push('/(tabs)/reservas')} />
-          <QuickCard title="Cursos" subtitle="Sesiones e inscripciones." onPress={() => router.push('/(tabs)/cursos')} />
-          <QuickCard title="Modelos" subtitle="Convocatorias y registro." onPress={() => router.push('/(tabs)/modelos')} />
-          <QuickCard title="Empleo" subtitle="Postulación con CV." onPress={() => router.push('/(tabs)/empleo')} />
-        </View>
-      </Card>
+      <Card elevated>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Barberias activas</Text>
+        <Text style={[styles.sectionCopy, { color: colors.textMuted }]}>
+          La seleccion que hagas aqui se usa como preferencia por defecto en los otros tabs.
+        </Text>
 
-      <Card>
-        <Text style={styles.sectionTitle}>Paneles por rol</Text>
-        <View style={styles.grid}>
-          <QuickCard title="Mi cuenta" subtitle="Perfil, rol y reservas." onPress={() => router.push('/(tabs)/cuenta')} />
-          <QuickCard
-            title="Panel staff"
-            subtitle="Agenda y estado de citas."
-            onPress={() => router.push('/staff/index')}
-            disabled={role !== 'staff' && role !== 'admin'}
-          />
-          <QuickCard
-            title="Panel admin"
-            subtitle="Citas, equipo, cursos, métricas."
-            onPress={() => router.push('/admin/index')}
-            disabled={role !== 'admin'}
-          />
+        {loading ? <MutedText>Cargando barberias...</MutedText> : null}
+        {!loading && !filteredShops.length ? <MutedText>No hay resultados para ese filtro.</MutedText> : null}
+
+        <View style={styles.shopList}>
+          {filteredShops.map(({ shop, distanceKm }) => {
+            const active = shop.id === (selectedShop?.id || '');
+
+            return (
+              <SurfaceCard
+                key={shop.id}
+                active={active}
+                onPress={() => {
+                  void selectShop(shop.id);
+                }}
+                style={styles.shopCard}
+              >
+                <View style={styles.shopHeader}>
+                  <View style={styles.shopTitleBlock}>
+                    <Text style={[styles.shopTitle, { color: colors.text }]}>{shop.name}</Text>
+                    <Text style={[styles.shopMeta, { color: colors.textMuted }]}>
+                      {formatMarketplaceLocation(shop)}
+                    </Text>
+                  </View>
+                  <Chip label={active ? 'Activa' : 'Seleccionar'} tone={active ? 'success' : 'neutral'} />
+                </View>
+
+                <Text style={[styles.shopDescription, { color: colors.textSoft }]} numberOfLines={3}>
+                  {shop.description || 'Marketplace multi-tenant con perfil publico, mapa y reserva.'}
+                </Text>
+
+                <View style={styles.shopFacts}>
+                  <Text style={[styles.shopFact, { color: colors.text }]}>Servicios: {shop.activeServiceCount}</Text>
+                  <Text style={[styles.shopFact, { color: colors.text }]}>
+                    Desde: {shop.minServicePriceCents != null ? formatCurrency(shop.minServicePriceCents) : 'Sin precios'}
+                  </Text>
+                  <Text style={[styles.shopFact, { color: colors.text }]}>
+                    Rating: {shop.averageRating ? shop.averageRating.toFixed(1) : 'Sin resenas'}
+                  </Text>
+                  {distanceKm != null ? (
+                    <Text style={[styles.shopFact, { color: colors.text }]}>Distancia: {distanceKm.toFixed(1)} km</Text>
+                  ) : null}
+                </View>
+              </SurfaceCard>
+            );
+          })}
         </View>
       </Card>
     </Screen>
   );
 }
 
-function RotatingFeatureTicker() {
-  const [index, setIndex] = useState(0);
-  const opacity = useRef(new Animated.Value(1)).current;
-
-  useEffect(() => {
-    const intervalId = setInterval(() => {
-      Animated.timing(opacity, {
-        toValue: 0,
-        duration: 170,
-        useNativeDriver: true,
-      }).start(() => {
-        setIndex((current) => (current + 1) % rotatingFeatures.length);
-        Animated.timing(opacity, {
-          toValue: 1,
-          duration: 210,
-          useNativeDriver: true,
-        }).start();
-      });
-    }, 1900);
-
-    return () => {
-      clearInterval(intervalId);
-    };
-  }, [opacity]);
-
-  return (
-    <View style={styles.bitsChip}>
-      <Text style={styles.bitsLabel}>Demo estilo React Bits</Text>
-      <Animated.Text style={[styles.bitsWord, { opacity }]}>
-        {rotatingFeatures[index]}
-      </Animated.Text>
-    </View>
-  );
-}
-
-function QuickCard({
+function QuickAction({
   title,
   subtitle,
   onPress,
-  disabled,
 }: {
   title: string;
   subtitle: string;
   onPress: () => void;
-  disabled?: boolean;
 }) {
+  const { colors } = useNavajaTheme();
+
   return (
-    <Pressable
-      style={[styles.quick, disabled ? styles.quickDisabled : null]}
+    <SurfaceCard
+      style={styles.quickAction}
       onPress={onPress}
-      disabled={disabled}
     >
-      <Text style={styles.quickTitle}>{title}</Text>
-      <Text style={styles.quickText}>{subtitle}</Text>
-    </Pressable>
+      <Text style={[styles.quickTitle, { color: colors.text }]}>{title}</Text>
+      <Text style={[styles.quickSubtitle, { color: colors.textMuted }]}>{subtitle}</Text>
+    </SurfaceCard>
   );
 }
 
 const styles = StyleSheet.create({
-  envCard: {
-    borderColor: '#f59e0b',
-    backgroundColor: '#fffbeb',
-  },
-  envTitle: {
-    color: '#92400e',
+  warningTitle: {
     fontSize: 15,
     fontWeight: '800',
   },
-  envText: {
-    color: '#78350f',
+  warningText: {
     fontSize: 13,
   },
-  hero: {
-    backgroundColor: '#0f1b2d',
-    borderColor: '#1f2e45',
-  },
-  heroTitle: {
-    color: '#fff',
-    fontSize: 22,
-    fontWeight: '800',
-  },
-  heroText: {
-    color: '#cbd5e1',
-    fontSize: 14,
-  },
-  bitsChip: {
-    marginTop: 2,
-    alignSelf: 'flex-start',
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  bitsLabel: {
-    color: 'rgba(255,255,255,0.75)',
-    fontSize: 10,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-  },
-  bitsWord: {
-    color: palette.accent,
-    fontSize: 14,
-    fontWeight: '700',
-    minWidth: 72,
-  },
-  heroFooter: {
-    marginTop: 4,
+  metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 8,
   },
-  heroUser: {
-    color: '#cbd5e1',
+  metaText: {
     fontSize: 12,
     flex: 1,
     textAlign: 'right',
   },
-  sectionTitle: {
-    color: palette.text,
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 2,
-  },
-  grid: {
+  statsRow: {
+    flexDirection: 'row',
     gap: 8,
   },
-  quick: {
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    backgroundColor: '#f8fafc',
-    padding: 12,
-    gap: 3,
+  quickGrid: {
+    gap: 8,
   },
-  quickDisabled: {
-    opacity: 0.45,
+  quickAction: {
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: 12,
+    gap: 4,
   },
   quickTitle: {
-    color: palette.text,
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '700',
   },
-  quickText: {
-    color: '#475569',
+  quickSubtitle: {
+    fontSize: 12,
+  },
+  sectionTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+  },
+  sectionCopy: {
     fontSize: 13,
+    lineHeight: 18,
+  },
+  inlineButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  flexButton: {
+    flex: 1,
+  },
+  locationError: {
+    fontSize: 12,
+  },
+  mapShell: {
+    position: 'relative',
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderRadius: 24,
+    minHeight: 320,
+  },
+  map: {
+    height: 320,
+    width: '100%',
+  },
+  mapChip: {
+    position: 'absolute',
+    left: 12,
+    top: 12,
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  mapChipText: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+  },
+  mapOverlay: {
+    position: 'absolute',
+    left: 12,
+    right: 12,
+    bottom: 12,
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: 12,
+    gap: 6,
+  },
+  mapOverlayTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  mapOverlayMeta: {
+    fontSize: 12,
+  },
+  mapOverlayActions: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 4,
+  },
+  overlayButton: {
+    flex: 1,
+    minHeight: 42,
+  },
+  mapEmpty: {
+    minHeight: 320,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 18,
+  },
+  shopList: {
+    gap: 10,
+  },
+  shopCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: 13,
+    gap: 8,
+  },
+  shopHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  shopTitleBlock: {
+    flex: 1,
+    gap: 2,
+  },
+  shopTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  shopMeta: {
+    fontSize: 12,
+  },
+  shopDescription: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  shopFacts: {
+    gap: 3,
+  },
+  shopFact: {
+    fontSize: 12,
+    fontWeight: '600',
   },
 });

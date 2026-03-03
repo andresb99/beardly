@@ -1,19 +1,34 @@
-import { useCallback, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { bookingInputSchema } from '@navaja/shared';
-import { ActionButton, Card, ErrorText, Field, Label, MultilineField, MutedText, Screen } from '../../components/ui/primitives';
-import { env } from '../../lib/env';
+import {
+  ActionButton,
+  Card,
+  ErrorText,
+  Field,
+  HeroPanel,
+  Label,
+  MultilineField,
+  MutedText,
+  PillToggle,
+  Screen,
+  SurfaceCard,
+} from '../../components/ui/primitives';
+import { submitBookingViaApi } from '../../lib/api';
 import { formatCurrency, formatTime } from '../../lib/format';
+import {
+  formatMarketplaceLocation,
+  listMarketplaceServices,
+  listMarketplaceShops,
+  resolvePreferredMarketplaceShopId,
+  saveMarketplaceShopId,
+  type MarketplaceService,
+  type MarketplaceShop,
+} from '../../lib/marketplace';
+import { openDirectionsToShop } from '../../lib/maps';
 import { supabase } from '../../lib/supabase';
-import { palette } from '../../lib/theme';
-
-interface ServiceOption {
-  id: string;
-  name: string;
-  price_cents: number;
-  duration_minutes: number;
-}
+import { useNavajaTheme } from '../../lib/theme';
 
 interface SlotOption {
   staff_id: string;
@@ -22,18 +37,36 @@ interface SlotOption {
   end_at: string;
 }
 
-function todayIsoDate() {
-  return new Date().toISOString().slice(0, 10);
+const stepLabels = ['1. Servicio', '2. Barbero', '3. Horario', '4. Tus datos'] as const;
+
+function getInitialBookingDate() {
+  const today = new Date();
+  const utcDate = new Date(
+    Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()),
+  );
+  const dayOfWeek = utcDate.getUTCDay();
+
+  if (dayOfWeek === 6) {
+    utcDate.setUTCDate(utcDate.getUTCDate() + 2);
+  } else if (dayOfWeek === 0) {
+    utcDate.setUTCDate(utcDate.getUTCDate() + 1);
+  }
+
+  return utcDate.toISOString().slice(0, 10);
 }
 
 export default function ReservasScreen() {
-  const [services, setServices] = useState<ServiceOption[]>([]);
-  const [loadingServices, setLoadingServices] = useState(true);
+  const { colors } = useNavajaTheme();
+  const [shops, setShops] = useState<MarketplaceShop[]>([]);
+  const [selectedShopId, setSelectedShopId] = useState('');
+  const [services, setServices] = useState<MarketplaceService[]>([]);
+  const [loadingShops, setLoadingShops] = useState(true);
+  const [loadingServices, setLoadingServices] = useState(false);
   const [loadingSlots, setLoadingSlots] = useState(false);
 
   const [serviceId, setServiceId] = useState('');
   const [staffFilter, setStaffFilter] = useState('');
-  const [date, setDate] = useState(todayIsoDate());
+  const [date, setDate] = useState(getInitialBookingDate());
   const [allSlots, setAllSlots] = useState<SlotOption[]>([]);
   const [selectedSlot, setSelectedSlot] = useState<SlotOption | null>(null);
 
@@ -45,11 +78,14 @@ export default function ReservasScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const selectedShop = useMemo(
+    () => shops.find((shop) => shop.id === selectedShopId) || shops[0] || null,
+    [selectedShopId, shops],
+  );
   const selectedService = useMemo(
     () => services.find((item) => item.id === serviceId) || null,
     [serviceId, services],
   );
-
   const staffChoices = useMemo(() => {
     const map = new Map<string, string>();
     allSlots.forEach((slot) => {
@@ -57,94 +93,148 @@ export default function ReservasScreen() {
     });
     return [...map.entries()].map(([id, name]) => ({ id, name }));
   }, [allSlots]);
-
   const visibleSlots = useMemo(
     () => (staffFilter ? allSlots.filter((slot) => slot.staff_id === staffFilter) : allSlots),
     [allSlots, staffFilter],
   );
 
-  const loadServices = useCallback(async () => {
-    setLoadingServices(true);
-    const { data, error: fetchError } = await supabase
-      .from('services')
-      .select('id, name, price_cents, duration_minutes')
-      .eq('shop_id', env.EXPO_PUBLIC_SHOP_ID)
-      .eq('is_active', true)
-      .order('name');
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
 
-    if (fetchError) {
-      setError(fetchError.message);
+      void (async () => {
+        setLoadingShops(true);
+        setError(null);
+
+        const marketplaceShops = await listMarketplaceShops();
+        if (!active) {
+          return;
+        }
+
+        setShops(marketplaceShops);
+        const preferredShopId = await resolvePreferredMarketplaceShopId(marketplaceShops);
+        if (!active) {
+          return;
+        }
+
+        setSelectedShopId(preferredShopId);
+        setLoadingShops(false);
+      })().catch(() => {
+        if (!active) {
+          return;
+        }
+
+        setLoadingShops(false);
+        setError('No se pudo cargar el marketplace.');
+      });
+
+      return () => {
+        active = false;
+      };
+    }, []),
+  );
+
+  useEffect(() => {
+    if (!selectedShopId) {
+      setServices([]);
+      return;
+    }
+
+    let active = true;
+
+    void (async () => {
+      setLoadingServices(true);
+      const items = await listMarketplaceServices(selectedShopId);
+      if (!active) {
+        return;
+      }
+
+      setServices(items);
+      if (!items.find((item) => item.id === serviceId)) {
+        setServiceId('');
+      }
+      setLoadingServices(false);
+    })().catch(() => {
+      if (!active) {
+        return;
+      }
+
       setServices([]);
       setLoadingServices(false);
-      return;
-    }
-
-    setServices(
-      (data || []).map((item) => ({
-        id: String(item.id),
-        name: String(item.name),
-        price_cents: Number(item.price_cents || 0),
-        duration_minutes: Number(item.duration_minutes || 0),
-      })),
-    );
-    setLoadingServices(false);
-  }, []);
-
-  const loadSlots = useCallback(async () => {
-    if (!serviceId || !date) {
-      setAllSlots([]);
-      return;
-    }
-
-    setLoadingSlots(true);
-    setError(null);
-
-    const { data, error: slotsError } = await supabase.rpc('get_public_availability', {
-      p_shop_id: env.EXPO_PUBLIC_SHOP_ID,
-      p_service_id: serviceId,
-      p_date: date,
-      p_staff_id: null,
+      setError('No se pudieron cargar los servicios.');
     });
 
-    if (slotsError) {
+    return () => {
+      active = false;
+    };
+  }, [selectedShopId, serviceId]);
+
+  useEffect(() => {
+    if (!selectedShopId || !serviceId || !date) {
       setAllSlots([]);
-      setLoadingSlots(false);
-      setError(slotsError.message);
+      setSelectedSlot(null);
       return;
     }
 
-    setAllSlots(
-      (data || []).map((item: Record<string, unknown>) => ({
-        staff_id: String(item.staff_id),
-        staff_name: String(item.staff_name || 'Staff'),
-        start_at: String(item.start_at),
-        end_at: String(item.end_at),
-      })),
-    );
+    let active = true;
+
+    void (async () => {
+      setLoadingSlots(true);
+      setError(null);
+
+      const { data, error: slotsError } = await supabase.rpc('get_public_availability', {
+        p_shop_id: selectedShopId,
+        p_service_id: serviceId,
+        p_date: date,
+        p_staff_id: null,
+      });
+
+      if (!active) {
+        return;
+      }
+
+      if (slotsError) {
+        setAllSlots([]);
+        setSelectedSlot(null);
+        setLoadingSlots(false);
+        setError(slotsError.message);
+        return;
+      }
+
+      setAllSlots(
+        (data || []).map((item: Record<string, unknown>) => ({
+          staff_id: String(item.staff_id),
+          staff_name: String(item.staff_name || 'Staff'),
+          start_at: String(item.start_at),
+          end_at: String(item.end_at),
+        })),
+      );
+      setSelectedSlot(null);
+      setLoadingSlots(false);
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [date, serviceId, selectedShopId]);
+
+  async function selectShop(shopId: string) {
+    setSelectedShopId(shopId);
+    setServiceId('');
+    setStaffFilter('');
+    setAllSlots([]);
     setSelectedSlot(null);
-    setLoadingSlots(false);
-  }, [date, serviceId]);
-
-  useFocusEffect(
-    useCallback(() => {
-      void loadServices();
-    }, [loadServices]),
-  );
-
-  useFocusEffect(
-    useCallback(() => {
-      void loadSlots();
-    }, [loadSlots]),
-  );
+    await saveMarketplaceShopId(shopId);
+  }
 
   async function submitBooking() {
-    if (!selectedService || !selectedSlot) {
-      setError('Selecciona un horario antes de confirmar.');
+    if (!selectedService || !selectedSlot || !selectedShopId) {
+      setError('Selecciona servicio y horario antes de confirmar.');
       return;
     }
 
     const parsed = bookingInputSchema.safeParse({
-      shop_id: env.EXPO_PUBLIC_SHOP_ID,
+      shop_id: selectedShopId,
       service_id: selectedService.id,
       staff_id: selectedSlot.staff_id,
       start_at: selectedSlot.start_at,
@@ -162,86 +252,183 @@ export default function ReservasScreen() {
     setSubmitting(true);
     setError(null);
 
-    const { data: customer, error: customerError } = await supabase
-      .from('customers')
-      .insert({
+    try {
+      const apiResult = await submitBookingViaApi({
         shop_id: parsed.data.shop_id,
-        name: parsed.data.customer_name,
-        phone: parsed.data.customer_phone,
-        email: parsed.data.customer_email || null,
-      })
-      .select('id')
-      .single();
-
-    if (customerError || !customer) {
-      setSubmitting(false);
-      setError(customerError?.message || 'No se pudo crear el cliente.');
-      return;
-    }
-
-    const { data: appointment, error: appointmentError } = await supabase
-      .from('appointments')
-      .insert({
-        shop_id: parsed.data.shop_id,
-        staff_id: parsed.data.staff_id,
-        customer_id: customer.id,
         service_id: parsed.data.service_id,
+        staff_id: selectedSlot.staff_id,
         start_at: parsed.data.start_at,
-        status: 'pending',
+        customer_name: parsed.data.customer_name,
+        customer_phone: parsed.data.customer_phone,
+        customer_email: parsed.data.customer_email || null,
         notes: parsed.data.notes || null,
-      })
-      .select('id')
-      .single();
+      });
+      if (apiResult?.appointment_id) {
+        router.push({
+          pathname: '/book/success',
+          params: {
+            appointment: apiResult.appointment_id,
+            start: selectedSlot.start_at,
+            service: selectedService.name,
+            staff: selectedSlot.staff_name,
+          },
+        });
+        return;
+      }
 
-    if (appointmentError || !appointment) {
+      const { data: customer, error: customerError } = await supabase
+        .from('customers')
+        .insert({
+          shop_id: parsed.data.shop_id,
+          name: parsed.data.customer_name,
+          phone: parsed.data.customer_phone,
+          email: parsed.data.customer_email || null,
+        })
+        .select('id')
+        .single();
+
+      if (customerError || !customer) {
+        setError(customerError?.message || 'No se pudo crear el cliente.');
+        return;
+      }
+
+      const { data: appointment, error: appointmentError } = await supabase
+        .from('appointments')
+        .insert({
+          shop_id: parsed.data.shop_id,
+          staff_id: parsed.data.staff_id,
+          customer_id: customer.id,
+          service_id: parsed.data.service_id,
+          start_at: parsed.data.start_at,
+          status: 'pending',
+          notes: parsed.data.notes || null,
+        })
+        .select('id')
+        .single();
+
+      if (appointmentError || !appointment) {
+        setError(appointmentError?.message || 'No se pudo crear la cita.');
+        return;
+      }
+
+      router.push({
+        pathname: '/book/success',
+        params: {
+          appointment: String(appointment.id),
+          start: selectedSlot.start_at,
+          service: selectedService.name,
+          staff: selectedSlot.staff_name,
+        },
+      });
+    } catch (submitError) {
+      setError(
+        submitError instanceof Error ? submitError.message : 'No se pudo confirmar la cita.',
+      );
+    } finally {
       setSubmitting(false);
-      setError(appointmentError?.message || 'No se pudo crear la cita.');
-      return;
     }
-
-    setSubmitting(false);
-    router.push({
-      pathname: '/book/success',
-      params: {
-        appointment: String(appointment.id),
-        start: selectedSlot.start_at,
-        service: selectedService.name,
-        staff: selectedSlot.staff_name,
-      },
-    });
   }
 
   return (
-    <Screen title="Reservas" subtitle="Flujo público de agenda en 4 pasos">
+    <Screen
+      eyebrow="Reservas"
+      title="Agenda como en la web, pero nativo"
+      subtitle="Selecciona barberia, servicio, staff y horario. El flujo conserva la misma secuencia visual de la web responsive."
+    >
+      <HeroPanel
+        eyebrow="Reserva publica"
+        title={selectedShop ? selectedShop.name : 'Elige una barberia para reservar'}
+        description={
+          selectedShop
+            ? formatMarketplaceLocation(selectedShop)
+            : 'El contexto activo define que servicios y horarios ves.'
+        }
+      >
+        <View style={styles.stepRow}>
+          {stepLabels.map((label, index) => {
+            const activeStep =
+              index === 0
+                ? Boolean(serviceId)
+                : index === 1
+                  ? Boolean(serviceId)
+                  : index === 2
+                    ? Boolean(selectedSlot)
+                    : Boolean(customerName || customerPhone || customerEmail);
+
+            return <PillToggle key={label} label={label} active={activeStep} compact />;
+          })}
+        </View>
+        {selectedShop ? (
+          <ActionButton
+            label="Ver ubicacion en Google Maps"
+            variant="secondary"
+            onPress={() => {
+              void openDirectionsToShop(selectedShop);
+            }}
+            style={styles.heroButton}
+          />
+        ) : null}
+      </HeroPanel>
+
       <ErrorText message={error} />
 
-      <Card>
-        <Text style={styles.stepTitle}>1. Servicio</Text>
+      <Card elevated>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>1. Servicio y barberia</Text>
+        {loadingShops ? <MutedText>Cargando barberias...</MutedText> : null}
+        {!loadingShops && !shops.length ? (
+          <MutedText>No hay barberias activas publicadas.</MutedText>
+        ) : null}
+
+        <View style={styles.filterWrap}>
+          {shops.map((shop) => (
+            <PillToggle
+              key={shop.id}
+              label={shop.name}
+              active={shop.id === (selectedShop?.id || '')}
+              onPress={() => {
+                void selectShop(shop.id);
+              }}
+            />
+          ))}
+        </View>
+
         {loadingServices ? <MutedText>Cargando servicios...</MutedText> : null}
-        <View style={styles.grid}>
+        {!loadingServices && selectedShop && !services.length ? (
+          <MutedText>No hay servicios activos en esta barberia.</MutedText>
+        ) : null}
+
+        <View style={styles.optionList}>
           {services.map((service) => (
-            <Pressable
+            <SurfaceCard
               key={service.id}
-              style={[styles.option, service.id === serviceId ? styles.optionActive : null]}
-              onPress={() => setServiceId(service.id)}
+              active={service.id === serviceId}
+              style={styles.optionCard}
+              onPress={() => {
+                setServiceId(service.id);
+                setStaffFilter('');
+              }}
             >
-              <Text style={styles.optionTitle}>{service.name}</Text>
-              <Text style={styles.optionMeta}>
-                {formatCurrency(service.price_cents)} - {service.duration_minutes} min
+              <Text style={[styles.optionTitle, { color: colors.text }]}>{service.name}</Text>
+              <Text style={[styles.optionMeta, { color: colors.textMuted }]}>
+                {formatCurrency(service.priceCents)} - {service.durationMinutes} min
               </Text>
-            </Pressable>
+            </SurfaceCard>
           ))}
         </View>
       </Card>
 
-      <Card>
-        <Text style={styles.stepTitle}>2. Barbero</Text>
+      <Card elevated>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>2. Barbero y fecha</Text>
         <Label>Fecha</Label>
         <Field value={date} onChangeText={setDate} placeholder="YYYY-MM-DD" />
         <View style={styles.inlineButtons}>
-          <ActionButton label="Hoy" variant="secondary" onPress={() => setDate(todayIsoDate())} />
           <ActionButton
-            label="Mañana"
+            label="Hoy"
+            variant="secondary"
+            onPress={() => setDate(new Date().toISOString().slice(0, 10))}
+          />
+          <ActionButton
+            label="Manana"
             variant="secondary"
             onPress={() => {
               const next = new Date();
@@ -250,55 +437,75 @@ export default function ReservasScreen() {
             }}
           />
         </View>
-        <MutedText>{staffChoices.length ? 'Filtra por barbero o usa primero disponible.' : 'Selecciona servicio y fecha para cargar disponibilidad.'}</MutedText>
-        <View style={styles.chipWrap}>
-          <Pressable
+        <Text style={[styles.helper, { color: colors.textMuted }]}>
+          {selectedShop
+            ? `Disponibilidad de ${selectedShop.name}.`
+            : 'Selecciona una barberia y un servicio para cargar disponibilidad.'}
+        </Text>
+
+        <View style={styles.filterWrap}>
+          <PillToggle
+            label="Primero disponible"
+            active={!staffFilter}
             onPress={() => setStaffFilter('')}
-            style={[styles.chip, !staffFilter ? styles.chipActive : null]}
-          >
-            <Text style={[styles.chipText, !staffFilter ? styles.chipTextActive : null]}>Primero disponible</Text>
-          </Pressable>
+          />
           {staffChoices.map((staff) => (
-            <Pressable
+            <PillToggle
               key={staff.id}
+              label={staff.name}
+              active={staffFilter === staff.id}
               onPress={() => setStaffFilter(staff.id)}
-              style={[styles.chip, staffFilter === staff.id ? styles.chipActive : null]}
-            >
-              <Text style={[styles.chipText, staffFilter === staff.id ? styles.chipTextActive : null]}>{staff.name}</Text>
-            </Pressable>
+            />
           ))}
         </View>
       </Card>
 
-      <Card>
-        <Text style={styles.stepTitle}>3. Hora disponible</Text>
+      <Card elevated>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>3. Horario</Text>
         {loadingSlots ? <MutedText>Cargando horarios...</MutedText> : null}
-        {!loadingSlots && visibleSlots.length === 0 ? <MutedText>No hay horarios para esa fecha.</MutedText> : null}
-        <View style={styles.grid}>
+        {!loadingSlots && selectedService && !visibleSlots.length ? (
+          <MutedText>No hay horarios disponibles para esa fecha.</MutedText>
+        ) : null}
+        {!selectedService ? <MutedText>Selecciona un servicio para ver la agenda.</MutedText> : null}
+
+        <View style={styles.optionList}>
           {visibleSlots.map((slot) => {
-            const selected = selectedSlot?.staff_id === slot.staff_id && selectedSlot.start_at === slot.start_at;
+            const selected =
+              selectedSlot?.staff_id === slot.staff_id &&
+              selectedSlot.start_at === slot.start_at;
+
             return (
-              <Pressable
+              <SurfaceCard
                 key={`${slot.staff_id}-${slot.start_at}`}
-                style={[styles.option, selected ? styles.optionActive : null]}
+                active={selected}
+                style={styles.optionCard}
                 onPress={() => setSelectedSlot(slot)}
               >
-                <Text style={styles.optionTitle}>{formatTime(slot.start_at)}</Text>
-                <Text style={styles.optionMeta}>{slot.staff_name}</Text>
-              </Pressable>
+                <Text style={[styles.optionTitle, { color: colors.text }]}>
+                  {formatTime(slot.start_at)}
+                </Text>
+                <Text style={[styles.optionMeta, { color: colors.textMuted }]}>
+                  {slot.staff_name}
+                </Text>
+              </SurfaceCard>
             );
           })}
         </View>
       </Card>
 
-      <Card>
-        <Text style={styles.stepTitle}>4. Tus datos</Text>
+      <Card elevated>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>4. Tus datos</Text>
         <Label>Nombre y apellido</Label>
         <Field value={customerName} onChangeText={setCustomerName} />
-        <Label>Teléfono</Label>
+        <Label>Telefono</Label>
         <Field value={customerPhone} onChangeText={setCustomerPhone} />
         <Label>Email (opcional)</Label>
-        <Field value={customerEmail} onChangeText={setCustomerEmail} keyboardType="email-address" />
+        <Field
+          value={customerEmail}
+          onChangeText={setCustomerEmail}
+          keyboardType="email-address"
+          autoCapitalize="none"
+        />
         <Label>Notas (opcional)</Label>
         <MultilineField value={notes} onChangeText={setNotes} />
         <ActionButton
@@ -313,62 +520,44 @@ export default function ReservasScreen() {
 }
 
 const styles = StyleSheet.create({
-  stepTitle: {
-    color: palette.text,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  grid: {
+  stepRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
   },
-  option: {
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 12,
-    backgroundColor: '#f8fafc',
-    padding: 12,
-    gap: 2,
+  heroButton: {
+    marginTop: 4,
   },
-  optionActive: {
-    borderColor: palette.accent,
-    backgroundColor: '#fff7e6',
+  sectionTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+  },
+  helper: {
+    fontSize: 12,
+  },
+  optionList: {
+    gap: 8,
+  },
+  optionCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: 13,
+    gap: 4,
   },
   optionTitle: {
-    color: palette.text,
-    fontWeight: '700',
     fontSize: 14,
+    fontWeight: '700',
   },
   optionMeta: {
-    color: '#475569',
     fontSize: 12,
   },
   inlineButtons: {
     flexDirection: 'row',
     gap: 8,
   },
-  chipWrap: {
+  filterWrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
-  },
-  chip: {
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: '#fff',
-  },
-  chipActive: {
-    backgroundColor: palette.text,
-    borderColor: palette.text,
-  },
-  chipText: {
-    color: '#334155',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  chipTextActive: {
-    color: '#fff',
   },
 });

@@ -17,25 +17,67 @@ export interface StaffContext {
   role: 'admin' | 'staff';
 }
 
+function guestAuthContext(): AuthContext {
+  return {
+    role: 'guest',
+    userId: null,
+    email: null,
+    staffId: null,
+    staffName: null,
+  };
+}
+
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return typeof error === 'string' ? error : '';
+}
+
+function isAuthSessionMissing(error: unknown) {
+  return getErrorMessage(error).toLowerCase().includes('auth session missing');
+}
+
+function isInvalidRefreshToken(error: unknown) {
+  const message = getErrorMessage(error).toLowerCase();
+  return (
+    message.includes('invalid refresh token') ||
+    message.includes('refresh token not found')
+  );
+}
+
+async function clearBrokenSession() {
+  try {
+    await supabase.auth.signOut({ scope: 'local' });
+  } catch {
+    // If local cleanup fails, we still continue in guest mode.
+  }
+}
+
 export async function getAuthContext(): Promise<AuthContext> {
   try {
     const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
+      data: { session },
+      error: sessionError,
+    } = await supabase.auth.getSession();
 
-    if (userError) {
-      throw userError;
+    if (sessionError) {
+      if (isInvalidRefreshToken(sessionError)) {
+        await clearBrokenSession();
+        return guestAuthContext();
+      }
+
+      if (isAuthSessionMissing(sessionError)) {
+        return guestAuthContext();
+      }
+
+      throw sessionError;
     }
 
+    const user = session?.user || null;
     if (!user) {
-      return {
-        role: 'guest',
-        userId: null,
-        email: null,
-        staffId: null,
-        staffName: null,
-      };
+      return guestAuthContext();
     }
 
     const { data: staff, error: staffError } = await supabase
@@ -68,14 +110,17 @@ export async function getAuthContext(): Promise<AuthContext> {
       staffName: String(staff.name),
     };
   } catch (cause) {
+    if (isInvalidRefreshToken(cause)) {
+      await clearBrokenSession();
+      return guestAuthContext();
+    }
+
+    if (isAuthSessionMissing(cause)) {
+      return guestAuthContext();
+    }
+
     console.warn('No se pudo resolver el contexto de auth en mobile:', cause);
-    return {
-      role: 'guest',
-      userId: null,
-      email: null,
-      staffId: null,
-      staffName: null,
-    };
+    return guestAuthContext();
   }
 }
 
@@ -91,4 +136,3 @@ export async function getStaffContext(): Promise<StaffContext | null> {
     role: ctx.role,
   };
 }
-

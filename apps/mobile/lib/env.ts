@@ -22,11 +22,14 @@ const rawEnv = {
   EXPO_PUBLIC_SUPABASE_URL: normalizeEnvValue(process.env.EXPO_PUBLIC_SUPABASE_URL),
   EXPO_PUBLIC_SUPABASE_ANON_KEY: normalizeEnvValue(process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY),
   EXPO_PUBLIC_SHOP_ID: normalizeEnvValue(process.env.EXPO_PUBLIC_SHOP_ID),
+  EXPO_PUBLIC_API_BASE_URL: normalizeEnvValue(process.env.EXPO_PUBLIC_API_BASE_URL),
 };
 
 const urlResult = urlSchema.safeParse(rawEnv.EXPO_PUBLIC_SUPABASE_URL);
 const anonKeyResult = anonKeySchema.safeParse(rawEnv.EXPO_PUBLIC_SUPABASE_ANON_KEY);
 const shopIdResult = shopIdSchema.safeParse(rawEnv.EXPO_PUBLIC_SHOP_ID);
+const apiBaseUrlCandidate = rawEnv.EXPO_PUBLIC_API_BASE_URL?.replace(/\/+$/g, '');
+const apiBaseUrlResult = apiBaseUrlCandidate ? urlSchema.safeParse(apiBaseUrlCandidate) : null;
 
 const invalidKeys: string[] = [];
 if (!urlResult.success) {
@@ -49,6 +52,8 @@ export const env = {
   EXPO_PUBLIC_SHOP_ID: shopIdResult.success
     ? shopIdResult.data
     : fallbackEnv.EXPO_PUBLIC_SHOP_ID,
+  EXPO_PUBLIC_API_BASE_URL:
+    apiBaseUrlResult && apiBaseUrlResult.success ? apiBaseUrlResult.data : undefined,
 };
 
 export const envValidation = {

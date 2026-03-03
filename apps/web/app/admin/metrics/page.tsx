@@ -3,7 +3,7 @@ import { formatCurrency } from '@navaja/shared';
 import { Card, CardBody } from '@heroui/card';
 import { HealthChip } from '@/components/admin/health-chip';
 import { KpiCard } from '@/components/admin/kpi-card';
-import { MetricBar } from '@/components/admin/metric-bar';
+import { StaffPerformanceVisuals } from '@/components/admin/staff-performance-visuals';
 import { StaffComparisonTable } from '@/components/admin/staff-comparison-table';
 import { StaffPerformanceFilters } from '@/components/admin/staff-performance-filters';
 import { requireAdmin } from '@/lib/auth';
@@ -39,7 +39,6 @@ export default async function MetricsPage({ searchParams }: MetricsPageProps) {
   const params = await searchParams;
   const ctx = await requireAdmin({ shopSlug: params.shop });
   const dashboard = await getStaffPerformanceDashboard(params, ctx.shopId, ctx.shopSlug);
-  const maxRevenue = Math.max(1, ...dashboard.staff.map((item) => item.totalRevenueCents));
 
   return (
     <section className="space-y-7">
@@ -97,6 +96,8 @@ export default async function MetricsPage({ searchParams }: MetricsPageProps) {
           value={formatCurrency(dashboard.team.averageTicketCents)}
         />
       </div>
+
+      <StaffPerformanceVisuals staff={dashboard.staff} />
 
       {dashboard.insights.length ? (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -188,11 +189,10 @@ export default async function MetricsPage({ searchParams }: MetricsPageProps) {
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                       <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate/55 dark:text-slate-400">
-                        Traccion
+                        Pulso operativo
                       </p>
                       <p className="mt-2 text-sm text-slate/80 dark:text-slate-300">
-                        Ocupacion {formatPercent(item.occupancyRatio)} y ticket promedio{' '}
-                        {formatCurrency(item.averageTicketCents)}.
+                        Lectura rapida del ritmo comercial, fidelizacion y valor por visita.
                       </p>
                     </div>
                     <p className="text-2xl font-semibold text-ink dark:text-slate-100">
@@ -200,31 +200,68 @@ export default async function MetricsPage({ searchParams }: MetricsPageProps) {
                     </p>
                   </div>
 
-                  <div className="mt-4">
-                    <MetricBar
-                      value={item.totalRevenueCents}
-                      max={maxRevenue}
-                      tone={
-                        item.health === 'attention'
-                          ? 'rose'
-                          : item.health === 'top'
-                            ? 'brass'
-                            : 'ink'
-                      }
-                    />
+                  <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                    <div className="rounded-2xl border border-white/55 bg-white/42 px-3 py-3 dark:border-transparent dark:bg-white/[0.03]">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate/55 dark:text-slate-400">
+                        Ticket
+                      </p>
+                      <p className="mt-1 text-sm font-semibold text-ink dark:text-slate-100">
+                        {formatCurrency(item.averageTicketCents)}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl border border-white/55 bg-white/42 px-3 py-3 dark:border-transparent dark:bg-white/[0.03]">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate/55 dark:text-slate-400">
+                        Recompra
+                      </p>
+                      <p className="mt-1 text-sm font-semibold text-ink dark:text-slate-100">
+                        {formatPercent(item.repeatClientRate)}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl border border-white/55 bg-white/42 px-3 py-3 dark:border-transparent dark:bg-white/[0.03]">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate/55 dark:text-slate-400">
+                        Ticket x hora
+                      </p>
+                      <p className="mt-1 text-sm font-semibold text-ink dark:text-slate-100">
+                        {formatCurrency(item.revenuePerAvailableHourCents)}
+                      </p>
+                    </div>
                   </div>
                 </div>
 
                 <div className="data-card rounded-[1.6rem] p-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate/55 dark:text-slate-400">
-                    Resena
-                  </p>
-                  <p className="mt-2 text-2xl font-semibold text-ink dark:text-slate-100">
-                    {item.trustedRating.toFixed(1)}
-                  </p>
-                  <p className="mt-1 text-sm text-slate/80 dark:text-slate-300">
-                    {item.reviewCount} valoraciones procesadas
-                  </p>
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate/55 dark:text-slate-400">
+                        Calidad percibida
+                      </p>
+                      <p className="mt-2 text-2xl font-semibold text-ink dark:text-slate-100">
+                        {item.trustedRating.toFixed(1)}
+                      </p>
+                    </div>
+                    <div className="rounded-full border border-white/55 bg-white/52 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate/75 dark:border-transparent dark:bg-white/[0.05] dark:text-slate-300">
+                      {dashboard.team.totalRevenueCents > 0
+                        ? `${formatPercent(item.totalRevenueCents / dashboard.team.totalRevenueCents)} del equipo`
+                        : 'Sin base'}
+                    </div>
+                  </div>
+                  <div className="mt-3 grid gap-2">
+                    <div className="rounded-2xl border border-white/55 bg-white/42 px-3 py-3 dark:border-transparent dark:bg-white/[0.03]">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate/55 dark:text-slate-400">
+                        Resenas verificadas
+                      </p>
+                      <p className="mt-1 text-sm font-semibold text-ink dark:text-slate-100">
+                        {item.reviewCount}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl border border-white/55 bg-white/42 px-3 py-3 dark:border-transparent dark:bg-white/[0.03]">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate/55 dark:text-slate-400">
+                        Cancelacion total
+                      </p>
+                      <p className="mt-1 text-sm font-semibold text-ink dark:text-slate-100">
+                        {formatPercent(item.cancellationRate)}
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </div>
 
