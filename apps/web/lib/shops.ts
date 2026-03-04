@@ -38,6 +38,8 @@ interface ShopServiceRow {
   price_cents: number | null;
 }
 
+export type MarketplaceSearchMode = 'all' | 'name' | 'area' | 'nearby';
+
 export interface MarketplaceShop {
   id: string;
   name: string;
@@ -96,6 +98,328 @@ function buildMarketplaceShop(
     activeServiceCount: validPrices.length,
     minServicePriceCents: validPrices.length > 0 ? Math.min(...validPrices) : null,
   };
+}
+
+function normalizeSearchValue(value: string | null | undefined) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+function getDistanceKm(
+  fromLatitude: number,
+  fromLongitude: number,
+  toLatitude: number,
+  toLongitude: number,
+) {
+  const toRadians = (value: number) => (value * Math.PI) / 180;
+  const earthRadiusKm = 6371;
+  const deltaLatitude = toRadians(toLatitude - fromLatitude);
+  const deltaLongitude = toRadians(toLongitude - fromLongitude);
+  const latitudeA = toRadians(fromLatitude);
+  const latitudeB = toRadians(toLatitude);
+
+  const a =
+    Math.sin(deltaLatitude / 2) * Math.sin(deltaLatitude / 2) +
+    Math.cos(latitudeA) *
+      Math.cos(latitudeB) *
+      Math.sin(deltaLongitude / 2) *
+      Math.sin(deltaLongitude / 2);
+
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return earthRadiusKm * c;
+}
+
+function getNameMatchScore(shop: MarketplaceShop, normalizedQuery: string) {
+  if (!normalizedQuery) {
+    return -1;
+  }
+
+  const normalizedName = normalizeSearchValue(shop.name);
+  const normalizedSlug = normalizeSearchValue(shop.slug).replace(/-/g, ' ');
+  let score = -1;
+
+  if (normalizedName === normalizedQuery) {
+    score = Math.max(score, 1200);
+  }
+
+  if (normalizedName.startsWith(normalizedQuery)) {
+    score = Math.max(score, 900);
+  }
+
+  if (normalizedName.includes(normalizedQuery)) {
+    score = Math.max(score, 700);
+  }
+
+  if (normalizedSlug.includes(normalizedQuery)) {
+    score = Math.max(score, 620);
+  }
+
+  const nameWords = normalizedName.split(/\s+/).filter(Boolean);
+  if (nameWords.some((word) => word.startsWith(normalizedQuery))) {
+    score = Math.max(score, 560);
+  }
+
+  if (score < 0) {
+    return -1;
+  }
+
+  return score + shop.reviewCount * 2 + (shop.averageRating || 0) * 10;
+}
+
+function getAreaMatchScore(shop: MarketplaceShop, normalizedQuery: string) {
+  if (!normalizedQuery) {
+    return -1;
+  }
+
+  const locationFields = [shop.locationLabel, shop.city, shop.region]
+    .map((value) => normalizeSearchValue(value))
+    .filter(Boolean);
+
+  let score = -1;
+
+  for (const field of locationFields) {
+    if (field === normalizedQuery) {
+      score = Math.max(score, 950);
+      continue;
+    }
+
+    if (field.startsWith(normalizedQuery)) {
+      score = Math.max(score, 760);
+      continue;
+    }
+
+    if (field.includes(normalizedQuery)) {
+      score = Math.max(score, 620);
+    }
+  }
+
+  const description = normalizeSearchValue(shop.description);
+  if (description.includes(normalizedQuery)) {
+    score = Math.max(score, 420);
+  }
+
+  if (score < 0) {
+    return -1;
+  }
+
+  return score + shop.reviewCount + (shop.isVerified ? 20 : 0);
+}
+
+function takeTopShops(
+  entries: Array<{ shop: MarketplaceShop; score: number }>,
+  limit: number,
+): MarketplaceShop[] {
+  return entries
+    .filter((entry) => entry.score >= 0)
+    .sort((left, right) => right.score - left.score)
+    .slice(0, limit)
+    .map((entry) => entry.shop);
+}
+
+interface SearchMarketplaceShopsOptions {
+  query?: string | null;
+  intent?: 'smart' | 'name' | 'area';
+  latitude?: number | null;
+  longitude?: number | null;
+  radiusKm?: number;
+  limit?: number;
+}
+
+interface MarketplaceViewportShopsOptions {
+  north: number;
+  south: number;
+  east: number;
+  west: number;
+  limit?: number;
+}
+
+export async function searchMarketplaceShops(options: SearchMarketplaceShopsOptions): Promise<{
+  items: MarketplaceShop[];
+  mode: MarketplaceSearchMode;
+}> {
+  const {
+    query,
+    intent = 'smart',
+    latitude = null,
+    longitude = null,
+    radiusKm = 18,
+    limit = 24,
+  } = options;
+  const allShops = await listMarketplaceShops();
+
+  if (latitude !== null && longitude !== null) {
+    const nearby = allShops
+      .filter((shop) => shop.latitude !== null && shop.longitude !== null)
+      .map((shop) => ({
+        shop,
+        distanceKm: getDistanceKm(latitude, longitude, Number(shop.latitude), Number(shop.longitude)),
+      }))
+      .sort((left, right) => left.distanceKm - right.distanceKm);
+
+    const withinRadius = nearby.filter((entry) => entry.distanceKm <= radiusKm);
+    const items = withinRadius.slice(0, limit).map((entry) => entry.shop);
+    return { items, mode: 'nearby' };
+  }
+
+  const normalizedQuery = normalizeSearchValue(query);
+  if (!normalizedQuery) {
+    return { items: allShops.slice(0, limit), mode: 'all' };
+  }
+
+  const nameMatches = takeTopShops(
+    allShops.map((shop) => ({
+      shop,
+      score: getNameMatchScore(shop, normalizedQuery),
+    })),
+    limit,
+  );
+
+  const areaMatches = takeTopShops(
+    allShops.map((shop) => ({
+      shop,
+      score: getAreaMatchScore(shop, normalizedQuery),
+    })),
+    limit,
+  );
+
+  if (intent === 'name') {
+    return { items: nameMatches, mode: 'name' };
+  }
+
+  if (intent === 'area') {
+    return { items: areaMatches, mode: 'area' };
+  }
+
+  if (nameMatches.length > 0) {
+    return { items: nameMatches, mode: 'name' };
+  }
+
+  return { items: areaMatches, mode: 'area' };
+}
+
+export async function listMarketplaceShopsInBounds(
+  options: MarketplaceViewportShopsOptions,
+): Promise<MarketplaceShop[]> {
+  const { north, south, east, west, limit = 24 } = options;
+
+  if (isMockRuntime()) {
+    return mockMarketplaceShops
+      .filter((shop) => {
+        if (shop.latitude === null || shop.longitude === null) {
+          return false;
+        }
+
+        return (
+          shop.latitude >= south &&
+          shop.latitude <= north &&
+          shop.longitude >= west &&
+          shop.longitude <= east
+        );
+      })
+      .slice(0, limit);
+  }
+
+  const { createSupabaseAdminClient } = await import('@/lib/supabase/admin');
+  const supabase = createSupabaseAdminClient();
+  const { data: locationRows, error: locationError } = await supabase
+    .from('shop_locations')
+    .select('shop_id, label, city, region, country_code, latitude, longitude')
+    .eq('is_public', true)
+    .gte('latitude', south)
+    .lte('latitude', north)
+    .gte('longitude', west)
+    .lte('longitude', east)
+    .order('shop_id');
+
+  if (locationError || !locationRows?.length) {
+    return [];
+  }
+
+  const locationsByShopId = new Map<string, ShopLocationRow>();
+  for (const item of locationRows as ShopLocationRow[]) {
+    const shopId = String(item.shop_id);
+    if (!locationsByShopId.has(shopId)) {
+      locationsByShopId.set(shopId, item);
+    }
+
+    if (locationsByShopId.size >= limit) {
+      break;
+    }
+  }
+
+  const shopIds = Array.from(locationsByShopId.keys());
+  if (!shopIds.length) {
+    return [];
+  }
+
+  const { data: shops, error: shopsError } = await supabase
+    .from('shops')
+    .select(
+      'id, name, slug, timezone, description, phone, is_verified, logo_url, cover_image_url, status',
+    )
+    .in('id', shopIds)
+    .eq('status', 'active');
+
+  if (shopsError || !shops?.length) {
+    return [];
+  }
+
+  const shopById = new Map(((shops || []) as ShopRow[]).map((item) => [String(item.id), item]));
+  const activeShopIds = shopIds.filter((shopId) => shopById.has(shopId));
+
+  if (!activeShopIds.length) {
+    return [];
+  }
+
+  const [{ data: reviews }, { data: services }] = await Promise.all([
+    supabase
+      .from('appointment_reviews')
+      .select('shop_id, rating')
+      .in('shop_id', activeShopIds)
+      .eq('status', 'published')
+      .eq('is_verified', true),
+    supabase
+      .from('services')
+      .select('shop_id, price_cents')
+      .in('shop_id', activeShopIds)
+      .eq('is_active', true),
+  ]);
+
+  const reviewsByShopId = new Map<string, ShopReviewRow[]>();
+  const servicesByShopId = new Map<string, ShopServiceRow[]>();
+
+  ((reviews || []) as ShopReviewRow[]).forEach((item) => {
+    const shopId = String(item.shop_id);
+    const current = reviewsByShopId.get(shopId) || [];
+    current.push(item);
+    reviewsByShopId.set(shopId, current);
+  });
+
+  ((services || []) as ShopServiceRow[]).forEach((item) => {
+    const shopId = String(item.shop_id);
+    const current = servicesByShopId.get(shopId) || [];
+    current.push(item);
+    servicesByShopId.set(shopId, current);
+  });
+
+  return activeShopIds
+    .map((shopId) => {
+      const shop = shopById.get(shopId);
+      if (!shop) {
+        return null;
+      }
+
+      return buildMarketplaceShop(
+        shop,
+        locationsByShopId.get(shopId),
+        reviewsByShopId.get(shopId) || [],
+        servicesByShopId.get(shopId) || [],
+      );
+    })
+    .filter((item): item is MarketplaceShop => item !== null);
 }
 
 export const listMarketplaceShops = cache(async (): Promise<MarketplaceShop[]> => {

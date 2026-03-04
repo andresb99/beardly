@@ -54,8 +54,8 @@ const rootThemeVars = {
 
 function SiteHeaderFallback() {
   return (
-    <div className="px-0 pt-3" aria-hidden="true">
-      <div className="glass-nav mx-auto h-[72px] w-[calc(100%-1rem)] max-w-[84rem] px-3 sm:px-4" />
+    <div className="px-0 pt-0" aria-hidden="true">
+      <div className="glass-nav mx-auto h-[72px] w-full max-w-none px-4 md:px-6 lg:px-8" />
     </div>
   );
 }

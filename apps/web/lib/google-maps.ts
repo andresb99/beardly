@@ -11,16 +11,24 @@ export interface GoogleLatLng {
   lng: number;
 }
 
+export interface GoogleMapsEventListener {
+  remove(): void;
+}
+
 export interface GoogleMap {
   setOptions(options: unknown): void;
   setCenter(center: GoogleLatLng): void;
   setZoom(zoom: number): void;
   panTo(position: GoogleLatLng): void;
   fitBounds(bounds: GoogleLatLngBounds, padding?: number): void;
+  addListener(eventName: string, handler: () => void): GoogleMapsEventListener;
+  getCenter(): GoogleGeocoderLocation | null;
+  getBounds(): GoogleLatLngBounds | null;
+  getZoom(): number | undefined;
 }
 
 export interface GoogleMarker {
-  addListener(eventName: string, handler: () => void): void;
+  addListener(eventName: string, handler: () => void): GoogleMapsEventListener;
   setIcon(icon: unknown): void;
   setMap(map: GoogleMap | null): void;
   setPosition(position: GoogleLatLng): void;
@@ -50,15 +58,23 @@ export interface GoogleGeocoderResult {
   formatted_address?: string;
 }
 
+export interface GoogleGeocoderRequest {
+  placeId?: string;
+  address?: string;
+  componentRestrictions?: { country: string };
+}
+
 export interface GoogleGeocoder {
   geocode(
-    request: { placeId: string },
+    request: GoogleGeocoderRequest,
     callback: (results: GoogleGeocoderResult[] | null, status: string) => void,
   ): void;
 }
 
 export interface GoogleLatLngBounds {
   extend(position: GoogleLatLng): void;
+  getNorthEast(): GoogleGeocoderLocation;
+  getSouthWest(): GoogleGeocoderLocation;
 }
 
 export interface GoogleMapsLibrary {

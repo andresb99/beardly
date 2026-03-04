@@ -493,10 +493,10 @@ export function SiteHeader() {
       height="88px"
       isMenuOpen={isMenuOpen}
       onMenuOpenChange={setIsMenuOpen}
-      className="bg-transparent px-0 pt-3"
+      className="bg-transparent px-0 pt-0"
       classNames={{
-        wrapper: 'glass-nav mx-auto w-[calc(100%-1rem)] max-w-[84rem] px-3 sm:px-4',
-        menu: 'mx-4 mt-3 rounded-[1.6rem] border border-white/80 bg-white/90 p-4 shadow-[0_24px_54px_-34px_rgba(15,23,42,0.3)] backdrop-blur-2xl dark:border-white/10 dark:bg-[#091120]/88',
+        wrapper: 'glass-nav mx-auto w-full max-w-none px-4 md:px-6 lg:px-8',
+        menu: 'mobile-nav-menu',
       }}
     >
       <NavbarContent justify="start">
