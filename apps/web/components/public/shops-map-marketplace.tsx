@@ -7,7 +7,6 @@ import {
   ArrowUpRight,
   BadgeCheck,
   LoaderCircle,
-  LocateFixed,
   MapPinned,
   MessageSquareText,
   Search,
@@ -326,13 +325,11 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [isApplyingSearch, setIsApplyingSearch] = useState(false);
-  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
-  const [locationError, setLocationError] = useState<string | null>(null);
+  const [userLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [mapError, setMapError] = useState<string | null>(
     googleMapsApiKey ? null : 'Configura NEXT_PUBLIC_GOOGLE_MAPS_API_KEY para mostrar el mapa.',
   );
   const [isMapReady, setIsMapReady] = useState(false);
-  const [isLocating, setIsLocating] = useState(false);
   const [isViewportLoading, setIsViewportLoading] = useState(initialShops.length === 0);
   const [isDarkTheme, setIsDarkTheme] = useState(false);
   const [isMobileViewport, setIsMobileViewport] = useState(false);
@@ -758,9 +755,8 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
   }, [isDarkTheme, mappableShops, selectedShop]);
 
   useEffect(() => {
-    const google = googleMapsRef.current;
     const map = mapRef.current;
-    if (!google?.maps || !map) {
+    if (!map) {
       return;
     }
 
@@ -768,45 +764,10 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
       return;
     }
 
-    if (userLocation && activeSearchMode === 'nearby') {
-      centerMapOnCoordinates(userLocation.latitude, userLocation.longitude, 12);
-      initialMapFrameDoneRef.current = true;
-      return;
-    }
-
-    if (!mappableShops.length) {
-      map.setCenter(DEFAULT_MARKETPLACE_CENTER);
-      map.setZoom(DEFAULT_MARKETPLACE_ZOOM);
-      initialMapFrameDoneRef.current = true;
-      return;
-    }
-
-    if (mappableShops.length === 1) {
-      const firstShop = mappableShops[0];
-      if (!firstShop) {
-        return;
-      }
-
-      map.panTo({
-        lat: Number(firstShop.latitude),
-        lng: Number(firstShop.longitude),
-      });
-      map.setZoom(12);
-      initialMapFrameDoneRef.current = true;
-      return;
-    }
-
-    const bounds = new google.maps.LatLngBounds();
-    for (const shop of mappableShops) {
-      bounds.extend({
-        lat: Number(shop.latitude),
-        lng: Number(shop.longitude),
-      });
-    }
-
-    map.fitBounds(bounds, 72);
+    map.setCenter(DEFAULT_MARKETPLACE_CENTER);
+    map.setZoom(DEFAULT_MARKETPLACE_ZOOM);
     initialMapFrameDoneRef.current = true;
-  }, [activeSearchMode, isMapReady, mappableShops, userLocation]);
+  }, [isMapReady]);
 
   useEffect(() => {
     const google = googleMapsRef.current;
@@ -1287,7 +1248,6 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
     setActiveSearchMode('all');
     setActiveSearchLabel(null);
     setSearchError(null);
-    setLocationError(null);
     setSuggestions([]);
     setIsSearching(false);
     setMapPreviewShopId(null);
@@ -1351,7 +1311,6 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
     suggestionsRequestIdRef.current += 1;
     setIsApplyingSearch(true);
     setSearchError(null);
-    setLocationError(null);
     setMapPreviewShopId(null);
     setSuggestions([]);
     setIsSearching(false);
@@ -1394,49 +1353,6 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
     } catch (error) {
       setSearchError(error instanceof Error ? error.message : 'No se pudo buscar esa zona.');
       return false;
-    } finally {
-      setIsApplyingSearch(false);
-    }
-  }
-
-  async function applyNearbySearch(latitude: number, longitude: number) {
-    const areaFocusRequestId = areaFocusRequestIdRef.current + 1;
-    areaFocusRequestIdRef.current = areaFocusRequestId;
-    viewportLoadRequestIdRef.current += 1;
-    suggestionsRequestIdRef.current += 1;
-    setIsApplyingSearch(true);
-    setSearchError(null);
-    setLocationError(null);
-    setMapPreviewShopId(null);
-    setSearchQuery('');
-    setSearchResults(null);
-    setSuggestions([]);
-    setIsSearching(false);
-    setIsSearchFocused(false);
-    setActiveSearchMode('nearby');
-    setActiveSearchLabel('cerca de ti');
-
-    if (isMobileViewport) {
-      setMobileSheetSnap('collapsed');
-    }
-
-    try {
-      const focused = await focusMapOnCoordinates(latitude, longitude, 15, areaFocusRequestId);
-
-      if (!focused) {
-        return;
-      }
-
-      const hasResults = await loadViewportShops({
-        preserveExistingOnEmpty: false,
-        clearErrorOnSuccess: true,
-      });
-
-      if (!hasResults) {
-        setSearchError('No encontramos barberias visibles cerca de tu ubicacion actual. Mueve el mapa para explorar mas.');
-      }
-    } catch (error) {
-      setSearchError(error instanceof Error ? error.message : 'No se pudo buscar cerca de ti.');
     } finally {
       setIsApplyingSearch(false);
     }
@@ -1491,121 +1407,6 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
     await applyNamedSearch(trimmedQuery, trimmedQuery);
   }
 
-  function getUserLocation(): Promise<{ latitude: number; longitude: number; accuracy: number | null }> {
-    const fallbackLocation = {
-      latitude: DEFAULT_MARKETPLACE_CENTER.lat,
-      longitude: DEFAULT_MARKETPLACE_CENTER.lng,
-      accuracy: null,
-    };
-
-    const resolveLocation = (
-      location: { latitude: number; longitude: number; accuracy: number | null },
-      reason: 'success' | 'invalid' | 'error' | 'unsupported',
-    ) => {
-      console.warn('[shops] geolocation', {
-        latitude: location.latitude,
-        longitude: location.longitude,
-        accuracy: location.accuracy,
-        reason,
-      });
-
-      mapRef.current?.setCenter({
-        lat: location.latitude,
-        lng: location.longitude,
-      });
-
-      return location;
-    };
-
-    return new Promise((resolve) => {
-      if (!navigator.geolocation) {
-        resolve(resolveLocation(fallbackLocation, 'unsupported'));
-        return;
-      }
-
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const nextLocation = {
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-            accuracy: position.coords.accuracy,
-          };
-          const isWithinUruguay =
-            nextLocation.latitude <= URUGUAY_BOUNDS.north &&
-            nextLocation.latitude >= URUGUAY_BOUNDS.south &&
-            nextLocation.longitude >= URUGUAY_BOUNDS.west &&
-            nextLocation.longitude <= URUGUAY_BOUNDS.east;
-
-          if (nextLocation.accuracy > 2000 || !isWithinUruguay) {
-            resolve(resolveLocation({ ...fallbackLocation, accuracy: nextLocation.accuracy }, 'invalid'));
-            return;
-          }
-
-          resolve(resolveLocation(nextLocation, 'success'));
-        },
-        () => {
-          resolve(resolveLocation(fallbackLocation, 'error'));
-        },
-        {
-          enableHighAccuracy: true,
-          timeout: 10_000,
-          maximumAge: 0,
-        },
-      );
-    });
-  }
-
-  function requestCurrentLocation() {
-    if (!isMobileViewport) {
-      return;
-    }
-
-    setIsLocating(true);
-    setLocationError(null);
-
-    void getUserLocation().then((nextLocation) => {
-      setUserLocation({
-        latitude: nextLocation.latitude,
-        longitude: nextLocation.longitude,
-      });
-      setIsLocating(false);
-      void applyNearbySearch(nextLocation.latitude, nextLocation.longitude);
-    });
-  }
-
-  useEffect(() => {
-    if (!isMapReady || userLocation || !isMobileViewport || !navigator.geolocation || !navigator.permissions) {
-      return;
-    }
-
-    let isCancelled = false;
-
-    void navigator.permissions
-      .query({ name: 'geolocation' })
-      .then((permissionStatus) => {
-        if (isCancelled || permissionStatus.state !== 'granted') {
-          return;
-        }
-
-        void getUserLocation().then((nextLocation) => {
-          if (isCancelled) {
-            return;
-          }
-
-          setUserLocation({
-            latitude: nextLocation.latitude,
-            longitude: nextLocation.longitude,
-          });
-          void applyNearbySearch(nextLocation.latitude, nextLocation.longitude);
-        });
-      })
-      .catch(() => undefined);
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [isMapReady, isMobileViewport, userLocation]);
-
   const resultHeadline =
     activeSearchMode === 'nearby'
       ? `${filteredShops.length} barberias cerca de ti`
@@ -1646,7 +1447,7 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
   const mobileSheetClassName = cn(
     'pointer-events-auto relative z-10',
     isMobileViewport
-      ? 'flex w-full h-[calc(100svh-9.5rem)] max-h-[calc(100svh-9.5rem)] flex-col rounded-t-[2.25rem] rounded-b-none border border-slate-200 bg-white shadow-[0_-28px_48px_-32px_rgba(15,23,42,0.32)] dark:border-white/10 dark:bg-slate-950'
+      ? 'mobile-marketplace-sheet flex w-full h-[calc(100svh-9.5rem)] max-h-[calc(100svh-9.5rem)] flex-col rounded-t-[2.25rem] rounded-b-none border border-slate-200 bg-white shadow-[0_-28px_48px_-32px_rgba(15,23,42,0.32)] dark:border-white/10 dark:bg-slate-950'
       : 'relative z-10 rounded-[2.25rem] border border-white/70 bg-white/95 p-4 shadow-[0_-28px_48px_-32px_rgba(15,23,42,0.32)] backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/94 xl:rounded-none xl:border-0 xl:bg-transparent xl:p-0 xl:shadow-none xl:backdrop-blur-0',
     !isMobileViewport && '-mt-14 xl:mt-0',
     !isMobileSheetDragging && isMobileViewport && 'transition-transform duration-300 ease-out',
@@ -1760,16 +1561,15 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
             </div>
 
             {searchError ? <p className="status-banner warning mt-3">{searchError}</p> : null}
-            {locationError ? <p className="status-banner warning mt-3">{locationError}</p> : null}
           </form>
         </div>
 
         <div ref={mobileSheetRef} className={mobileSheetClassName} style={mobileSheetStyle}>
-          <div className="pointer-events-none absolute inset-x-0 top-3 flex justify-center xl:hidden">
+          <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex h-7 justify-center bg-white pt-3 dark:bg-slate-950 xl:hidden">
             <div className="h-1.5 w-14 rounded-full bg-black/20 dark:bg-white/20" />
           </div>
 
-          <div className="px-4 pb-3 pt-7 xl:hidden">
+          <div className="relative z-10 bg-white px-4 pb-3 pt-7 dark:bg-slate-950 xl:hidden">
             <div
               className="cursor-grab touch-none select-none active:cursor-grabbing"
               onPointerDown={handleMobileSheetDragStart}
@@ -1810,7 +1610,6 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
               </button>
             ) : null}
             {mobileSheetStage !== 'collapsed' && searchError ? <p className="status-banner warning mt-3">{searchError}</p> : null}
-            {mobileSheetStage !== 'collapsed' && locationError ? <p className="status-banner warning mt-3">{locationError}</p> : null}
           </div>
 
           <div
@@ -2051,17 +1850,6 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
                   aria-label="Buscar"
                 >
                   {isApplyingSearch ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={requestCurrentLocation}
-                  className="action-secondary inline-flex h-11 w-11 items-center justify-center rounded-2xl"
-                  disabled={isLocating || isApplyingSearch}
-                  aria-label="Buscar cerca de mi"
-                  title="Buscar cerca de mi"
-                >
-                  <LocateFixed className={cn('h-4 w-4', isLocating ? 'animate-pulse' : '')} />
                 </button>
               </div>
             </form>
