@@ -35,6 +35,8 @@ interface ShopsMapMarketplaceProps {
   initialShops?: MarketplaceShop[];
 }
 
+const markerBadgeIconCache = new Map<string, string>();
+
 function formatRating(value: number | null) {
   if (value === null) {
     return 'Nuevo';
@@ -85,13 +87,19 @@ function createMarkerBadgeSvg(
   borderColor: string,
   textColor: string,
 ) {
+  const cacheKey = [label, fillColor, borderColor, textColor].join('|');
+  const cachedIcon = markerBadgeIconCache.get(cacheKey);
+  if (cachedIcon) {
+    return cachedIcon;
+  }
+
   const width = Math.max(72, label.length * 9 + 30);
   const badgeHeight = 34;
   const pointerHeight = 10;
   const totalHeight = badgeHeight + pointerHeight + 2;
   const centerX = width / 2;
 
-  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(
+  const iconUrl = `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(
     `<svg width="${width}" height="${totalHeight}" viewBox="0 0 ${width} ${totalHeight}" fill="none" xmlns="http://www.w3.org/2000/svg">
       <rect x="1" y="1" width="${width - 2}" height="${badgeHeight}" rx="17" fill="${fillColor}" stroke="${borderColor}" stroke-width="1.5"/>
       <path d="M${centerX - 6} ${badgeHeight - 1}L${centerX} ${badgeHeight + pointerHeight}L${centerX + 6} ${badgeHeight - 1}" fill="${fillColor}" stroke="${borderColor}" stroke-width="1.5" stroke-linejoin="round"/>
@@ -100,6 +108,9 @@ function createMarkerBadgeSvg(
       </text>
     </svg>`,
   )}`;
+
+  markerBadgeIconCache.set(cacheKey, iconUrl);
+  return iconUrl;
 }
 
 function getShopMarkerIcon(
@@ -260,6 +271,7 @@ const DEFAULT_MARKETPLACE_CENTER = {
   lng: -56.1645,
 } as const;
 const DEFAULT_MARKETPLACE_ZOOM = 11;
+const MOBILE_MARKETPLACE_NAVBAR_HEIGHT_PX = 76;
 type MobileSheetStage = 'collapsed' | 'mid' | 'expanded';
 const MOBILE_SHEET_STAGE_TRANSLATE: Record<MobileSheetStage, number> = {
   collapsed: 88,
@@ -281,6 +293,7 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
   const suggestionsRequestIdRef = useRef(0);
   const areaFocusRequestIdRef = useRef(0);
   const viewportLoadRequestIdRef = useRef(0);
+  const viewportIdleTimeoutRef = useRef<number | null>(null);
   const viewportCacheRef = useRef<Map<string, MarketplaceShop[]>>(new Map());
   const skipNextAreaViewportSyncRef = useRef(false);
   const activeSearchModeRef = useRef<MarketplaceSearchMode>('all');
@@ -307,6 +320,7 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
   const [isViewportLoading, setIsViewportLoading] = useState(initialShops.length === 0);
   const [isDarkTheme, setIsDarkTheme] = useState(false);
   const [isMobileViewport, setIsMobileViewport] = useState(false);
+  const [mobileViewportHeight, setMobileViewportHeight] = useState<number | null>(null);
   const [mobileSheetStage, setMobileSheetStage] = useState<MobileSheetStage>('collapsed');
   const [mobileSheetDragOffset, setMobileSheetDragOffset] = useState(0);
   const [isMobileSheetDragging, setIsMobileSheetDragging] = useState(false);
@@ -406,9 +420,37 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
       return;
     }
 
+    setMobileViewportHeight(null);
     setMobileSheetDragOffset(0);
     setIsMobileSheetDragging(false);
     setMobileSheetStage('collapsed');
+  }, [isMobileViewport]);
+
+  useEffect(() => {
+    if (!isMobileViewport || typeof window === 'undefined') {
+      return;
+    }
+
+    const syncViewportHeight = () => {
+      const nextViewportHeight = Math.round(
+        window.visualViewport?.height || window.innerHeight || document.documentElement.clientHeight || 0,
+      );
+
+      setMobileViewportHeight(nextViewportHeight > 0 ? nextViewportHeight : null);
+    };
+
+    syncViewportHeight();
+
+    const visualViewport = window.visualViewport;
+    window.addEventListener('resize', syncViewportHeight, { passive: true });
+    visualViewport?.addEventListener('resize', syncViewportHeight);
+    visualViewport?.addEventListener('scroll', syncViewportHeight);
+
+    return () => {
+      window.removeEventListener('resize', syncViewportHeight);
+      visualViewport?.removeEventListener('resize', syncViewportHeight);
+      visualViewport?.removeEventListener('scroll', syncViewportHeight);
+    };
   }, [isMobileViewport]);
 
   useEffect(() => {
@@ -524,10 +566,16 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
             return;
           }
 
-          void loadViewportShops({
-            preserveExistingOnEmpty: false,
-            clearErrorOnSuccess: true,
-          });
+          if (viewportIdleTimeoutRef.current) {
+            window.clearTimeout(viewportIdleTimeoutRef.current);
+          }
+
+          viewportIdleTimeoutRef.current = window.setTimeout(() => {
+            void loadViewportShops({
+              preserveExistingOnEmpty: false,
+              clearErrorOnSuccess: true,
+            });
+          }, 160);
         });
 
         setMapError(null);
@@ -580,6 +628,7 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
           position,
           title: shop.name,
           icon: getShopMarkerIcon(google.maps, shop, isActive, isDarkTheme),
+          optimized: true,
           zIndex: isActive ? 20 : 10,
         });
 
@@ -682,6 +731,7 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
           lng: userLocation.longitude,
         },
         icon: getUserMarkerIcon(google.maps),
+        optimized: true,
         zIndex: 50,
         title: 'Tu ubicacion',
       });
@@ -697,6 +747,10 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
 
   useEffect(() => {
     return () => {
+      if (viewportIdleTimeoutRef.current) {
+        window.clearTimeout(viewportIdleTimeoutRef.current);
+      }
+
       for (const marker of markersRef.current.values()) {
         marker.setMap(null);
       }
@@ -1436,17 +1490,29 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
       : 'Compara reputacion, perfil y disponibilidad antes de reservar.';
   const showResetSearch = (activeSearchMode !== 'all' || activeSearchLabel) && !isApplyingSearch;
   const mobileCollapsedCountLabel = `${filteredShops.length} ${filteredShops.length === 1 ? 'barberia' : 'barberias'}`;
+  const mobileViewportContentHeight =
+    isMobileViewport && mobileViewportHeight
+      ? Math.max(mobileViewportHeight - MOBILE_MARKETPLACE_NAVBAR_HEIGHT_PX, 0)
+      : null;
   const mobileSheetTranslate = MOBILE_SHEET_STAGE_TRANSLATE[mobileSheetStage];
   const mobileSheetStyle = isMobileViewport
     ? {
         transform: `translateY(calc(${mobileSheetTranslate}% + ${mobileSheetDragOffset}px))`,
+        height: mobileViewportContentHeight ? `${Math.max(mobileViewportContentHeight - 16, 0)}px` : undefined,
+        maxHeight: mobileViewportContentHeight ? `${Math.max(mobileViewportContentHeight - 16, 0)}px` : undefined,
       }
     : undefined;
+  const mobileStageStyle =
+    mobileViewportContentHeight !== null
+      ? {
+          height: `${mobileViewportContentHeight}px`,
+        }
+      : undefined;
   const mobileMapShellClassName = cn(
     'marketplace-map-shell relative overflow-hidden',
     isMobileViewport
       ? 'h-full min-h-full max-h-full rounded-none border-0 bg-transparent p-0 shadow-none backdrop-blur-0'
-      : 'soft-panel h-[20rem] rounded-[2rem] p-2 md:h-[26rem] xl:h-[calc(100vh-8rem)] xl:min-h-[44rem]',
+      : 'h-[20rem] rounded-[2rem] border border-white/70 bg-white/88 p-2 shadow-[0_24px_44px_-30px_rgba(15,23,42,0.22)] md:h-[26rem] dark:border-white/10 dark:bg-slate-950/78 xl:h-[calc(100vh-8rem)] xl:min-h-[44rem]',
   );
   const mobileSheetClassName = cn(
     'pointer-events-auto relative z-10',
@@ -1458,7 +1524,10 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
   );
 
   return (
-    <div className="relative -mx-4 -mb-16 -mt-5 flex h-[calc(100dvh-4.75rem)] flex-col gap-4 overflow-hidden sm:-mx-6 md:-mb-[4.5rem] md:-mt-7 xl:mx-0 xl:mb-0 xl:mt-0 xl:grid xl:h-auto xl:min-h-0 xl:overflow-visible xl:grid-cols-[minmax(0,1.02fr)_minmax(28rem,0.98fr)] xl:gap-6 xl:items-start">
+    <div
+      className="relative -mx-4 -mb-16 -mt-5 flex h-[calc(100dvh-4.75rem)] flex-col gap-4 overflow-hidden sm:-mx-6 md:-mb-[4.5rem] md:-mt-7 xl:mx-0 xl:mb-0 xl:mt-0 xl:grid xl:h-auto xl:min-h-0 xl:overflow-visible xl:grid-cols-[minmax(0,1.02fr)_minmax(28rem,0.98fr)] xl:gap-6 xl:items-start"
+      style={mobileStageStyle}
+    >
       <div className="pointer-events-none absolute inset-0 z-20 flex items-end overflow-hidden xl:pointer-events-auto xl:relative xl:inset-auto xl:block xl:overflow-visible xl:order-1 xl:pr-4">
         <div className="hidden space-y-5 xl:block">
           <div className="px-1">
@@ -1571,12 +1640,15 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
         </div>
 
         <div ref={mobileSheetRef} className={mobileSheetClassName} style={mobileSheetStyle}>
-          <div className="px-4 pb-3 pt-3 xl:hidden">
+          <div className="pointer-events-none absolute inset-x-0 top-3 flex justify-center xl:hidden">
+            <div className="h-1.5 w-14 rounded-full bg-black/20 dark:bg-white/20" />
+          </div>
+
+          <div className="px-4 pb-3 pt-7 xl:hidden">
             <div
               className="cursor-grab touch-none select-none active:cursor-grabbing"
               onPointerDown={handleMobileSheetDragStart}
             >
-              <div className="mx-auto mb-4 h-1.5 w-14 rounded-full bg-slate-300/80 dark:bg-white/10" />
               {mobileSheetStage === 'collapsed' ? (
                 <div className="pb-1 text-center">
                   <p className="font-[family-name:var(--font-heading)] text-lg font-semibold text-ink dark:text-slate-100">
