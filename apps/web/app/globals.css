@@ -169,7 +169,7 @@ input:not([data-slot='input']):not([type='hidden']):not([type='checkbox']):not([
   ),
 select:not([data-slot]),
 textarea:not([data-slot='input']) {
-  @apply text-[15px];
+  @apply text-[16px];
   border-color: rgb(17 31 51 / 0.1);
   background-color: rgb(17 31 51 / 0.04);
   border-radius: 1rem;

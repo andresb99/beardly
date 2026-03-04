@@ -273,11 +273,25 @@ const DEFAULT_MARKETPLACE_CENTER = {
 const DEFAULT_MARKETPLACE_ZOOM = 11;
 const MOBILE_MARKETPLACE_FALLBACK_TOP_OFFSET_PX = 88;
 type MobileSheetStage = 'collapsed' | 'mid' | 'expanded';
+const MOBILE_SHEET_COLLAPSED_PEEK_PX = 132;
 const MOBILE_SHEET_STAGE_TRANSLATE: Record<MobileSheetStage, number> = {
-  collapsed: 88,
   mid: 42,
   expanded: 0,
+  collapsed: 88,
 };
+
+function getMobileSheetStageTranslate(stage: MobileSheetStage, sheetHeight?: number | null) {
+  if (stage !== 'collapsed') {
+    return MOBILE_SHEET_STAGE_TRANSLATE[stage];
+  }
+
+  if (!sheetHeight || sheetHeight <= 0) {
+    return MOBILE_SHEET_STAGE_TRANSLATE.collapsed;
+  }
+
+  const collapsedTranslate = 100 - (MOBILE_SHEET_COLLAPSED_PEEK_PX / sheetHeight) * 100;
+  return Math.min(Math.max(collapsedTranslate, 0), 100);
+}
 
 export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplaceProps) {
   const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY?.trim() ?? '';
@@ -1575,12 +1589,13 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
   const showResetSearch = (activeSearchMode !== 'all' || activeSearchLabel) && !isApplyingSearch;
   const mobileCollapsedCountLabel = `${filteredShops.length} ${filteredShops.length === 1 ? 'barberia' : 'barberias'}`;
   const mobileViewportContentHeight = isMobileViewport && mobileViewportHeight ? mobileViewportHeight : null;
+  const mobileSheetHeight = mobileViewportContentHeight ? Math.max(mobileViewportContentHeight - 16, 0) : null;
   const mobileSheetTranslate = MOBILE_SHEET_STAGE_TRANSLATE[mobileSheetStage];
   const mobileSheetStyle = isMobileViewport
     ? {
-        transform: `translateY(calc(${mobileSheetTranslate}% + ${mobileSheetDragOffset}px))`,
-        height: mobileViewportContentHeight ? `${Math.max(mobileViewportContentHeight - 16, 0)}px` : undefined,
-        maxHeight: mobileViewportContentHeight ? `${Math.max(mobileViewportContentHeight - 16, 0)}px` : undefined,
+        transform: `translateY(calc(${getMobileSheetStageTranslate(mobileSheetStage, mobileSheetHeight)}% + ${mobileSheetDragOffset}px))`,
+        height: mobileSheetHeight ? `${mobileSheetHeight}px` : undefined,
+        maxHeight: mobileSheetHeight ? `${mobileSheetHeight}px` : undefined,
       }
     : undefined;
   const mobileStageStyle =
