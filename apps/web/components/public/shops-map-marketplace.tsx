@@ -1491,40 +1491,86 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
     await applyNamedSearch(trimmedQuery, trimmedQuery);
   }
 
+  function getUserLocation(): Promise<{ latitude: number; longitude: number; accuracy: number | null }> {
+    const fallbackLocation = {
+      latitude: DEFAULT_MARKETPLACE_CENTER.lat,
+      longitude: DEFAULT_MARKETPLACE_CENTER.lng,
+      accuracy: null,
+    };
+
+    const resolveLocation = (
+      location: { latitude: number; longitude: number; accuracy: number | null },
+      reason: 'success' | 'invalid' | 'error' | 'unsupported',
+    ) => {
+      console.warn('[shops] geolocation', {
+        latitude: location.latitude,
+        longitude: location.longitude,
+        accuracy: location.accuracy,
+        reason,
+      });
+
+      mapRef.current?.setCenter({
+        lat: location.latitude,
+        lng: location.longitude,
+      });
+
+      return location;
+    };
+
+    return new Promise((resolve) => {
+      if (!navigator.geolocation) {
+        resolve(resolveLocation(fallbackLocation, 'unsupported'));
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const nextLocation = {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            accuracy: position.coords.accuracy,
+          };
+          const isWithinUruguay =
+            nextLocation.latitude <= URUGUAY_BOUNDS.north &&
+            nextLocation.latitude >= URUGUAY_BOUNDS.south &&
+            nextLocation.longitude >= URUGUAY_BOUNDS.west &&
+            nextLocation.longitude <= URUGUAY_BOUNDS.east;
+
+          if (nextLocation.accuracy > 2000 || !isWithinUruguay) {
+            resolve(resolveLocation({ ...fallbackLocation, accuracy: nextLocation.accuracy }, 'invalid'));
+            return;
+          }
+
+          resolve(resolveLocation(nextLocation, 'success'));
+        },
+        () => {
+          resolve(resolveLocation(fallbackLocation, 'error'));
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10_000,
+          maximumAge: 0,
+        },
+      );
+    });
+  }
+
   function requestCurrentLocation() {
     if (!isMobileViewport) {
-      return;
-    }
-
-    if (!navigator.geolocation) {
-      setLocationError('Tu navegador no soporta geolocalizacion.');
       return;
     }
 
     setIsLocating(true);
     setLocationError(null);
 
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const nextLocation = {
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-        };
-
-        setUserLocation(nextLocation);
-        setIsLocating(false);
-        void applyNearbySearch(nextLocation.latitude, nextLocation.longitude);
-      },
-      () => {
-        setIsLocating(false);
-        setLocationError('No se pudo obtener tu ubicacion actual.');
-      },
-      {
-        enableHighAccuracy: true,
-        maximumAge: 0,
-        timeout: 12_000,
-      },
-    );
+    void getUserLocation().then((nextLocation) => {
+      setUserLocation({
+        latitude: nextLocation.latitude,
+        longitude: nextLocation.longitude,
+      });
+      setIsLocating(false);
+      void applyNearbySearch(nextLocation.latitude, nextLocation.longitude);
+    });
   }
 
   useEffect(() => {
@@ -1541,31 +1587,17 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
           return;
         }
 
-        navigator.geolocation.getCurrentPosition(
-          (position) => {
-            if (isCancelled) {
-              return;
-            }
+        void getUserLocation().then((nextLocation) => {
+          if (isCancelled) {
+            return;
+          }
 
-            const nextLocation = {
-              latitude: position.coords.latitude,
-              longitude: position.coords.longitude,
-            };
-
-            setUserLocation(nextLocation);
-            void applyNearbySearch(nextLocation.latitude, nextLocation.longitude);
-          },
-          () => {
-            if (!isCancelled) {
-              setLocationError(null);
-            }
-          },
-          {
-            enableHighAccuracy: true,
-            maximumAge: 0,
-            timeout: 12_000,
-          },
-        );
+          setUserLocation({
+            latitude: nextLocation.latitude,
+            longitude: nextLocation.longitude,
+          });
+          void applyNearbySearch(nextLocation.latitude, nextLocation.longitude);
+        });
       })
       .catch(() => undefined);
 
