@@ -479,6 +479,12 @@ export function SiteHeader() {
         return;
       }
 
+      if (action === 'create-shop') {
+        setIsMenuOpen(false);
+        router.push('/onboarding/barbershop');
+        return;
+      }
+
       if (action === 'logout') {
         void handleSignOut();
       }
@@ -490,7 +496,7 @@ export function SiteHeader() {
     <Navbar
       isBlurred={false}
       maxWidth="full"
-      height="88px"
+      height="76px"
       isMenuOpen={isMenuOpen}
       onMenuOpenChange={setIsMenuOpen}
       className="bg-transparent px-0 pt-0"
@@ -500,8 +506,8 @@ export function SiteHeader() {
       }}
     >
       <NavbarContent justify="start">
-        <NavbarBrand className="h-full items-center py-0 md:w-[14rem]">
-          <NextLink href={contextualHomeHref} className="flex h-full items-center no-underline md:w-full">
+        <NavbarBrand className="h-full items-center justify-center py-0 md:w-[14rem]">
+          <NextLink href={contextualHomeHref} className="flex h-full items-center justify-center no-underline md:w-full">
             <HeaderBrand />
           </NextLink>
         </NavbarBrand>
@@ -551,6 +557,21 @@ export function SiteHeader() {
             >
               <Store className="h-4 w-4" />
               <span>Mis barberias</span>
+            </Button>
+          </NavbarItem>
+        ) : null}
+
+        {!loading && role !== 'guest' && navigationContext === 'public' ? (
+          <NavbarItem className="hidden md:flex">
+            <Button
+              as={NextLink}
+              href="/onboarding/barbershop"
+              variant="ghost"
+              size="sm"
+              className={actionButtonClassName}
+            >
+              <Store className="h-4 w-4" />
+              <span>Crear barberia</span>
             </Button>
           </NavbarItem>
         ) : null}
@@ -615,6 +636,7 @@ export function SiteHeader() {
                   {pendingNotificationCount > 0 ? ` (${pendingNotificationCount})` : ''}
                 </DropdownItem>
                 <DropdownItem key="account">Mi cuenta</DropdownItem>
+                <DropdownItem key="create-shop">Crear barberia</DropdownItem>
                 {hasWorkspaceAccess ? <DropdownItem key="workspaces">Mis barberias</DropdownItem> : null}
                 <DropdownItem key="logout" className="text-danger" color="danger">
                   Salir
@@ -686,6 +708,19 @@ export function SiteHeader() {
               className="nav-link-pill flex w-full justify-start no-underline"
             >
               Cambiar barberia
+            </NextLink>
+          </NavbarMenuItem>
+        ) : null}
+
+        {!loading && role !== 'guest' ? (
+          <NavbarMenuItem>
+            <NextLink
+              href="/onboarding/barbershop"
+              onClick={() => setIsMenuOpen(false)}
+              className="nav-link-pill flex w-full items-center justify-start gap-2 no-underline"
+            >
+              <Store className="h-4 w-4" />
+              Crear barberia
             </NextLink>
           </NavbarMenuItem>
         ) : null}

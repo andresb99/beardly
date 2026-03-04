@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useDeferredValue, useEffect, useMemo, useRef, useState, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react';
-import { Skeleton } from '@heroui/react';
+import { Card, CardBody, CardFooter, Skeleton } from '@heroui/react';
 import {
   ArrowUpRight,
   BadgeCheck,
@@ -271,7 +271,7 @@ const DEFAULT_MARKETPLACE_CENTER = {
   lng: -56.1645,
 } as const;
 const DEFAULT_MARKETPLACE_ZOOM = 11;
-const MOBILE_MARKETPLACE_FALLBACK_TOP_OFFSET_PX = 88;
+const MOBILE_MARKETPLACE_FALLBACK_TOP_OFFSET_PX = 76;
 type MobileSheetStage = 'collapsed' | 'mid' | 'expanded';
 const MOBILE_SHEET_COLLAPSED_PEEK_PX = 84;
 const MOBILE_SHEET_STAGE_TRANSLATE: Record<MobileSheetStage, number> = {
@@ -1613,7 +1613,7 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
   const mobileSheetClassName = cn(
     'pointer-events-auto relative z-10',
     isMobileViewport
-      ? 'flex h-[calc(100svh-9.5rem)] max-h-[calc(100svh-9.5rem)] flex-col rounded-t-[2.25rem] rounded-b-none border border-slate-200 bg-white shadow-[0_-28px_48px_-32px_rgba(15,23,42,0.32)] dark:border-white/10 dark:bg-slate-950'
+      ? 'flex w-full h-[calc(100svh-9.5rem)] max-h-[calc(100svh-9.5rem)] flex-col rounded-t-[2.25rem] rounded-b-none border border-slate-200 bg-white shadow-[0_-28px_48px_-32px_rgba(15,23,42,0.32)] dark:border-white/10 dark:bg-slate-950'
       : 'relative z-10 rounded-[2.25rem] border border-white/70 bg-white/95 p-4 shadow-[0_-28px_48px_-32px_rgba(15,23,42,0.32)] backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/94 xl:rounded-none xl:border-0 xl:bg-transparent xl:p-0 xl:shadow-none xl:backdrop-blur-0',
     !isMobileViewport && '-mt-14 xl:mt-0',
     !isMobileSheetDragging && isMobileViewport && 'transition-transform duration-300 ease-out',
@@ -1795,12 +1795,12 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
         {showCardSkeletons ? (
           <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
             {Array.from({ length: MARKETPLACE_CARD_SKELETON_COUNT }).map((_, index) => (
-              <div
+              <Card
                 key={`shop-skeleton-${index}`}
-                className="data-card overflow-hidden rounded-[1.9rem] p-0 ring-1 ring-white/10"
+                className="data-card overflow-hidden rounded-[1.9rem] border-0 p-0 shadow-none ring-1 ring-white/10"
               >
                 <Skeleton className="aspect-[4/3] w-full rounded-none" />
-                <div className="space-y-4 p-4">
+                <CardBody className="space-y-4 p-4">
                   <div className="space-y-2">
                     <Skeleton className="h-4 w-2/3 rounded-xl" />
                     <Skeleton className="h-3 w-full rounded-xl" />
@@ -1819,8 +1819,8 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
                     <Skeleton className="h-10 w-24 rounded-2xl" />
                     <Skeleton className="h-10 w-28 rounded-2xl" />
                   </div>
-                </div>
-              </div>
+                </CardBody>
+              </Card>
             ))}
           </div>
         ) : filteredShops.length > 0 ? (
@@ -1829,10 +1829,11 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
               const isActive = shop.id === selectedShop?.id;
 
               return (
-                <article
+                <Card
                   key={shop.id}
+                  as="article"
                   className={cn(
-                    'data-card group cursor-pointer overflow-hidden rounded-[1.9rem] p-0 transition-transform duration-200 md:hover:-translate-y-1',
+                    'data-card group cursor-pointer overflow-hidden rounded-[1.9rem] border-0 p-0 shadow-none transition-transform duration-200 md:hover:-translate-y-1',
                     isActive
                       ? 'ring-2 ring-sky-400/35 dark:ring-sky-300/25'
                       : 'ring-1 ring-transparent',
@@ -1840,108 +1841,112 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
                   data-active={String(isActive)}
                   onClick={() => focusShop(shop)}
                 >
-                  <div className="relative aspect-[4/3] overflow-hidden">
-                    {shop.coverImageUrl ? (
-                      <img
-                        src={shop.coverImageUrl}
-                        alt={`Vista de ${shop.name}`}
-                        className="h-full w-full object-cover transition-transform duration-300 md:group-hover:scale-[1.03]"
-                        loading="lazy"
-                      />
-                    ) : (
-                      <div className="h-full w-full" style={getFallbackCoverStyle(shop)} />
-                    )}
+                  <CardBody className="p-0">
+                    <div className="relative aspect-[4/3] overflow-hidden">
+                      {shop.coverImageUrl ? (
+                        <img
+                          src={shop.coverImageUrl}
+                          alt={`Vista de ${shop.name}`}
+                          className="h-full w-full object-cover transition-transform duration-300 md:group-hover:scale-[1.03]"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="h-full w-full" style={getFallbackCoverStyle(shop)} />
+                      )}
 
-                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-slate-950/18 to-transparent" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-slate-950/18 to-transparent" />
 
-                    <div className="absolute left-3 top-3 flex flex-wrap gap-2">
-                      <span className="rounded-full bg-white/92 px-3 py-1 text-[11px] font-semibold text-ink shadow-[0_12px_24px_-18px_rgba(15,23,42,0.35)] dark:bg-slate-950/90 dark:text-slate-100">
-                        {getShopHighlight(shop, distanceKm)}
-                      </span>
-                      {shop.isVerified ? (
-                        <span className="rounded-full border border-white/35 bg-slate-950/45 px-3 py-1 text-[11px] font-semibold text-white backdrop-blur-xl">
-                          <BadgeCheck className="mr-1 inline h-3 w-3" />
-                          Verificada
+                      <div className="absolute left-3 top-3 flex flex-wrap gap-2">
+                        <span className="rounded-full bg-white/92 px-3 py-1 text-[11px] font-semibold text-ink shadow-[0_12px_24px_-18px_rgba(15,23,42,0.35)] dark:bg-slate-950/90 dark:text-slate-100">
+                          {getShopHighlight(shop, distanceKm)}
                         </span>
-                      ) : null}
-                    </div>
-
-                    <div className="absolute right-3 top-3 rounded-full bg-white/92 px-3 py-1 text-[11px] font-semibold text-ink shadow-[0_12px_24px_-18px_rgba(15,23,42,0.35)] dark:bg-slate-950/90 dark:text-slate-100">
-                      <Star className="mr-1 inline h-3.5 w-3.5 fill-current text-amber-500" />
-                      {formatRating(shop.averageRating)}
-                    </div>
-
-                    <div className="absolute inset-x-3 bottom-3">
-                      <p className="text-base font-semibold text-white">{shop.name}</p>
-                      <p className="mt-1 text-sm text-white/82">
-                        {shop.locationLabel || shop.city || 'Montevideo'}{shop.region ? `, ${shop.region}` : ''}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-ink dark:text-slate-100">
-                          {shop.locationLabel || shop.city || 'Ubicacion por confirmar'}
-                        </p>
-                        <p className="mt-1 text-xs text-slate/75 dark:text-slate-400">
-                          {getLocationSummary(shop)}
-                        </p>
+                        {shop.isVerified ? (
+                          <span className="rounded-full border border-white/35 bg-slate-950/45 px-3 py-1 text-[11px] font-semibold text-white backdrop-blur-xl">
+                            <BadgeCheck className="mr-1 inline h-3 w-3" />
+                            Verificada
+                          </span>
+                        ) : null}
                       </div>
 
-                      {distanceKm !== null ? (
-                        <span className="shrink-0 rounded-full bg-sky-500/[0.12] px-2.5 py-1 text-[11px] font-semibold text-sky-700 dark:bg-sky-400/[0.12] dark:text-sky-200">
-                          {distanceKm.toFixed(1)} km
+                      <div className="absolute right-3 top-3 rounded-full bg-white/92 px-3 py-1 text-[11px] font-semibold text-ink shadow-[0_12px_24px_-18px_rgba(15,23,42,0.35)] dark:bg-slate-950/90 dark:text-slate-100">
+                        <Star className="mr-1 inline h-3.5 w-3.5 fill-current text-amber-500" />
+                        {formatRating(shop.averageRating)}
+                      </div>
+
+                      <div className="absolute inset-x-3 bottom-3">
+                        <p className="text-base font-semibold text-white">{shop.name}</p>
+                        <p className="mt-1 text-sm text-white/82">
+                          {shop.locationLabel || shop.city || 'Montevideo'}{shop.region ? `, ${shop.region}` : ''}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-ink dark:text-slate-100">
+                            {shop.locationLabel || shop.city || 'Ubicacion por confirmar'}
+                          </p>
+                          <p className="mt-1 text-xs text-slate/75 dark:text-slate-400">
+                            {getLocationSummary(shop)}
+                          </p>
+                        </div>
+
+                        {distanceKm !== null ? (
+                          <span className="shrink-0 rounded-full bg-sky-500/[0.12] px-2.5 py-1 text-[11px] font-semibold text-sky-700 dark:bg-sky-400/[0.12] dark:text-sky-200">
+                            {distanceKm.toFixed(1)} km
+                          </span>
+                        ) : null}
+                      </div>
+
+                      <p className="mt-3 line-clamp-2 text-sm text-slate/80 dark:text-slate-300">
+                        {shop.description || 'Agenda online, perfil publico y reservas en pocos pasos.'}
+                      </p>
+
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        <span className="meta-chip">
+                          <MessageSquareText className="h-3.5 w-3.5" />
+                          {shop.reviewCount || 0} resenas
                         </span>
-                      ) : null}
+                        <span className="meta-chip">{shop.activeServiceCount} servicios</span>
+                        {shop.minServicePriceCents !== null ? (
+                          <span className="meta-chip">Desde {formatCurrency(shop.minServicePriceCents)}</span>
+                        ) : null}
+                      </div>
                     </div>
+                  </CardBody>
 
-                    <p className="mt-3 line-clamp-2 text-sm text-slate/80 dark:text-slate-300">
-                      {shop.description || 'Agenda online, perfil publico y reservas en pocos pasos.'}
-                    </p>
-
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      <span className="meta-chip">
-                        <MessageSquareText className="h-3.5 w-3.5" />
-                        {shop.reviewCount || 0} resenas
-                      </span>
-                      <span className="meta-chip">{shop.activeServiceCount} servicios</span>
-                      {shop.minServicePriceCents !== null ? (
-                        <span className="meta-chip">Desde {formatCurrency(shop.minServicePriceCents)}</span>
-                      ) : null}
-                    </div>
-
-                    <div className="mt-4 flex flex-wrap gap-3">
-                      <Link
-                        href={buildShopHref(shop.slug)}
-                        className="action-secondary rounded-2xl px-4 py-2 text-sm font-semibold"
-                        onClick={(event) => event.stopPropagation()}
-                      >
-                        Ver perfil
-                      </Link>
-                      <Link
-                        href={buildShopHref(shop.slug, 'book')}
-                        className="action-primary inline-flex items-center gap-1 rounded-2xl px-4 py-2 text-sm font-semibold"
-                        onClick={(event) => event.stopPropagation()}
-                      >
-                        Reservar
-                        <ArrowUpRight className="h-4 w-4" />
-                      </Link>
-                    </div>
-                  </div>
-                </article>
+                  <CardFooter className="flex flex-wrap gap-3 px-4 pb-4 pt-0">
+                    <Link
+                      href={buildShopHref(shop.slug)}
+                      className="action-secondary rounded-2xl px-4 py-2 text-sm font-semibold"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      Ver perfil
+                    </Link>
+                    <Link
+                      href={buildShopHref(shop.slug, 'book')}
+                      className="action-primary inline-flex items-center gap-1 rounded-2xl px-4 py-2 text-sm font-semibold"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      Reservar
+                      <ArrowUpRight className="h-4 w-4" />
+                    </Link>
+                  </CardFooter>
+                </Card>
               );
             })}
           </div>
         ) : (
-          <div className="soft-panel rounded-[1.8rem] p-5">
-            <p className="text-sm text-slate/80 dark:text-slate-300">
-              {activeSearchMode === 'all'
-                ? 'Aun no hay barberias visibles en esta vista.'
-                : 'No encontramos barberias para esa busqueda. Prueba con otra zona o limpia la busqueda.'}
-            </p>
-          </div>
+          <Card className="soft-panel rounded-[1.8rem] border-0 shadow-none">
+            <CardBody className="p-5">
+              <p className="text-sm text-slate/80 dark:text-slate-300">
+                {activeSearchMode === 'all'
+                  ? 'Aun no hay barberias visibles en esta vista.'
+                  : 'No encontramos barberias para esa busqueda. Prueba con otra zona o limpia la busqueda.'}
+              </p>
+            </CardBody>
+          </Card>
         )}
       </div>
       </div>
@@ -2056,7 +2061,7 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
 
           {mapPreviewShop ? (
             <div className="pointer-events-none absolute inset-x-3 top-[5.35rem] z-30 xl:inset-x-auto xl:bottom-4 xl:left-4 xl:right-auto xl:top-auto xl:max-w-[24rem]">
-              <div className="soft-panel pointer-events-auto overflow-hidden rounded-[1.7rem] p-0">
+              <Card className="soft-panel pointer-events-auto overflow-hidden rounded-[1.7rem] border-0 p-0 shadow-none">
                 <div className="relative aspect-[16/10] overflow-hidden">
                   {mapPreviewShop.coverImageUrl ? (
                     <img
@@ -2091,7 +2096,7 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
                   </div>
                 </div>
 
-                <div className="p-4">
+                <CardBody className="p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="text-base font-semibold text-ink dark:text-slate-100">{mapPreviewShop.name}</p>
@@ -2111,41 +2116,45 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
                   </p>
 
                   <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                    <div className="rounded-2xl bg-white/70 px-3 py-3 shadow-[0_14px_24px_-22px_rgba(15,23,42,0.24)] dark:bg-white/[0.06]">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate/60 dark:text-slate-400">
-                        Reputacion
-                      </p>
-                      <p className="mt-1 text-sm font-semibold text-ink dark:text-slate-100">
-                        {formatRating(mapPreviewShop.averageRating)} ({mapPreviewShop.reviewCount || 0})
-                      </p>
-                    </div>
-                    <div className="rounded-2xl bg-white/70 px-3 py-3 shadow-[0_14px_24px_-22px_rgba(15,23,42,0.24)] dark:bg-white/[0.06]">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate/60 dark:text-slate-400">
-                        Servicios
-                      </p>
-                      <p className="mt-1 text-sm font-semibold text-ink dark:text-slate-100">
-                        {mapPreviewShop.activeServiceCount} activos
-                      </p>
-                    </div>
+                    <Card className="rounded-2xl border-0 bg-white/70 shadow-[0_14px_24px_-22px_rgba(15,23,42,0.24)] dark:bg-white/[0.06]">
+                      <CardBody className="px-3 py-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate/60 dark:text-slate-400">
+                          Reputacion
+                        </p>
+                        <p className="mt-1 text-sm font-semibold text-ink dark:text-slate-100">
+                          {formatRating(mapPreviewShop.averageRating)} ({mapPreviewShop.reviewCount || 0})
+                        </p>
+                      </CardBody>
+                    </Card>
+                    <Card className="rounded-2xl border-0 bg-white/70 shadow-[0_14px_24px_-22px_rgba(15,23,42,0.24)] dark:bg-white/[0.06]">
+                      <CardBody className="px-3 py-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate/60 dark:text-slate-400">
+                          Servicios
+                        </p>
+                        <p className="mt-1 text-sm font-semibold text-ink dark:text-slate-100">
+                          {mapPreviewShop.activeServiceCount} activos
+                        </p>
+                      </CardBody>
+                    </Card>
                   </div>
+                </CardBody>
 
-                  <div className="mt-4 flex flex-wrap gap-3">
-                    <Link
-                      href={buildShopHref(mapPreviewShop.slug)}
-                      className="action-secondary rounded-2xl px-4 py-2 text-sm font-semibold"
-                    >
-                      Ver perfil
-                    </Link>
-                    <Link
-                      href={buildShopHref(mapPreviewShop.slug, 'book')}
-                      className="action-primary inline-flex items-center gap-1 rounded-2xl px-4 py-2 text-sm font-semibold"
-                    >
-                      Reservar
-                      <ArrowUpRight className="h-4 w-4" />
-                    </Link>
-                  </div>
-                </div>
-              </div>
+                <CardFooter className="flex flex-wrap gap-3 px-4 pb-4 pt-0">
+                  <Link
+                    href={buildShopHref(mapPreviewShop.slug)}
+                    className="action-secondary rounded-2xl px-4 py-2 text-sm font-semibold"
+                  >
+                    Ver perfil
+                  </Link>
+                  <Link
+                    href={buildShopHref(mapPreviewShop.slug, 'book')}
+                    className="action-primary inline-flex items-center gap-1 rounded-2xl px-4 py-2 text-sm font-semibold"
+                  >
+                    Reservar
+                    <ArrowUpRight className="h-4 w-4" />
+                  </Link>
+                </CardFooter>
+              </Card>
             </div>
           ) : null}
         </div>
