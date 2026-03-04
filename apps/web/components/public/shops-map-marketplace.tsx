@@ -1445,7 +1445,7 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
   const mobileMapShellClassName = cn(
     'marketplace-map-shell relative overflow-hidden',
     isMobileViewport
-      ? 'h-[calc(100svh-4.75rem)] min-h-[calc(100svh-4.75rem)] rounded-none border-0 bg-transparent p-0 shadow-none backdrop-blur-0'
+      ? 'h-full min-h-full max-h-full rounded-none border-0 bg-transparent p-0 shadow-none backdrop-blur-0'
       : 'soft-panel h-[20rem] rounded-[2rem] p-2 md:h-[26rem] xl:h-[calc(100vh-8rem)] xl:min-h-[44rem]',
   );
   const mobileSheetClassName = cn(
@@ -1458,7 +1458,7 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
   );
 
   return (
-    <div className="relative -mx-4 flex h-[calc(100svh-4.75rem)] flex-col gap-4 overflow-hidden sm:-mx-6 xl:mx-0 xl:grid xl:h-auto xl:min-h-0 xl:overflow-visible xl:grid-cols-[minmax(0,1.02fr)_minmax(28rem,0.98fr)] xl:gap-6 xl:items-start">
+    <div className="relative -mx-4 -mb-16 -mt-5 flex h-[calc(100dvh-4.75rem)] flex-col gap-4 overflow-hidden sm:-mx-6 md:-mb-[4.5rem] md:-mt-7 xl:mx-0 xl:mb-0 xl:mt-0 xl:grid xl:h-auto xl:min-h-0 xl:overflow-visible xl:grid-cols-[minmax(0,1.02fr)_minmax(28rem,0.98fr)] xl:gap-6 xl:items-start">
       <div className="pointer-events-none absolute inset-0 z-20 flex items-end overflow-hidden xl:pointer-events-auto xl:relative xl:inset-auto xl:block xl:overflow-visible xl:order-1 xl:pr-4">
         <div className="hidden space-y-5 xl:block">
           <div className="px-1">
@@ -1778,7 +1778,7 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
       </div>
       </div>
 
-      <div className="order-1 xl:order-2 xl:sticky xl:top-[6.25rem] xl:self-start xl:w-full">
+      <div className="order-1 h-full min-h-0 xl:order-2 xl:h-auto xl:sticky xl:top-[6.25rem] xl:self-start xl:w-full">
         <div className={mobileMapShellClassName}>
           <div className="pointer-events-none absolute inset-x-3 top-3 z-20 xl:hidden">
             <form
