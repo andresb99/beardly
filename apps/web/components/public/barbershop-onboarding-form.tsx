@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
+import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button, Input, Textarea } from '@heroui/react';
 import { MapPin, Search } from 'lucide-react';
@@ -16,7 +16,6 @@ import {
   getGoogleMapThemeOptions,
   loadGoogleMapsPlacesApi,
 } from '@/lib/google-maps';
-import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
 import {
   WORKSPACE_COOKIE_MAX_AGE_SECONDS,
   WORKSPACE_COOKIE_NAME,
@@ -33,6 +32,10 @@ type GooglePrediction = {
 };
 
 type GoogleAutocompleteSessionToken = object;
+
+const MIN_REQUIRED_SHOP_IMAGES = 1;
+const RECOMMENDED_SHOP_IMAGES = 3;
+const MAX_SHOP_IMAGES = 6;
 
 function slugify(value: string) {
   return value
@@ -56,7 +59,6 @@ function pickAddressComponent(components: Array<{ long_name?: string; short_name
 
 export function BarbershopOnboardingForm() {
   const router = useRouter();
-  const supabase = useMemo(() => createSupabaseBrowserClient(), []);
   const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY?.trim() ?? '';
 
   const searchShellRef = useRef<HTMLDivElement | null>(null);
@@ -81,6 +83,7 @@ export function BarbershopOnboardingForm() {
   const [countryCode, setCountryCode] = useState('UY');
   const [latitude, setLatitude] = useState<number | null>(null);
   const [longitude, setLongitude] = useState<number | null>(null);
+  const [shopPhotos, setShopPhotos] = useState<File[]>([]);
   const [placesMode, setPlacesMode] = useState<'loading' | 'ready' | 'fallback'>(
     googleMapsApiKey ? 'loading' : 'fallback',
   );
@@ -187,6 +190,19 @@ export function BarbershopOnboardingForm() {
 
       applyGeocodedPlace(prediction, firstResult);
     });
+  });
+
+  const handlePhotosChange = useEffectEvent((files: FileList | null) => {
+    if (!files) {
+      setShopPhotos([]);
+      return;
+    }
+
+    const nextPhotos = Array.from(files)
+      .filter((file) => file.size > 0)
+      .slice(0, MAX_SHOP_IMAGES);
+
+    setShopPhotos(nextPhotos);
   });
 
   useEffect(() => {
@@ -403,40 +419,56 @@ export function BarbershopOnboardingForm() {
       return;
     }
 
+    if (shopPhotos.length < MIN_REQUIRED_SHOP_IMAGES) {
+      setSubmitting(false);
+      setError('Debes subir al menos una foto del local antes de crear la barberia.');
+      return;
+    }
+
     try {
-      const { data, error: rpcError } = await supabase.rpc('bootstrap_shop_owner', {
-        p_shop_name: shopName.trim(),
-        p_shop_slug: resolvedSlug,
-        p_timezone: timezone.trim() || 'UTC',
-        p_owner_name: ownerName.trim() || 'Shop owner',
-        p_contact_phone: phone.trim() || null,
-        p_description: description.trim() || null,
-        p_location_label: locationLabel.trim() || shopName.trim() || locationQuery.trim() || null,
-        p_city: city.trim() || null,
-        p_region: region.trim() || null,
-        p_country_code: countryCode.trim().toUpperCase() || null,
-        p_latitude: latitude,
-        p_longitude: longitude,
+      const payload = {
+        shop_name: shopName.trim(),
+        shop_slug: resolvedSlug,
+        timezone: timezone.trim() || 'UTC',
+        owner_name: ownerName.trim() || 'Shop owner',
+        phone: phone.trim() || null,
+        description: description.trim() || null,
+        location_label: locationLabel.trim() || shopName.trim() || locationQuery.trim() || null,
+        city: city.trim() || null,
+        region: region.trim() || null,
+        country_code: countryCode.trim().toUpperCase() || null,
+        latitude,
+        longitude,
+      };
+
+      const formData = new FormData();
+      formData.append('payload', JSON.stringify(payload));
+
+      for (const photo of shopPhotos) {
+        formData.append('shopPhotos', photo);
+      }
+
+      const response = await fetch('/api/onboarding/barbershop', {
+        method: 'POST',
+        body: formData,
       });
 
-      if (rpcError) {
+      if (!response.ok) {
+        const message = await response.text();
         setSubmitting(false);
-        setError(rpcError.message);
+        setError(message || 'No se pudo crear la barberia.');
         return;
       }
 
-      const row = Array.isArray(data)
-        ? (data[0] as { shop_id?: string; shop_slug?: string } | undefined)
-        : undefined;
-
-      if (row?.shop_id) {
-        document.cookie = `${WORKSPACE_COOKIE_NAME}=${encodeURIComponent(row.shop_id)}; path=/; max-age=${WORKSPACE_COOKIE_MAX_AGE_SECONDS}; samesite=lax`;
-        router.replace(buildAdminHref('/admin', row?.shop_slug || resolvedSlug));
+      const result = (await response.json()) as { shop_id?: string; shop_slug?: string };
+      if (result.shop_id) {
+        document.cookie = `${WORKSPACE_COOKIE_NAME}=${encodeURIComponent(result.shop_id)}; path=/; max-age=${WORKSPACE_COOKIE_MAX_AGE_SECONDS}; samesite=lax`;
+        router.replace(buildAdminHref('/admin', result.shop_slug || resolvedSlug));
         router.refresh();
         return;
       }
 
-      const targetSlug = row?.shop_slug || resolvedSlug;
+      const targetSlug = result.shop_slug || resolvedSlug;
       router.replace(`/shops/${targetSlug}`);
       router.refresh();
     } catch (requestError) {
@@ -506,6 +538,52 @@ export function BarbershopOnboardingForm() {
         value={description}
         onChange={(event) => setDescription(event.target.value)}
       />
+
+      <div className="surface-card rounded-[1.75rem] p-4">
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p className="text-sm font-semibold text-ink dark:text-slate-100">Fotos del local</p>
+              <p className="text-xs text-slate/80 dark:text-slate-400">
+                Sube al menos {MIN_REQUIRED_SHOP_IMAGES}. Recomendado: {RECOMMENDED_SHOP_IMAGES} para mostrar mejor tu barberia.
+              </p>
+            </div>
+            <span className="meta-chip" data-tone={shopPhotos.length >= RECOMMENDED_SHOP_IMAGES ? 'success' : 'default'}>
+              {shopPhotos.length}/{RECOMMENDED_SHOP_IMAGES} recomendadas
+            </span>
+          </div>
+
+          <label className="block">
+            <span className="sr-only">Seleccionar fotos del local</span>
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              multiple
+              required
+              onChange={(event) => handlePhotosChange(event.target.files)}
+              className="block w-full cursor-pointer rounded-2xl border border-white/70 bg-white/70 px-4 py-3 text-sm text-slate-700 shadow-[0_16px_28px_-24px_rgba(15,23,42,0.16)] file:mr-4 file:rounded-xl file:border-0 file:bg-slate-900 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white hover:bg-white/85 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-200 dark:file:bg-white dark:file:text-slate-950"
+            />
+          </label>
+
+          <p className="text-xs text-slate/70 dark:text-slate-400">
+            La primera foto seleccionada se usara como portada publica de la barberia. Puedes subir hasta {MAX_SHOP_IMAGES}.
+          </p>
+
+          {shopPhotos.length > 0 ? (
+            <div className="flex flex-wrap gap-2 pt-1">
+              {shopPhotos.map((file, index) => (
+                <span key={`${file.name}-${file.lastModified}-${index}`} className="meta-chip">
+                  {index === 0 ? 'Portada:' : `Foto ${index + 1}:`} {file.name}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs font-medium text-rose-600 dark:text-rose-300">
+              Debes seleccionar al menos una foto del local para continuar.
+            </p>
+          )}
+        </div>
+      </div>
 
       {placesMode === 'fallback' ? (
         <>

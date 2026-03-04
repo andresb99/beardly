@@ -271,7 +271,7 @@ const DEFAULT_MARKETPLACE_CENTER = {
   lng: -56.1645,
 } as const;
 const DEFAULT_MARKETPLACE_ZOOM = 11;
-const MOBILE_MARKETPLACE_NAVBAR_HEIGHT_PX = 76;
+const MOBILE_MARKETPLACE_FALLBACK_TOP_OFFSET_PX = 88;
 type MobileSheetStage = 'collapsed' | 'mid' | 'expanded';
 const MOBILE_SHEET_STAGE_TRANSLATE: Record<MobileSheetStage, number> = {
   collapsed: 88,
@@ -283,6 +283,7 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
   const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY?.trim() ?? '';
   const mapElementRef = useRef<HTMLDivElement | null>(null);
   const mobileSheetRef = useRef<HTMLDivElement | null>(null);
+  const mobileStageRef = useRef<HTMLDivElement | null>(null);
   const googleMapsRef = useRef<GoogleMapsApi | null>(null);
   const mapRef = useRef<GoogleMap | null>(null);
   const autocompleteServiceRef = useRef<GoogleAutocompleteService | null>(null);
@@ -435,8 +436,12 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
       const nextViewportHeight = Math.round(
         window.visualViewport?.height || window.innerHeight || document.documentElement.clientHeight || 0,
       );
+      const stageTop = Math.round(
+        mobileStageRef.current?.getBoundingClientRect().top ?? MOBILE_MARKETPLACE_FALLBACK_TOP_OFFSET_PX,
+      );
+      const nextContentHeight = Math.max(nextViewportHeight - Math.max(stageTop, 0), 0);
 
-      setMobileViewportHeight(nextViewportHeight > 0 ? nextViewportHeight : null);
+      setMobileViewportHeight(nextContentHeight > 0 ? nextContentHeight : null);
     };
 
     syncViewportHeight();
@@ -452,6 +457,50 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
       visualViewport?.removeEventListener('scroll', syncViewportHeight);
     };
   }, [isMobileViewport]);
+
+  useEffect(() => {
+    if (!isMobileViewport || !mobileViewportHeight || typeof window === 'undefined') {
+      return;
+    }
+
+    const map = mapRef.current;
+    if (!map) {
+      return;
+    }
+
+    const center = map.getCenter();
+    const zoom = map.getZoom();
+    const frame = window.requestAnimationFrame(() => {
+      const googleMapsEvent = (
+        window as Window & {
+          google?: {
+            maps?: {
+              event?: {
+                trigger(instance: unknown, eventName: string): void;
+              };
+            };
+          };
+        }
+      ).google?.maps?.event;
+
+      googleMapsEvent?.trigger(map as unknown, 'resize');
+
+      if (center) {
+        map.setCenter({
+          lat: center.lat(),
+          lng: center.lng(),
+        });
+      }
+
+      if (typeof zoom === 'number') {
+        map.setZoom(zoom);
+      }
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
+  }, [isMobileViewport, mobileViewportHeight]);
 
   useEffect(() => {
     activeSearchModeRef.current = activeSearchMode;
@@ -1490,10 +1539,7 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
       : 'Compara reputacion, perfil y disponibilidad antes de reservar.';
   const showResetSearch = (activeSearchMode !== 'all' || activeSearchLabel) && !isApplyingSearch;
   const mobileCollapsedCountLabel = `${filteredShops.length} ${filteredShops.length === 1 ? 'barberia' : 'barberias'}`;
-  const mobileViewportContentHeight =
-    isMobileViewport && mobileViewportHeight
-      ? Math.max(mobileViewportHeight - MOBILE_MARKETPLACE_NAVBAR_HEIGHT_PX, 0)
-      : null;
+  const mobileViewportContentHeight = isMobileViewport && mobileViewportHeight ? mobileViewportHeight : null;
   const mobileSheetTranslate = MOBILE_SHEET_STAGE_TRANSLATE[mobileSheetStage];
   const mobileSheetStyle = isMobileViewport
     ? {
@@ -1525,6 +1571,7 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
 
   return (
     <div
+      ref={mobileStageRef}
       className="relative -mx-4 -mb-16 -mt-5 flex h-[calc(100dvh-4.75rem)] flex-col gap-4 overflow-hidden sm:-mx-6 md:-mb-[4.5rem] md:-mt-7 xl:mx-0 xl:mb-0 xl:mt-0 xl:grid xl:h-auto xl:min-h-0 xl:overflow-visible xl:grid-cols-[minmax(0,1.02fr)_minmax(28rem,0.98fr)] xl:gap-6 xl:items-start"
       style={mobileStageStyle}
     >
