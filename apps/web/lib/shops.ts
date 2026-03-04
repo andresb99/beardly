@@ -38,6 +38,13 @@ interface ShopServiceRow {
   price_cents: number | null;
 }
 
+interface ShopGalleryRow {
+  shop_id: string;
+  public_url: string | null;
+  sort_order: number | null;
+  created_at: string | null;
+}
+
 export type MarketplaceSearchMode = 'all' | 'name' | 'area' | 'nearby';
 
 export interface MarketplaceShop {
@@ -50,6 +57,7 @@ export interface MarketplaceShop {
   isVerified: boolean;
   logoUrl: string | null;
   coverImageUrl: string | null;
+  imageUrls: string[];
   locationLabel: string | null;
   city: string | null;
   region: string | null;
@@ -67,6 +75,7 @@ function buildMarketplaceShop(
   location: ShopLocationRow | undefined,
   reviews: ShopReviewRow[],
   services: ShopServiceRow[],
+  galleryImages: ShopGalleryRow[],
 ): MarketplaceShop {
   const validRatings = reviews
     .map((item) => Number(item.rating))
@@ -76,6 +85,13 @@ function buildMarketplaceShop(
   const validPrices = services
     .map((item) => Number(item.price_cents))
     .filter((item) => Number.isFinite(item) && item >= 0);
+  const imageUrls = Array.from(
+    new Set(
+      [shop.cover_image_url, ...galleryImages.map((item) => item.public_url)]
+        .map((value) => String(value || '').trim())
+        .filter(Boolean),
+    ),
+  );
 
   return {
     id: shop.id,
@@ -86,7 +102,8 @@ function buildMarketplaceShop(
     phone: shop.phone,
     isVerified: Boolean(shop.is_verified),
     logoUrl: shop.logo_url,
-    coverImageUrl: shop.cover_image_url,
+    coverImageUrl: shop.cover_image_url || imageUrls[0] || null,
+    imageUrls,
     locationLabel: location?.label || null,
     city: location?.city || null,
     region: location?.region || null,
@@ -374,7 +391,7 @@ export async function listMarketplaceShopsInBounds(
     return [];
   }
 
-  const [{ data: reviews }, { data: services }] = await Promise.all([
+  const [{ data: reviews }, { data: services }, { data: galleryImages }] = await Promise.all([
     supabase
       .from('appointment_reviews')
       .select('shop_id, rating')
@@ -386,10 +403,17 @@ export async function listMarketplaceShopsInBounds(
       .select('shop_id, price_cents')
       .in('shop_id', activeShopIds)
       .eq('is_active', true),
+    supabase
+      .from('shop_gallery_images')
+      .select('shop_id, public_url, sort_order, created_at')
+      .in('shop_id', activeShopIds)
+      .order('sort_order')
+      .order('created_at'),
   ]);
 
   const reviewsByShopId = new Map<string, ShopReviewRow[]>();
   const servicesByShopId = new Map<string, ShopServiceRow[]>();
+  const galleryByShopId = new Map<string, ShopGalleryRow[]>();
 
   ((reviews || []) as ShopReviewRow[]).forEach((item) => {
     const shopId = String(item.shop_id);
@@ -405,6 +429,13 @@ export async function listMarketplaceShopsInBounds(
     servicesByShopId.set(shopId, current);
   });
 
+  ((galleryImages || []) as ShopGalleryRow[]).forEach((item) => {
+    const shopId = String(item.shop_id);
+    const current = galleryByShopId.get(shopId) || [];
+    current.push(item);
+    galleryByShopId.set(shopId, current);
+  });
+
   return activeShopIds
     .map((shopId) => {
       const shop = shopById.get(shopId);
@@ -417,6 +448,7 @@ export async function listMarketplaceShopsInBounds(
         locationsByShopId.get(shopId),
         reviewsByShopId.get(shopId) || [],
         servicesByShopId.get(shopId) || [],
+        galleryByShopId.get(shopId) || [],
       );
     })
     .filter((item): item is MarketplaceShop => item !== null);
@@ -444,7 +476,7 @@ export const listMarketplaceShops = cache(async (): Promise<MarketplaceShop[]> =
   }
 
   const shopIds = shops.map((item) => String(item.id));
-  const [{ data: locations }, { data: reviews }, { data: services }] = await Promise.all([
+  const [{ data: locations }, { data: reviews }, { data: services }, { data: galleryImages }] = await Promise.all([
     supabase
       .from('shop_locations')
       .select('shop_id, label, city, region, country_code, latitude, longitude')
@@ -461,6 +493,12 @@ export const listMarketplaceShops = cache(async (): Promise<MarketplaceShop[]> =
       .select('shop_id, price_cents')
       .in('shop_id', shopIds)
       .eq('is_active', true),
+    supabase
+      .from('shop_gallery_images')
+      .select('shop_id, public_url, sort_order, created_at')
+      .in('shop_id', shopIds)
+      .order('sort_order')
+      .order('created_at'),
   ]);
 
   const locationsByShopId = new Map(
@@ -468,6 +506,7 @@ export const listMarketplaceShops = cache(async (): Promise<MarketplaceShop[]> =
   );
   const reviewsByShopId = new Map<string, ShopReviewRow[]>();
   const servicesByShopId = new Map<string, ShopServiceRow[]>();
+  const galleryByShopId = new Map<string, ShopGalleryRow[]>();
 
   ((reviews || []) as ShopReviewRow[]).forEach((item) => {
     const shopId = String(item.shop_id);
@@ -483,12 +522,20 @@ export const listMarketplaceShops = cache(async (): Promise<MarketplaceShop[]> =
     servicesByShopId.set(shopId, current);
   });
 
+  ((galleryImages || []) as ShopGalleryRow[]).forEach((item) => {
+    const shopId = String(item.shop_id);
+    const current = galleryByShopId.get(shopId) || [];
+    current.push(item);
+    galleryByShopId.set(shopId, current);
+  });
+
   return (shops as ShopRow[]).map((shop) =>
     buildMarketplaceShop(
       shop,
       locationsByShopId.get(shop.id),
       reviewsByShopId.get(shop.id) || [],
       servicesByShopId.get(shop.id) || [],
+      galleryByShopId.get(shop.id) || [],
     ),
   );
 });

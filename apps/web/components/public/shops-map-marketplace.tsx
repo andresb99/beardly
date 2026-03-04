@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useDeferredValue, useEffect, useMemo, useRef, useState, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react';
-import { Card, CardBody, CardFooter, Skeleton } from '@heroui/react';
+import { Card, CardBody, CardFooter, CardHeader, Skeleton } from '@heroui/react';
 import {
   ArrowUpRight,
   BadgeCheck,
@@ -18,6 +18,7 @@ import { formatCurrency } from '@navaja/shared';
 import type { MarketplaceSearchMode, MarketplaceShop } from '@/lib/shops';
 import { cn } from '@/lib/cn';
 import { buildShopHref } from '@/lib/shop-links';
+import { MediaShowcase } from '@/components/public/media-showcase';
 import {
   type GoogleAutocompleteService,
   type GoogleGeocoder,
@@ -1422,7 +1423,9 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
       ? 'Resultados directos por nombre de barberia.'
       : 'Compara reputacion, perfil y disponibilidad antes de reservar.';
   const showResetSearch = (activeSearchMode !== 'all' || activeSearchLabel) && !isApplyingSearch;
-  const mobileCollapsedCountLabel = `${filteredShops.length} ${filteredShops.length === 1 ? 'barberia' : 'barberias'}`;
+  const mobileCollapsedCountLabel = `${filteredShops.length} ${
+    filteredShops.length === 1 ? 'barberia' : 'barberias'
+  } en esta zona`;
   const mobileViewportContentHeight = isMobileViewport && mobileViewportHeight ? mobileViewportHeight : null;
   const mobileSheetHeight = mobileViewportContentHeight ? Math.max(mobileViewportContentHeight - 16, 0) : null;
   const mobileSheetStyle = isMobileViewport
@@ -1565,45 +1568,50 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
         </div>
 
         <div ref={mobileSheetRef} className={mobileSheetClassName} style={mobileSheetStyle}>
-          <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex h-7 justify-center bg-white pt-3 dark:bg-slate-950 xl:hidden">
+          <div
+            className="absolute inset-x-0 top-0 z-10 flex h-7 cursor-grab touch-none justify-center bg-white pt-3 select-none active:cursor-grabbing dark:bg-slate-950 xl:hidden"
+            onPointerDown={handleMobileSheetDragStart}
+          >
             <div className="h-1.5 w-14 rounded-full bg-black/20 dark:bg-white/20" />
           </div>
 
-          <div className="relative z-10 bg-white px-4 pb-3 pt-7 dark:bg-slate-950 xl:hidden">
-            <div
-              className="cursor-grab touch-none select-none active:cursor-grabbing"
-              onPointerDown={handleMobileSheetDragStart}
-            >
-              {mobileSheetStage === 'collapsed' ? (
-                <div className="pb-1 text-center">
-                  <p className="font-[family-name:var(--font-heading)] text-lg font-semibold text-ink dark:text-slate-100">
-                    {mobileCollapsedCountLabel}
-                  </p>
-                </div>
-              ) : (
-                <>
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate/65 dark:text-slate-400">
-                        Barberias en el area del mapa
-                      </p>
-                      <h1 className="mt-2 font-[family-name:var(--font-heading)] text-xl font-semibold text-ink dark:text-slate-100">
-                        {resultHeadline}
-                      </h1>
-                    </div>
-                    <div className="meta-chip shrink-0" data-tone="success">
-                      <MapPinned className="h-3.5 w-3.5" />
-                      {activePins}
-                    </div>
+          <div
+            className={cn(
+              'relative z-10 bg-white dark:bg-slate-950 xl:hidden cursor-grab touch-none select-none active:cursor-grabbing',
+              mobileSheetStage === 'collapsed'
+                ? 'h-[5.25rem] px-4 py-0 flex items-center justify-center'
+                : 'px-4 pb-3 pt-7',
+            )}
+            onPointerDown={handleMobileSheetDragStart}
+          >
+            {mobileSheetStage === 'collapsed' ? (
+              <p className="whitespace-nowrap text-base font-semibold leading-none text-ink dark:text-slate-100">
+                {mobileCollapsedCountLabel}
+              </p>
+            ) : (
+              <div>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate/65 dark:text-slate-400">
+                      Barberias en el area del mapa
+                    </p>
+                    <h1 className="mt-2 font-[family-name:var(--font-heading)] text-xl font-semibold text-ink dark:text-slate-100">
+                      {resultHeadline}
+                    </h1>
                   </div>
-                  <p className="mt-2 text-sm text-slate/80 dark:text-slate-300">{resultDescription}</p>
-                </>
-              )}
-            </div>
+                  <div className="meta-chip shrink-0" data-tone="success">
+                    <MapPinned className="h-3.5 w-3.5" />
+                    {activePins}
+                  </div>
+                </div>
+                <p className="mt-2 text-sm text-slate/80 dark:text-slate-300">{resultDescription}</p>
+              </div>
+            )}
             {mobileSheetStage !== 'collapsed' && showResetSearch ? (
               <button
                 type="button"
                 onClick={clearSearchResults}
+                onPointerDown={(event) => event.stopPropagation()}
                 className="meta-chip mt-3 transition hover:bg-white/80 dark:hover:bg-white/[0.08]"
               >
                 Limpiar busqueda
@@ -1659,8 +1667,9 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
                 <Card
                   key={shop.id}
                   as="article"
+                  isFooterBlurred
                   className={cn(
-                    'data-card group cursor-pointer overflow-hidden rounded-[1.9rem] border-0 p-0 shadow-none transition-transform duration-200 md:hover:-translate-y-1',
+                    'data-card group h-[22rem] cursor-pointer overflow-hidden rounded-[1.9rem] border-0 p-0 shadow-none transition-transform duration-200 md:hover:-translate-y-1',
                     isActive
                       ? 'ring-2 ring-sky-400/35 dark:ring-sky-300/25'
                       : 'ring-1 ring-transparent',
@@ -1668,97 +1677,90 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
                   data-active={String(isActive)}
                   onClick={() => focusShop(shop)}
                 >
-                  <CardBody className="p-0">
-                    <div className="relative aspect-[4/3] overflow-hidden">
-                      {shop.coverImageUrl ? (
-                        <img
-                          src={shop.coverImageUrl}
-                          alt={`Vista de ${shop.name}`}
-                          className="h-full w-full object-cover transition-transform duration-300 md:group-hover:scale-[1.03]"
-                          loading="lazy"
-                        />
-                      ) : (
-                        <div className="h-full w-full" style={getFallbackCoverStyle(shop)} />
-                      )}
-
-                      <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-slate-950/18 to-transparent" />
-
-                      <div className="absolute left-3 top-3 flex flex-wrap gap-2">
-                        <span className="rounded-full bg-white/92 px-3 py-1 text-[11px] font-semibold text-ink shadow-[0_12px_24px_-18px_rgba(15,23,42,0.35)] dark:bg-slate-950/90 dark:text-slate-100">
-                          {getShopHighlight(shop, distanceKm)}
-                        </span>
-                        {shop.isVerified ? (
-                          <span className="rounded-full border border-white/35 bg-slate-950/45 px-3 py-1 text-[11px] font-semibold text-white backdrop-blur-xl">
-                            <BadgeCheck className="mr-1 inline h-3 w-3" />
-                            Verificada
-                          </span>
-                        ) : null}
-                      </div>
-
-                      <div className="absolute right-3 top-3 rounded-full bg-white/92 px-3 py-1 text-[11px] font-semibold text-ink shadow-[0_12px_24px_-18px_rgba(15,23,42,0.35)] dark:bg-slate-950/90 dark:text-slate-100">
-                        <Star className="mr-1 inline h-3.5 w-3.5 fill-current text-amber-500" />
-                        {formatRating(shop.averageRating)}
-                      </div>
-
-                      <div className="absolute inset-x-3 bottom-3">
-                        <p className="text-base font-semibold text-white">{shop.name}</p>
-                        <p className="mt-1 text-sm text-white/82">
-                          {shop.locationLabel || shop.city || 'Montevideo'}{shop.region ? `, ${shop.region}` : ''}
-                        </p>
-                      </div>
+                  <CardHeader className="absolute inset-x-0 top-0 z-10 items-start justify-between gap-3 p-4">
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/72">
+                        {getShopHighlight(shop, distanceKm)}
+                      </p>
+                      <h3 className="mt-2 line-clamp-2 font-[family-name:var(--font-heading)] text-xl font-semibold text-white">
+                        {shop.name}
+                      </h3>
                     </div>
+                    <div className="shrink-0 rounded-full bg-white/92 px-3 py-1 text-[11px] font-semibold text-ink shadow-[0_12px_24px_-18px_rgba(15,23,42,0.35)] dark:bg-slate-950/90 dark:text-slate-100">
+                      <Star className="mr-1 inline h-3.5 w-3.5 fill-current text-amber-500" />
+                      {formatRating(shop.averageRating)}
+                    </div>
+                  </CardHeader>
 
-                    <div className="p-4">
+                  <MediaShowcase
+                    alt={`Vista de ${shop.name}`}
+                    images={shop.imageUrls}
+                    className="h-full w-full"
+                    imageClassName="transition-transform duration-300 md:group-hover:scale-[1.03]"
+                    dotsClassName="bottom-[7.1rem]"
+                    fallback={<div className="h-full w-full" style={getFallbackCoverStyle(shop)} />}
+                  />
+
+                  <div className="absolute inset-0 z-[1] bg-gradient-to-t from-slate-950/88 via-slate-950/28 to-slate-950/10" />
+
+                  <CardFooter className="absolute inset-x-0 bottom-0 z-10 border-t border-white/10 bg-black/40 px-4 py-4 backdrop-blur-md">
+                    <div className="flex w-full flex-col gap-3">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <p className="text-sm font-semibold text-ink dark:text-slate-100">
+                          <p className="line-clamp-1 text-sm font-semibold text-white">
                             {shop.locationLabel || shop.city || 'Ubicacion por confirmar'}
                           </p>
-                          <p className="mt-1 text-xs text-slate/75 dark:text-slate-400">
-                            {getLocationSummary(shop)}
+                          <p className="mt-1 line-clamp-2 text-xs text-white/68">
+                            {shop.description || 'Agenda online, perfil publico y reservas en pocos pasos.'}
                           </p>
                         </div>
 
                         {distanceKm !== null ? (
-                          <span className="shrink-0 rounded-full bg-sky-500/[0.12] px-2.5 py-1 text-[11px] font-semibold text-sky-700 dark:bg-sky-400/[0.12] dark:text-sky-200">
+                          <span className="shrink-0 rounded-full bg-white/14 px-2.5 py-1 text-[11px] font-semibold text-white">
                             {distanceKm.toFixed(1)} km
                           </span>
                         ) : null}
                       </div>
 
-                      <p className="mt-3 line-clamp-2 text-sm text-slate/80 dark:text-slate-300">
-                        {shop.description || 'Agenda online, perfil publico y reservas en pocos pasos.'}
-                      </p>
-
-                      <div className="mt-4 flex flex-wrap gap-2">
-                        <span className="meta-chip">
+                      <div className="flex flex-wrap gap-2 text-[11px] font-semibold text-white/72">
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1">
                           <MessageSquareText className="h-3.5 w-3.5" />
                           {shop.reviewCount || 0} resenas
                         </span>
-                        <span className="meta-chip">{shop.activeServiceCount} servicios</span>
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1">
+                          {shop.activeServiceCount} servicios
+                        </span>
                         {shop.minServicePriceCents !== null ? (
-                          <span className="meta-chip">Desde {formatCurrency(shop.minServicePriceCents)}</span>
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1">
+                            Desde {formatCurrency(shop.minServicePriceCents)}
+                          </span>
+                        ) : null}
+                        {shop.isVerified ? (
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-400/14 px-2.5 py-1 text-emerald-100">
+                            <BadgeCheck className="h-3.5 w-3.5" />
+                            Verificada
+                          </span>
                         ) : null}
                       </div>
-                    </div>
-                  </CardBody>
 
-                  <CardFooter className="flex flex-wrap gap-3 px-4 pb-4 pt-0">
-                    <Link
-                      href={buildShopHref(shop.slug)}
-                      className="action-secondary rounded-2xl px-4 py-2 text-sm font-semibold"
-                      onClick={(event) => event.stopPropagation()}
-                    >
-                      Ver perfil
-                    </Link>
-                    <Link
-                      href={buildShopHref(shop.slug, 'book')}
-                      className="action-primary inline-flex items-center gap-1 rounded-2xl px-4 py-2 text-sm font-semibold"
-                      onClick={(event) => event.stopPropagation()}
-                    >
-                      Reservar
-                      <ArrowUpRight className="h-4 w-4" />
-                    </Link>
+                      <div className="flex flex-wrap gap-2">
+                        <Link
+                          href={buildShopHref(shop.slug)}
+                          className="action-secondary rounded-full px-4 py-2 text-sm font-semibold"
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          Ver perfil
+                        </Link>
+                        <Link
+                          href={buildShopHref(shop.slug, 'book')}
+                          className="action-primary inline-flex items-center gap-1 rounded-full px-4 py-2 text-sm font-semibold"
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          Reservar
+                          <ArrowUpRight className="h-4 w-4" />
+                        </Link>
+                      </div>
+                    </div>
                   </CardFooter>
                 </Card>
               );
@@ -1872,26 +1874,18 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
 
           {mapPreviewShop ? (
             <div className="pointer-events-none absolute inset-x-3 top-[5.35rem] z-30 xl:inset-x-auto xl:bottom-4 xl:left-4 xl:right-auto xl:top-auto xl:max-w-[24rem]">
-              <Card className="soft-panel pointer-events-auto overflow-hidden rounded-[1.7rem] border-0 p-0 shadow-none">
-                <div className="relative aspect-[16/10] overflow-hidden">
-                  {mapPreviewShop.coverImageUrl ? (
-                    <img
-                      src={mapPreviewShop.coverImageUrl}
-                      alt={`Vista de ${mapPreviewShop.name}`}
-                      className="h-full w-full object-cover"
-                      loading="lazy"
-                    />
-                  ) : (
-                    <div className="h-full w-full" style={getFallbackCoverStyle(mapPreviewShop)} />
-                  )}
-
-                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950/78 via-slate-950/16 to-transparent" />
-
-                  <div className="absolute left-3 top-3 rounded-full bg-white/92 px-3 py-1 text-[11px] font-semibold text-ink shadow-[0_12px_24px_-18px_rgba(15,23,42,0.35)] dark:bg-slate-950/90 dark:text-slate-100">
-                    {getShopHighlight(mapPreviewShop, mapPreviewDistanceKm)}
+              <Card isFooterBlurred className="soft-panel pointer-events-auto overflow-hidden rounded-[1.7rem] border-0 p-0 shadow-none">
+                <CardHeader className="absolute inset-x-0 top-0 z-10 items-start justify-between gap-3 p-3">
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/72">
+                      {getShopHighlight(mapPreviewShop, mapPreviewDistanceKm)}
+                    </p>
+                    <h3 className="mt-2 line-clamp-1 font-[family-name:var(--font-heading)] text-lg font-semibold text-white">
+                      {mapPreviewShop.name}
+                    </h3>
                   </div>
 
-                  <div className="absolute right-3 top-3 flex items-center gap-2">
+                  <div className="flex items-center gap-2">
                     <div className="rounded-full bg-white/92 px-3 py-1 text-[11px] font-semibold text-ink shadow-[0_12px_24px_-18px_rgba(15,23,42,0.35)] dark:bg-slate-950/90 dark:text-slate-100">
                       <Star className="mr-1 inline h-3.5 w-3.5 fill-current text-amber-500" />
                       {formatRating(mapPreviewShop.averageRating)}
@@ -1905,7 +1899,17 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
                       <X className="h-4 w-4" />
                     </button>
                   </div>
-                </div>
+                </CardHeader>
+
+                <MediaShowcase
+                  alt={`Vista de ${mapPreviewShop.name}`}
+                  images={mapPreviewShop.imageUrls}
+                  className="aspect-[16/10] w-full"
+                  dotsClassName="bottom-[1.1rem]"
+                  fallback={<div className="h-full w-full" style={getFallbackCoverStyle(mapPreviewShop)} />}
+                />
+
+                <div className="absolute inset-x-0 top-0 h-[40%] z-[1] bg-gradient-to-b from-slate-950/62 to-transparent" />
 
                 <CardBody className="p-4">
                   <div className="flex items-start justify-between gap-3">
