@@ -1622,8 +1622,9 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
 
           <div
             className={cn(
-              'mt-5 xl:mt-0',
-              isMobileViewport ? 'min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-24' : '',
+              isMobileViewport
+                ? 'mt-0 min-h-0 flex-1 overflow-y-auto overscroll-contain bg-white px-4 pb-24 pt-5 dark:bg-slate-950'
+                : 'mt-5',
               isMobileViewport && mobileSheetStage === 'collapsed' && 'pointer-events-none opacity-0',
             )}
           >
