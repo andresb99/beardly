@@ -262,8 +262,8 @@ const DEFAULT_MARKETPLACE_CENTER = {
 const DEFAULT_MARKETPLACE_ZOOM = 11;
 type MobileSheetStage = 'collapsed' | 'mid' | 'expanded';
 const MOBILE_SHEET_STAGE_TRANSLATE: Record<MobileSheetStage, number> = {
-  collapsed: 72,
-  mid: 38,
+  collapsed: 88,
+  mid: 42,
   expanded: 0,
 };
 
@@ -1435,6 +1435,7 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
       ? 'Resultados directos por nombre de barberia.'
       : 'Compara reputacion, perfil y disponibilidad antes de reservar.';
   const showResetSearch = (activeSearchMode !== 'all' || activeSearchLabel) && !isApplyingSearch;
+  const mobileCollapsedCountLabel = `${filteredShops.length} ${filteredShops.length === 1 ? 'barberia' : 'barberias'}`;
   const mobileSheetTranslate = MOBILE_SHEET_STAGE_TRANSLATE[mobileSheetStage];
   const mobileSheetStyle = isMobileViewport
     ? {
@@ -1457,8 +1458,8 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
   );
 
   return (
-    <div className="relative -mx-4 flex min-h-[calc(100svh-4.75rem)] flex-col gap-4 sm:-mx-6 xl:mx-0 xl:grid xl:min-h-0 xl:grid-cols-[minmax(0,1.02fr)_minmax(28rem,0.98fr)] xl:gap-6 xl:items-start">
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 xl:pointer-events-auto xl:relative xl:inset-auto xl:order-1 xl:pr-4">
+    <div className="relative -mx-4 flex h-[calc(100svh-4.75rem)] flex-col gap-4 overflow-hidden sm:-mx-6 xl:mx-0 xl:grid xl:h-auto xl:min-h-0 xl:overflow-visible xl:grid-cols-[minmax(0,1.02fr)_minmax(28rem,0.98fr)] xl:gap-6 xl:items-start">
+      <div className="pointer-events-none absolute inset-0 z-20 flex items-end overflow-hidden xl:pointer-events-auto xl:relative xl:inset-auto xl:block xl:overflow-visible xl:order-1 xl:pr-4">
         <div className="hidden space-y-5 xl:block">
           <div className="px-1">
             <div className="flex flex-wrap items-center gap-3">
@@ -1576,23 +1577,33 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
               onPointerDown={handleMobileSheetDragStart}
             >
               <div className="mx-auto mb-4 h-1.5 w-14 rounded-full bg-slate-300/80 dark:bg-white/10" />
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate/65 dark:text-slate-400">
-                    Barberias en el area del mapa
+              {mobileSheetStage === 'collapsed' ? (
+                <div className="pb-1 text-center">
+                  <p className="font-[family-name:var(--font-heading)] text-lg font-semibold text-ink dark:text-slate-100">
+                    {mobileCollapsedCountLabel}
                   </p>
-                  <h1 className="mt-2 font-[family-name:var(--font-heading)] text-xl font-semibold text-ink dark:text-slate-100">
-                    {resultHeadline}
-                  </h1>
                 </div>
-                <div className="meta-chip shrink-0" data-tone="success">
-                  <MapPinned className="h-3.5 w-3.5" />
-                  {activePins}
-                </div>
-              </div>
-              <p className="mt-2 text-sm text-slate/80 dark:text-slate-300">{resultDescription}</p>
+              ) : (
+                <>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate/65 dark:text-slate-400">
+                        Barberias en el area del mapa
+                      </p>
+                      <h1 className="mt-2 font-[family-name:var(--font-heading)] text-xl font-semibold text-ink dark:text-slate-100">
+                        {resultHeadline}
+                      </h1>
+                    </div>
+                    <div className="meta-chip shrink-0" data-tone="success">
+                      <MapPinned className="h-3.5 w-3.5" />
+                      {activePins}
+                    </div>
+                  </div>
+                  <p className="mt-2 text-sm text-slate/80 dark:text-slate-300">{resultDescription}</p>
+                </>
+              )}
             </div>
-            {showResetSearch ? (
+            {mobileSheetStage !== 'collapsed' && showResetSearch ? (
               <button
                 type="button"
                 onClick={clearSearchResults}
@@ -1601,11 +1612,17 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
                 Limpiar busqueda
               </button>
             ) : null}
-            {searchError ? <p className="status-banner warning mt-3">{searchError}</p> : null}
-            {locationError ? <p className="status-banner warning mt-3">{locationError}</p> : null}
+            {mobileSheetStage !== 'collapsed' && searchError ? <p className="status-banner warning mt-3">{searchError}</p> : null}
+            {mobileSheetStage !== 'collapsed' && locationError ? <p className="status-banner warning mt-3">{locationError}</p> : null}
           </div>
 
-          <div className={cn('mt-5 xl:mt-0', isMobileViewport ? 'min-h-0 flex-1 overflow-y-auto px-4 pb-24' : '')}>
+          <div
+            className={cn(
+              'mt-5 xl:mt-0',
+              isMobileViewport ? 'min-h-0 flex-1 overflow-y-auto px-4 pb-24' : '',
+              isMobileViewport && mobileSheetStage === 'collapsed' && 'pointer-events-none opacity-0',
+            )}
+          >
         {showCardSkeletons ? (
           <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
             {Array.from({ length: MARKETPLACE_CARD_SKELETON_COUNT }).map((_, index) => (
@@ -1757,18 +1774,6 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
             </p>
           </div>
         )}
-        {isMobileViewport && mobileSheetStage === 'expanded' ? (
-          <div className="pointer-events-none absolute inset-x-0 bottom-5 flex justify-center">
-            <button
-              type="button"
-              onClick={() => setMobileSheetSnap('collapsed')}
-              className="pointer-events-auto inline-flex items-center gap-2 rounded-full border border-slate-900/10 bg-slate-950 px-4 py-3 text-sm font-semibold text-white shadow-[0_20px_40px_-24px_rgba(15,23,42,0.7)] ring-1 ring-white/10 dark:border-white/10 dark:bg-slate-900 dark:text-slate-100 dark:ring-white/10"
-            >
-              Mapa
-              <MapPinned className="h-4 w-4" />
-            </button>
-          </div>
-        ) : null}
       </div>
       </div>
       </div>
