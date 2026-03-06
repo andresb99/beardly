@@ -3,6 +3,7 @@ import { formatCurrency } from '@navaja/shared';
 import { Card, CardBody } from '@heroui/card';
 import { PencilLine } from 'lucide-react';
 import { AdminCourseForm } from '@/components/admin/course-form';
+import { AdminCourseEnrollmentsTable } from '@/components/admin/course-enrollments-table';
 import { AdminCourseSessionForm } from '@/components/admin/course-session-form';
 import { requireAdmin } from '@/lib/auth';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
@@ -10,6 +11,36 @@ import { buildAdminHref } from '@/lib/workspace-routes';
 
 interface CoursesAdminPageProps {
   searchParams: Promise<{ shop?: string; edit?: string }>;
+}
+
+function parseModelCategories(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const seen = new Set<string>();
+  const normalized: string[] = [];
+
+  for (const category of value) {
+    if (typeof category !== 'string') {
+      continue;
+    }
+
+    const trimmed = category.trim();
+    if (!trimmed) {
+      continue;
+    }
+
+    const dedupeKey = trimmed.toLowerCase();
+    if (seen.has(dedupeKey)) {
+      continue;
+    }
+
+    seen.add(dedupeKey);
+    normalized.push(trimmed);
+  }
+
+  return normalized;
 }
 
 export default async function CoursesAdminPage({ searchParams }: CoursesAdminPageProps) {
@@ -20,7 +51,9 @@ export default async function CoursesAdminPage({ searchParams }: CoursesAdminPag
 
   const { data: courses } = await supabase
     .from('courses')
-    .select('id, title, description, level, price_cents, duration_hours, image_url, is_active')
+    .select(
+      'id, title, description, level, price_cents, duration_hours, image_url, requires_model, model_categories, is_active',
+    )
     .eq('shop_id', ctx.shopId)
     .order('title');
 
@@ -56,6 +89,27 @@ export default async function CoursesAdminPage({ searchParams }: CoursesAdminPag
   const activeCourses = (courses || []).filter((item) => item.is_active).length;
   const editingCourse =
     (courses || []).find((course) => String(course.id) === editingCourseId) || null;
+  const sessionsById = new Map((sessions || []).map((session) => [String(session.id), session]));
+  const coursesById = new Map((courses || []).map((course) => [String(course.id), course]));
+  const recentEnrollments = (enrollments || []).slice(0, 30);
+  const enrollmentRows = recentEnrollments.map((enrollment) => {
+    const session = sessionsById.get(String(enrollment.session_id || ''));
+    const course = coursesById.get(String(session?.course_id || ''));
+
+    return {
+      id: String(enrollment.id),
+      studentName: String(enrollment.name || 'Sin nombre'),
+      courseTitle: String(course?.title || 'Curso'),
+      email: String(enrollment.email || '-'),
+      phone: String(enrollment.phone || '-'),
+      status: String(enrollment.status || 'pending'),
+      sessionStartLabel: session?.start_at
+        ? new Date(String(session.start_at)).toLocaleString('es-UY')
+        : 'Sin fecha',
+      sessionLocation: String(session?.location || '-'),
+      createdAtLabel: new Date(String(enrollment.created_at)).toLocaleString('es-UY'),
+    };
+  });
 
   return (
     <section className="space-y-6">
@@ -119,6 +173,8 @@ export default async function CoursesAdminPage({ searchParams }: CoursesAdminPag
                 durationHours: Number(editingCourse.duration_hours || 0),
                 level: String(editingCourse.level || 'Inicial'),
                 imageUrl: (typeof editingCourse.image_url === 'string' && editingCourse.image_url.trim()) || null,
+                requiresModel: Boolean(editingCourse.requires_model),
+                modelCategories: parseModelCategories(editingCourse.model_categories),
                 isActive: Boolean(editingCourse.is_active),
               }}
               cancelHref={buildAdminHref('/admin/courses', ctx.shopSlug)}
@@ -169,6 +225,8 @@ export default async function CoursesAdminPage({ searchParams }: CoursesAdminPag
               const scopedSessions = (sessions || []).filter(
                 (session) => String(session.course_id) === String(course.id),
               );
+              const requiresModel = Boolean(course.requires_model);
+              const modelCategories = parseModelCategories(course.model_categories);
 
               return (
                 <li key={String(course.id)} className="data-card rounded-[1.7rem] p-4">
@@ -196,6 +254,11 @@ export default async function CoursesAdminPage({ searchParams }: CoursesAdminPag
                       >
                         {course.is_active ? 'Activo' : 'Inactivo'}
                       </span>
+                      {requiresModel ? (
+                        <span className="meta-chip border-cyan-400/28 bg-cyan-500/10 text-cyan-700 dark:text-cyan-200">
+                          Requiere modelos
+                        </span>
+                      ) : null}
                     </div>
                   </div>
 
@@ -225,6 +288,25 @@ export default async function CoursesAdminPage({ searchParams }: CoursesAdminPag
                       </p>
                     </div>
                   </div>
+
+                  {requiresModel ? (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {modelCategories.length ? (
+                        modelCategories.map((category) => (
+                          <span
+                            key={`${String(course.id)}-${category}`}
+                            className="meta-chip border-cyan-400/24 bg-cyan-500/10 text-cyan-700 dark:text-cyan-200"
+                          >
+                            {category}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-xs text-slate/70 dark:text-slate-400">
+                          Sin categorias configuradas.
+                        </span>
+                      )}
+                    </div>
+                  ) : null}
 
                   <div className="mt-4 space-y-2">
                     {scopedSessions.length === 0 ? (
@@ -286,40 +368,7 @@ export default async function CoursesAdminPage({ searchParams }: CoursesAdminPag
           <h3 className="text-xl font-semibold text-ink dark:text-slate-100">
             Inscripciones recientes
           </h3>
-          {(enrollments || []).length === 0 ? (
-            <p className="mt-3 text-sm text-slate/80 dark:text-slate-300">
-              Todavia no hay inscripciones.
-            </p>
-          ) : null}
-          <ul className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3 text-sm">
-            {(enrollments || []).slice(0, 30).map((enrollment) => (
-              <li key={String(enrollment.id)} className="data-card rounded-2xl p-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="font-medium text-ink dark:text-slate-100">
-                      {String(enrollment.name)}
-                    </p>
-                    <p className="mt-1 text-xs text-slate/70 dark:text-slate-400">
-                      {String(enrollment.email)}
-                    </p>
-                  </div>
-                  <span
-                    className="meta-chip"
-                    data-tone={enrollment.status === 'confirmed' ? 'success' : undefined}
-                  >
-                    {enrollment.status === 'pending'
-                      ? 'Pendiente'
-                      : enrollment.status === 'confirmed'
-                        ? 'Confirmada'
-                        : 'Cancelada'}
-                  </span>
-                </div>
-                <p className="mt-3 text-xs text-slate/70 dark:text-slate-400">
-                  {String(enrollment.phone)}
-                </p>
-              </li>
-            ))}
-          </ul>
+          <AdminCourseEnrollmentsTable rows={enrollmentRows} className="mt-4" />
         </CardBody>
       </Card>
     </section>

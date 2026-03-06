@@ -44,6 +44,10 @@ export interface AccountAppointmentReviewAccess {
   canReview: boolean;
 }
 
+function normalizeEmail(value: string) {
+  return value.trim().toLowerCase();
+}
+
 function mapAppointmentRow(
   row: RawAccountAppointmentRow,
   reviewsByAppointmentId: Map<string, RawAppointmentReviewRow>,
@@ -72,11 +76,16 @@ function mapAppointmentRow(
 }
 
 async function fetchAccountAppointmentsRaw(userEmail: string) {
+  const normalizedEmail = normalizeEmail(userEmail);
+  if (!normalizedEmail) {
+    return [];
+  }
+
   const admin = createSupabaseAdminClient();
   const { data, error } = await admin
     .from('appointments')
     .select('id, shop_id, customer_id, staff_id, start_at, status, services(name), staff(name), customers!inner(email)')
-    .eq('customers.email', userEmail)
+    .eq('customers.email', normalizedEmail)
     .order('start_at', { ascending: false })
     .limit(50);
 
@@ -126,12 +135,17 @@ export async function getAppointmentReviewAccessForUser(
   userEmail: string,
   appointmentId: string,
 ): Promise<AccountAppointmentReviewAccess | null> {
+  const normalizedEmail = normalizeEmail(userEmail);
+  if (!normalizedEmail) {
+    return null;
+  }
+
   const admin = createSupabaseAdminClient();
   const { data, error } = await admin
     .from('appointments')
     .select('id, shop_id, customer_id, staff_id, start_at, status, services(name), staff(name), customers!inner(email)')
     .eq('id', appointmentId)
-    .eq('customers.email', userEmail)
+    .eq('customers.email', normalizedEmail)
     .maybeSingle();
 
   if (error) {

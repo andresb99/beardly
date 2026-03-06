@@ -19,9 +19,9 @@ function formatHours(minutes: number) {
 }
 
 function formatCompactCurrency(cents: number) {
-  return new Intl.NumberFormat('en-US', {
+  return new Intl.NumberFormat('es-UY', {
     style: 'currency',
-    currency: 'USD',
+    currency: 'UYU',
     notation: 'compact',
     maximumFractionDigits: 1,
   }).format(cents / 100);

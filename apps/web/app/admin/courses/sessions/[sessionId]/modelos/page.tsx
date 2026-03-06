@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { centsToCurrencyInput } from '@navaja/shared';
 import { Button } from '@heroui/button';
 import { Card, CardBody } from '@heroui/card';
 import { Chip } from '@heroui/chip';
@@ -142,7 +143,11 @@ export default async function SessionModelosPage({
             hairLengthCategory={String(requirementObj.hair_length_category || 'indistinto')}
             hairType={String(requirementObj.hair_type || '')}
             compensationType={String(requirement?.compensation_type || 'gratis')}
-            compensationValueCents={String(requirement?.compensation_value_cents ?? '')}
+            compensationValueCents={centsToCurrencyInput(
+              requirement?.compensation_value_cents == null
+                ? null
+                : Number(requirement.compensation_value_cents),
+            )}
             beardRequired={Boolean(requirementObj.beard_required)}
             notesPublic={String(requirement?.notes_public || '')}
             isOpen={requirement ? !!requirement.is_open : true}

@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
-import { serviceUpsertSchema } from '@navaja/shared';
+import { parseCurrencyInputToCents, serviceUpsertSchema } from '@navaja/shared';
 import { ActionButton, Card, ErrorText, Field, Label, MutedText, Screen } from '../../components/ui/primitives';
 import { getAuthContext } from '../../lib/auth';
 import { env } from '../../lib/env';
@@ -25,7 +25,7 @@ export default function AdminServicesScreen() {
   const [error, setError] = useState<string | null>(null);
 
   const [name, setName] = useState('');
-  const [priceCents, setPriceCents] = useState('');
+  const [priceUy, setPriceUy] = useState('');
   const [durationMinutes, setDurationMinutes] = useState('');
 
   const loadServices = useCallback(async () => {
@@ -74,7 +74,7 @@ export default function AdminServicesScreen() {
     const parsed = serviceUpsertSchema.safeParse({
       shop_id: env.EXPO_PUBLIC_SHOP_ID,
       name,
-      price_cents: Number(priceCents),
+      price_cents: parseCurrencyInputToCents(priceUy),
       duration_minutes: Number(durationMinutes),
       is_active: true,
     });
@@ -96,7 +96,7 @@ export default function AdminServicesScreen() {
 
     setSaving(false);
     setName('');
-    setPriceCents('');
+    setPriceUy('');
     setDurationMinutes('');
     await loadServices();
   }
@@ -117,15 +117,15 @@ export default function AdminServicesScreen() {
         <Text style={styles.section}>Agregar servicio</Text>
         <Label>Nombre</Label>
         <Field value={name} onChangeText={setName} />
-        <Label>Precio (cents)</Label>
-        <Field value={priceCents} onChangeText={setPriceCents} keyboardType="numeric" />
+        <Label>Precio (pesos UYU)</Label>
+        <Field value={priceUy} onChangeText={setPriceUy} keyboardType="numeric" />
         <Label>Duración (minutos)</Label>
         <Field value={durationMinutes} onChangeText={setDurationMinutes} keyboardType="numeric" />
         <ErrorText message={error} />
         <ActionButton
           label={saving ? 'Guardando...' : 'Guardar servicio'}
           onPress={() => void createService()}
-          disabled={!name || !priceCents || !durationMinutes || saving}
+          disabled={!name || !priceUy || !durationMinutes || saving}
           loading={saving}
         />
       </Card>

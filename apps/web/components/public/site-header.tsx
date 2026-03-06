@@ -94,6 +94,23 @@ function getAvatarInitials(name: string | null, email: string | null) {
   return `${first.charAt(0)}${second.charAt(0)}`.toUpperCase();
 }
 
+function isMissingAccountNotificationsTableError(error: unknown) {
+  if (!error) {
+    return false;
+  }
+
+  const maybeError = error as { code?: string; message?: string };
+  const code = String(maybeError.code || '').toUpperCase();
+  const message = String(maybeError.message || error || '').toLowerCase();
+
+  return (
+    code === 'PGRST205' ||
+    code === '42P01' ||
+    (message.includes('account_notifications') &&
+      (message.includes('does not exist') || message.includes('schema cache') || message.includes('not found')))
+  );
+}
+
 function isActivePath(pathname: string, href: string): boolean {
   const resolvedHref = new URL(href, 'http://localhost');
   const targetPathname = resolvedHref.pathname;
@@ -328,7 +345,18 @@ export function SiteHeader() {
       membershipRoles.includes('admin') ||
       staffRoles.includes('admin');
     const hasStaffRole = membershipRoles.includes('staff') || staffRoles.includes('staff');
-    let nextPendingNotificationCount = (pendingInviteRows || []).length;
+    const { count: unreadAccountNotificationsCount, error: unreadAccountNotificationsError } = await supabase
+      .from('account_notifications')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .eq('is_read', false);
+
+    const safeUnreadAccountNotificationsCount =
+      unreadAccountNotificationsError && !isMissingAccountNotificationsTableError(unreadAccountNotificationsError)
+        ? 0
+        : (unreadAccountNotificationsCount || 0);
+    let nextPendingNotificationCount =
+      (pendingInviteRows || []).length + safeUnreadAccountNotificationsCount;
 
     if (hasAdminRole && accessibleShopIds.length > 0) {
       const { data: timeOffRows } = await supabase
@@ -344,9 +372,11 @@ export function SiteHeader() {
 
       // The avatar badge only tracks actionable work:
       // user invitations that still need a decision, plus admin absence approvals.
-      // Informational events remain visible in the notifications panel but no longer
-      // keep the badge active after they are reviewed.
-      nextPendingNotificationCount = (pendingInviteRows || []).length + pendingAbsenceApprovals;
+      // Personal account notifications remain part of this total when unread.
+      nextPendingNotificationCount =
+        (pendingInviteRows || []).length +
+        pendingAbsenceApprovals +
+        safeUnreadAccountNotificationsCount;
     }
 
     setHasWorkspaceAccess(accessibleShopIds.length > 0);
@@ -486,11 +516,16 @@ export function SiteHeader() {
         return;
       }
 
+      if (action === 'theme-toggle') {
+        applyTheme(theme === 'dark' ? 'light' : 'dark');
+        return;
+      }
+
       if (action === 'logout') {
         void handleSignOut();
       }
     },
-    [activeWorkspaceSlug, handleSignOut, role, router],
+    [activeWorkspaceSlug, applyTheme, handleSignOut, role, router, theme],
   );
 
   return (
@@ -584,14 +619,14 @@ export function SiteHeader() {
                 <Store className="h-4 w-4" />
               </span>
               <span className="flex min-w-0 flex-col">
-                <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/60 dark:text-slate-300/70">
+                <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink/60 dark:text-white/85">
                   {navigationContext === 'admin' ? 'Admin activo' : 'Staff activo'}
                 </span>
-                <span className="max-w-[9rem] truncate text-sm font-semibold leading-tight">
+                <span className="max-w-[9rem] truncate text-sm font-semibold leading-tight text-ink dark:text-slate-100">
                   {activeWorkspaceLabel}
                 </span>
               </span>
-              <span className="flex items-center gap-1 text-[11px] font-semibold text-ink/65 transition-colors group-hover:text-ink dark:text-slate-300/70 dark:group-hover:text-slate-100">
+              <span className="flex items-center gap-1 text-[11px] font-semibold text-ink/65 transition-colors group-hover:text-ink dark:text-white/85 dark:group-hover:text-white">
                 Cambiar
                 <ChevronRight className="h-3.5 w-3.5" />
               </span>
@@ -637,6 +672,12 @@ export function SiteHeader() {
                   {pendingNotificationCount > 0 ? ` (${pendingNotificationCount})` : ''}
                 </DropdownItem>
                 <DropdownItem key="account">Mi cuenta</DropdownItem>
+                <DropdownItem
+                  key="theme-toggle"
+                  startContent={theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+                >
+                  {theme === 'dark' ? 'Modo claro' : 'Modo oscuro'}
+                </DropdownItem>
                 <DropdownItem key="create-shop">Crear barberia</DropdownItem>
                 {hasWorkspaceAccess ? <DropdownItem key="workspaces">Mis barberias</DropdownItem> : null}
                 <DropdownItem key="logout" className="text-danger" color="danger">
@@ -647,20 +688,22 @@ export function SiteHeader() {
           </NavbarItem>
         ) : null}
 
-        <NavbarItem>
-          <Button
-            type="button"
-            isIconOnly
-            variant="light"
-            radius="full"
-            onPress={handleThemeToggle}
-            aria-label={theme === 'dark' ? 'Activar modo claro' : 'Activar modo oscuro'}
-            title={theme === 'dark' ? 'Modo claro' : 'Modo oscuro'}
-            className="h-10 w-10 min-w-0 rounded-2xl border border-white/75 bg-white/58 p-0 text-ink shadow-[0_16px_24px_-20px_rgba(15,23,42,0.24)] transition data-[hover=true]:border-white/90 data-[hover=true]:bg-white/84 data-[hover=true]:text-sky-700 data-[pressed=true]:scale-100 data-[pressed=true]:bg-white/88 dark:border-white/10 dark:bg-white/[0.05] dark:text-white dark:data-[hover=true]:bg-white/[0.08] dark:data-[hover=true]:text-sky-200"
-          >
-            {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-          </Button>
-        </NavbarItem>
+        {!loading && role === 'guest' ? (
+          <NavbarItem>
+            <Button
+              type="button"
+              isIconOnly
+              variant="light"
+              radius="full"
+              onPress={handleThemeToggle}
+              aria-label={theme === 'dark' ? 'Activar modo claro' : 'Activar modo oscuro'}
+              title={theme === 'dark' ? 'Modo claro' : 'Modo oscuro'}
+              className="h-10 w-10 min-w-10 rounded-2xl border border-white/75 bg-white/58 p-0 text-ink shadow-[0_16px_24px_-20px_rgba(15,23,42,0.24)] transition data-[hover=true]:border-white/90 data-[hover=true]:bg-white/84 data-[hover=true]:text-sky-700 data-[pressed=true]:scale-100 data-[pressed=true]:bg-white/88 dark:border-white/10 dark:bg-white/[0.05] dark:text-white dark:data-[hover=true]:bg-white/[0.08] dark:data-[hover=true]:text-sky-200"
+            >
+              {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            </Button>
+          </NavbarItem>
+        ) : null}
 
         <NavbarItem className="md:hidden">
           <NavbarMenuToggle
@@ -740,6 +783,7 @@ export function SiteHeader() {
             </Button>
           </NavbarMenuItem>
         ) : null}
+
       </NavbarMenu>
     </Navbar>
   );

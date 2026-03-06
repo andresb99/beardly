@@ -63,10 +63,14 @@ export default async function ShopModelRegistrationPage({
       <ModelRegistrationForm
         shopId={shop.id}
         {...(query.session_id ? { initialSessionId: query.session_id } : {})}
-        sessions={openCalls.map((call) => ({
-          session_id: call.session_id,
-          label: `${call.course_title} - ${new Date(call.start_at).toLocaleString('es-UY')}`,
-        }))}
+        sessions={openCalls.map((call) => {
+          const modelCategories = Array.isArray(call.model_categories) ? call.model_categories : [];
+
+          return {
+            session_id: call.session_id,
+            label: `${call.course_title} - ${new Date(call.start_at).toLocaleString('es-UY')}${modelCategories.length ? ` - ${modelCategories.join(', ')}` : ''}`,
+          };
+        })}
       />
     </section>
   );

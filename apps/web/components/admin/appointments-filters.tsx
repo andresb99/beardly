@@ -13,6 +13,7 @@ interface AdminAppointmentsFiltersProps {
   shopSlug: string;
   from: string;
   to: string;
+  selectedView?: 'table' | 'cards';
   selectedStaffId?: string | undefined;
   selectedStatus?: string | undefined;
   staff: StaffOption[];
@@ -22,6 +23,7 @@ export function AdminAppointmentsFilters({
   shopSlug,
   from,
   to,
+  selectedView,
   selectedStaffId,
   selectedStatus,
   staff,
@@ -42,6 +44,7 @@ export function AdminAppointmentsFilters({
       method="get"
     >
       <input type="hidden" name="shop" value={shopSlug} />
+      {selectedView === 'cards' ? <input type="hidden" name="view" value="cards" /> : null}
       <Input
         id="from"
         name="from"

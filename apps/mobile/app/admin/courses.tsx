@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
-import { courseSessionUpsertSchema, courseUpsertSchema } from '@navaja/shared';
+import { courseSessionUpsertSchema, courseUpsertSchema, parseCurrencyInputToCents } from '@navaja/shared';
 import { ActionButton, Card, ErrorText, Field, Label, MutedText, MultilineField, Screen } from '../../components/ui/primitives';
 import { getAuthContext } from '../../lib/auth';
 import { env } from '../../lib/env';
@@ -49,7 +49,7 @@ export default function AdminCoursesScreen() {
 
   const [courseTitle, setCourseTitle] = useState('');
   const [courseDescription, setCourseDescription] = useState('');
-  const [coursePrice, setCoursePrice] = useState('');
+  const [coursePriceUy, setCoursePriceUy] = useState('');
   const [courseHours, setCourseHours] = useState('');
   const [courseLevel, setCourseLevel] = useState('');
 
@@ -157,7 +157,7 @@ export default function AdminCoursesScreen() {
       shop_id: env.EXPO_PUBLIC_SHOP_ID,
       title: courseTitle,
       description: courseDescription,
-      price_cents: Number(coursePrice),
+      price_cents: parseCurrencyInputToCents(coursePriceUy),
       duration_hours: Number(courseHours),
       level: courseLevel,
       is_active: true,
@@ -180,7 +180,7 @@ export default function AdminCoursesScreen() {
     setSaving(false);
     setCourseTitle('');
     setCourseDescription('');
-    setCoursePrice('');
+    setCoursePriceUy('');
     setCourseHours('');
     setCourseLevel('');
     await loadData();
@@ -236,8 +236,8 @@ export default function AdminCoursesScreen() {
         <Field value={courseTitle} onChangeText={setCourseTitle} />
         <Label>Descripción</Label>
         <MultilineField value={courseDescription} onChangeText={setCourseDescription} />
-        <Label>Precio (cents)</Label>
-        <Field value={coursePrice} onChangeText={setCoursePrice} keyboardType="numeric" />
+        <Label>Precio (pesos UYU)</Label>
+        <Field value={coursePriceUy} onChangeText={setCoursePriceUy} keyboardType="numeric" />
         <Label>Duración (horas)</Label>
         <Field value={courseHours} onChangeText={setCourseHours} keyboardType="numeric" />
         <Label>Nivel</Label>
@@ -245,7 +245,7 @@ export default function AdminCoursesScreen() {
         <ActionButton
           label={saving ? 'Guardando...' : 'Guardar curso'}
           onPress={() => void createCourse()}
-          disabled={!courseTitle || !courseDescription || !coursePrice || !courseHours || !courseLevel || saving}
+          disabled={!courseTitle || !courseDescription || !coursePriceUy || !courseHours || !courseLevel || saving}
           loading={saving}
         />
       </Card>

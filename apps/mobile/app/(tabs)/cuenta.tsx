@@ -13,6 +13,11 @@ import {
   Screen,
   SurfaceCard,
 } from '../../components/ui/primitives';
+import {
+  hasExternalApi,
+  listAccountAppointmentsViaApi,
+  respondToInvitationViaApi,
+} from '../../lib/api';
 import { AppRole, getAuthContext } from '../../lib/auth';
 import { formatDateTime } from '../../lib/format';
 import { listMarketplaceShops } from '../../lib/marketplace';
@@ -26,6 +31,8 @@ interface MyAppointment {
   status: string;
   service_name: string | null;
   staff_name: string | null;
+  has_review: boolean;
+  review_rating: number | null;
 }
 
 interface InvitationItem {
@@ -33,6 +40,17 @@ interface InvitationItem {
   role: string;
   createdAt: string;
   shopName: string;
+  shopSlug: string | null;
+}
+
+interface AccountSystemNotificationItem {
+  id: string;
+  type: string;
+  title: string;
+  message: string;
+  actionUrl: string | null;
+  isRead: boolean;
+  createdAt: string;
 }
 
 const roleLabel: Record<AppRole, string> = {
@@ -49,6 +67,49 @@ const toneByRole: Record<AppRole, 'neutral' | 'success' | 'warning' | 'danger'> 
   admin: 'success',
 };
 
+const bookingStatusLabel: Record<string, string> = {
+  pending: 'Pendiente',
+  confirmed: 'Confirmada',
+  cancelled: 'Cancelada',
+  no_show: 'No asistio',
+  done: 'Realizada',
+};
+
+function isMissingAccountNotificationsTableError(error: unknown) {
+  if (!error) {
+    return false;
+  }
+
+  const maybeError = error as { code?: string; message?: string };
+  const code = String(maybeError.code || '').toUpperCase();
+  const message = String(maybeError.message || error || '').toLowerCase();
+
+  return (
+    code === 'PGRST205' ||
+    code === '42P01' ||
+    (message.includes('account_notifications') &&
+      (message.includes('does not exist') || message.includes('schema cache') || message.includes('not found')))
+  );
+}
+
+function notificationTone(
+  type: string,
+): 'neutral' | 'success' | 'warning' | 'danger' {
+  if (type === 'appointment_confirmed') {
+    return 'success';
+  }
+
+  if (type === 'appointment_cancelled') {
+    return 'danger';
+  }
+
+  if (type === 'review_requested') {
+    return 'warning';
+  }
+
+  return 'neutral';
+}
+
 export default function CuentaScreen() {
   const { colors } = useNavajaTheme();
   const [role, setRole] = useState<AppRole>('guest');
@@ -59,14 +120,25 @@ export default function CuentaScreen() {
   const [avatarUrl, setAvatarUrl] = useState<string>('');
   const [appointments, setAppointments] = useState<MyAppointment[]>([]);
   const [invitations, setInvitations] = useState<InvitationItem[]>([]);
+  const [accountNotifications, setAccountNotifications] = useState<AccountSystemNotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [processingInvitationId, setProcessingInvitationId] = useState<string | null>(null);
+  const [processingNotificationId, setProcessingNotificationId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
   const canEditProfile = useMemo(
     () => Boolean(userId && (role === 'user' || role === 'staff' || role === 'admin')),
     [role, userId],
+  );
+  const reviewableAppointments = useMemo(
+    () => appointments.filter((item) => item.status === 'done' && !item.has_review),
+    [appointments],
+  );
+  const unreadAccountNotifications = useMemo(
+    () => accountNotifications.filter((item) => !item.isRead),
+    [accountNotifications],
   );
 
   const loadAccount = useCallback(async () => {
@@ -80,7 +152,7 @@ export default function CuentaScreen() {
     setUserId(auth.userId || '');
 
     if (auth.userId) {
-      const [{ data: profile }, { data: membershipRows }, marketplaceShops] = await Promise.all([
+      const [{ data: profile }, { data: membershipRows }, { data: notificationRows, error: notificationsError }, marketplaceShops] = await Promise.all([
         supabase
           .from('user_profiles')
           .select('full_name, phone, avatar_url')
@@ -92,6 +164,12 @@ export default function CuentaScreen() {
           .eq('user_id', auth.userId)
           .eq('membership_status', 'invited')
           .order('created_at', { ascending: false }),
+        supabase
+          .from('account_notifications')
+          .select('id, notification_type, title, message, action_url, is_read, created_at')
+          .eq('user_id', auth.userId)
+          .order('created_at', { ascending: false })
+          .limit(40),
         listMarketplaceShops(),
       ]);
 
@@ -103,14 +181,17 @@ export default function CuentaScreen() {
       const { data: inviteShops } = shopIds.length
         ? await supabase
             .from('shops')
-            .select('id, name')
+            .select('id, name, slug')
             .in('id', shopIds)
             .eq('status', 'active')
-        : { data: [] as Array<{ id: string; name: string }> };
+        : { data: [] as Array<{ id: string; name: string; slug: string | null }> };
       const shopsById = new Map(
-        ((inviteShops || []) as Array<{ id: string; name: string }>).map((item) => [
+        ((inviteShops || []) as Array<{ id: string; name: string; slug: string | null }>).map((item) => [
           String(item.id),
-          String(item.name),
+          {
+            name: String(item.name),
+            slug: item.slug ? String(item.slug) : null,
+          },
         ]),
       );
 
@@ -119,37 +200,97 @@ export default function CuentaScreen() {
           id: String(item.id),
           role: String(item.role || 'staff'),
           createdAt: String(item.created_at),
-          shopName: shopsById.get(String(item.shop_id || '')) || 'Barberia',
+          shopName: shopsById.get(String(item.shop_id || ''))?.name || 'Barberia',
+          shopSlug: shopsById.get(String(item.shop_id || ''))?.slug || null,
         })),
       );
 
-      if (auth.role === 'user' || auth.role === 'staff' || auth.role === 'admin') {
-        const appointmentResponses = await Promise.all(
-          marketplaceShops.map((shop) =>
-            supabase.rpc('get_my_appointments', {
-              p_shop_id: shop.id,
-            }),
-          ),
+      if (notificationsError && !isMissingAccountNotificationsTableError(notificationsError)) {
+        setError(notificationsError.message);
+      } else {
+        setAccountNotifications(
+          ((notificationRows || []) as Array<Record<string, unknown>>).map((item) => ({
+            id: String(item.id || ''),
+            type: String(item.notification_type || 'info'),
+            title: String(item.title || 'Notificacion'),
+            message: String(item.message || ''),
+            actionUrl:
+              typeof item.action_url === 'string' && item.action_url.trim()
+                ? String(item.action_url)
+                : null,
+            isRead: Boolean(item.is_read),
+            createdAt: String(item.created_at || ''),
+          })),
         );
-        const failedResponse = appointmentResponses.find((result) => result.error);
+      }
 
-        if (failedResponse?.error) {
-          setAppointments([]);
-          setError(failedResponse.error.message);
-        } else {
-          const mergedAppointments = appointmentResponses
-            .flatMap((result) => (result.data || []) as Array<Record<string, unknown>>)
-            .map((item) => ({
-              id: String(item.id),
-              start_at: String(item.start_at),
-              end_at: String(item.end_at),
-              status: String(item.status),
-              service_name: item.service_name ? String(item.service_name) : null,
-              staff_name: item.staff_name ? String(item.staff_name) : null,
-            }))
-            .sort((a, b) => (a.start_at < b.start_at ? 1 : -1));
+      if (auth.role === 'user' || auth.role === 'staff' || auth.role === 'admin') {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        const accessToken = session?.access_token || '';
 
-          setAppointments(mergedAppointments);
+        let loaded = false;
+        if (hasExternalApi && accessToken) {
+          try {
+            const response = await listAccountAppointmentsViaApi({
+              accessToken,
+            });
+            if (response?.items) {
+              setAppointments(
+                response.items
+                  .map((item) => ({
+                    id: String(item.id),
+                    start_at: String(item.startAt),
+                    end_at: String(item.startAt),
+                    status: String(item.status || 'pending'),
+                    service_name: item.serviceName ? String(item.serviceName) : null,
+                    staff_name: item.staffName ? String(item.staffName) : null,
+                    has_review: Boolean(item.hasReview),
+                    review_rating:
+                      item.reviewRating === null || item.reviewRating === undefined
+                        ? null
+                        : Number(item.reviewRating),
+                  }))
+                  .sort((a, b) => (a.start_at < b.start_at ? 1 : -1)),
+              );
+              loaded = true;
+            }
+          } catch {
+            loaded = false;
+          }
+        }
+
+        if (!loaded) {
+          const appointmentResponses = await Promise.all(
+            marketplaceShops.map((shop) =>
+              supabase.rpc('get_my_appointments', {
+                p_shop_id: shop.id,
+              }),
+            ),
+          );
+          const failedResponse = appointmentResponses.find((result) => result.error);
+
+          if (failedResponse?.error) {
+            setAppointments([]);
+            setError(failedResponse.error.message);
+          } else {
+            const mergedAppointments = appointmentResponses
+              .flatMap((result) => (result.data || []) as Array<Record<string, unknown>>)
+              .map((item) => ({
+                id: String(item.id),
+                start_at: String(item.start_at),
+                end_at: String(item.end_at),
+                status: String(item.status),
+                service_name: item.service_name ? String(item.service_name) : null,
+                staff_name: item.staff_name ? String(item.staff_name) : null,
+                has_review: false,
+                review_rating: null,
+              }))
+              .sort((a, b) => (a.start_at < b.start_at ? 1 : -1));
+
+            setAppointments(mergedAppointments);
+          }
         }
       } else {
         setAppointments([]);
@@ -159,6 +300,7 @@ export default function CuentaScreen() {
       setPhone('');
       setAvatarUrl('');
       setInvitations([]);
+      setAccountNotifications([]);
       setAppointments([]);
     }
 
@@ -205,11 +347,114 @@ export default function CuentaScreen() {
     await loadAccount();
   }
 
+  async function respondToInvitation(membershipId: string, decision: 'accept' | 'decline') {
+    setProcessingInvitationId(membershipId);
+    setError(null);
+    setMessage(null);
+
+    try {
+      if (!hasExternalApi) {
+        throw new Error(
+          'Configura EXPO_PUBLIC_API_BASE_URL para responder invitaciones desde mobile.',
+        );
+      }
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const accessToken = session?.access_token || '';
+      if (!accessToken) {
+        throw new Error('Debes iniciar sesion para responder invitaciones.');
+      }
+
+      const result = await respondToInvitationViaApi({
+        accessToken,
+        membershipId,
+        decision,
+      });
+
+      if (!result?.success) {
+        throw new Error('No se pudo actualizar la invitacion.');
+      }
+
+      setInvitations((current) => current.filter((item) => item.id !== membershipId));
+      setMessage(
+        decision === 'accept'
+          ? 'Invitacion aceptada. Ya puedes entrar al panel correspondiente.'
+          : 'Invitacion rechazada.',
+      );
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : 'No se pudo actualizar la invitacion.',
+      );
+    } finally {
+      setProcessingInvitationId(null);
+    }
+  }
+
+  async function markNotificationAsRead(notificationId: string) {
+    if (!userId) {
+      return;
+    }
+
+    setProcessingNotificationId(notificationId);
+    setError(null);
+    setMessage(null);
+
+    const readAt = new Date().toISOString();
+    const { error: updateError } = await supabase
+      .from('account_notifications')
+      .update({
+        is_read: true,
+        read_at: readAt,
+      })
+      .eq('id', notificationId)
+      .eq('user_id', userId)
+      .eq('is_read', false);
+
+    if (updateError) {
+      setProcessingNotificationId(null);
+      setError(updateError.message);
+      return;
+    }
+
+    setAccountNotifications((current) =>
+      current.map((item) =>
+        item.id === notificationId
+          ? {
+              ...item,
+              isRead: true,
+            }
+          : item,
+      ),
+    );
+    setProcessingNotificationId(null);
+  }
+
+  function openNotificationAction(item: AccountSystemNotificationItem) {
+    if (!item.actionUrl) {
+      return;
+    }
+
+    const reviewMatch = item.actionUrl.match(/^\/cuenta\/resenas\/([0-9a-fA-F-]{36})$/);
+    if (reviewMatch?.[1]) {
+      router.push({
+        pathname: '/cuenta/resenas/[appointmentId]',
+        params: { appointmentId: reviewMatch[1] },
+      });
+      return;
+    }
+
+    if (item.actionUrl.startsWith('/cuenta')) {
+      router.push('/(tabs)/cuenta');
+    }
+  }
+
   return (
     <Screen
       eyebrow="Cuenta"
       title="Perfil, invitaciones y reservas"
-      subtitle="La cuenta mobile ahora sigue la misma estructura principal que la web: perfil editable, notificaciones y seguimiento de reservas."
+      subtitle="La cuenta mobile sigue la estructura principal de la web: perfil editable, notificaciones, reservas y reseñas."
     >
       <HeroPanel
         eyebrow="Mi cuenta"
@@ -284,11 +529,64 @@ export default function CuentaScreen() {
         <View style={styles.sectionHeader}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Notificaciones</Text>
           <Chip
-            label={`${invitations.length} pendiente${invitations.length === 1 ? '' : 's'}`}
-            tone={invitations.length ? 'warning' : 'neutral'}
+            label={`${invitations.length + unreadAccountNotifications.length} pendiente${invitations.length + unreadAccountNotifications.length === 1 ? '' : 's'}`}
+            tone={invitations.length + unreadAccountNotifications.length ? 'warning' : 'neutral'}
           />
         </View>
 
+        {!accountNotifications.length && !invitations.length ? (
+          <MutedText>No tienes notificaciones pendientes en este momento.</MutedText>
+        ) : null}
+
+        <Text style={[styles.subSectionTitle, { color: colors.textMuted }]}>
+          Actividad de citas
+        </Text>
+        {!accountNotifications.length ? (
+          <MutedText>No hay novedades de citas para mostrar.</MutedText>
+        ) : null}
+        <View style={styles.list}>
+          {accountNotifications.map((item) => (
+            <SurfaceCard key={item.id} style={styles.infoCard}>
+              <View style={styles.sectionHeader}>
+                <Text style={[styles.infoTitle, { color: colors.text }]}>{item.title}</Text>
+                <Chip
+                  label={item.isRead ? 'Leida' : 'Nueva'}
+                  tone={item.isRead ? 'neutral' : notificationTone(item.type)}
+                />
+              </View>
+              <Text style={[styles.infoMeta, { color: colors.textMuted }]}>{item.message}</Text>
+              <Text style={[styles.infoMeta, { color: colors.textMuted }]}>
+                {formatDateTime(item.createdAt)}
+              </Text>
+              <View style={styles.inviteActions}>
+                {item.actionUrl ? (
+                  <ActionButton
+                    label="Ver detalle"
+                    variant="secondary"
+                    onPress={() => openNotificationAction(item)}
+                  />
+                ) : null}
+                {!item.isRead ? (
+                  <ActionButton
+                    label={
+                      processingNotificationId === item.id
+                        ? 'Actualizando...'
+                        : 'Marcar como leida'
+                    }
+                    onPress={() => {
+                      void markNotificationAsRead(item.id);
+                    }}
+                    disabled={processingNotificationId === item.id}
+                  />
+                ) : null}
+              </View>
+            </SurfaceCard>
+          ))}
+        </View>
+
+        <Text style={[styles.subSectionTitle, { color: colors.textMuted }]}>
+          Invitaciones de equipo
+        </Text>
         {!invitations.length ? (
           <MutedText>No tienes invitaciones pendientes en este momento.</MutedText>
         ) : null}
@@ -303,9 +601,66 @@ export default function CuentaScreen() {
               <Text style={[styles.infoMeta, { color: colors.textMuted }]}>
                 Recibida el {formatDateTime(item.createdAt)}
               </Text>
-              <Text style={[styles.infoHint, { color: colors.warning }]}>
-                La respuesta de invitaciones sigue disponible en la web.
+              <View style={styles.inviteActions}>
+                <ActionButton
+                  label={
+                    processingInvitationId === item.id ? 'Procesando...' : 'Aceptar invitacion'
+                  }
+                  onPress={() => {
+                    void respondToInvitation(item.id, 'accept');
+                  }}
+                  disabled={processingInvitationId === item.id}
+                />
+                <ActionButton
+                  label="Rechazar"
+                  variant="secondary"
+                  onPress={() => {
+                    void respondToInvitation(item.id, 'decline');
+                  }}
+                  disabled={processingInvitationId === item.id}
+                />
+              </View>
+              {item.shopSlug ? (
+                <ActionButton
+                  label="Ver barberia"
+                  variant="secondary"
+                  onPress={() => router.push('/(tabs)/inicio')}
+                />
+              ) : null}
+            </SurfaceCard>
+          ))}
+        </View>
+      </Card>
+
+      <Card elevated>
+        <View style={styles.sectionHeader}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Pendientes de calificar</Text>
+          <Chip
+            label={`${reviewableAppointments.length} pendiente${reviewableAppointments.length === 1 ? '' : 's'}`}
+            tone={reviewableAppointments.length ? 'warning' : 'neutral'}
+          />
+        </View>
+
+        {!reviewableAppointments.length ? (
+          <MutedText>No tienes citas pendientes de reseña.</MutedText>
+        ) : null}
+
+        <View style={styles.list}>
+          {reviewableAppointments.map((item) => (
+            <SurfaceCard key={item.id} style={styles.infoCard}>
+              <Text style={[styles.infoTitle, { color: colors.text }]}>{formatDateTime(item.start_at)}</Text>
+              <Text style={[styles.infoMeta, { color: colors.textMuted }]}>
+                {item.service_name || 'Servicio'} - {item.staff_name || 'Sin asignar'}
               </Text>
+              <ActionButton
+                label="Calificar cita"
+                onPress={() =>
+                  router.push({
+                    pathname: '/cuenta/resenas/[appointmentId]',
+                    params: { appointmentId: item.id },
+                  })
+                }
+              />
             </SurfaceCard>
           ))}
         </View>
@@ -332,8 +687,16 @@ export default function CuentaScreen() {
                 {item.service_name || 'Servicio'} - {item.staff_name || 'Sin asignar'}
               </Text>
               <Text style={[styles.infoMeta, { color: colors.textMuted }]}>
-                Estado: {item.status}
+                Estado: {bookingStatusLabel[item.status] || item.status}
               </Text>
+              {item.status === 'done' && !item.has_review ? (
+                <Text style={[styles.infoHint, { color: '#92400e' }]}>Pendiente de calificar</Text>
+              ) : null}
+              {item.has_review ? (
+                <Text style={[styles.infoHint, { color: colors.textMuted }]}>
+                  Reseña enviada{item.review_rating ? `: ${item.review_rating} / 5` : ''}
+                </Text>
+              ) : null}
             </SurfaceCard>
           ))}
         </View>
@@ -352,6 +715,12 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 17,
     fontWeight: '800',
+  },
+  subSectionTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
   },
   actions: {
     gap: 8,
@@ -375,6 +744,10 @@ const styles = StyleSheet.create({
   infoHint: {
     fontSize: 12,
     marginTop: 2,
+  },
+  inviteActions: {
+    marginTop: 8,
+    gap: 8,
   },
   success: {
     fontSize: 13,

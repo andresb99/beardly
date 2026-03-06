@@ -3,6 +3,13 @@ import { bookingInputSchema } from '@navaja/shared';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
+function normalizeEmail(value: string | null | undefined) {
+  const normalized = String(value || '')
+    .trim()
+    .toLowerCase();
+  return normalized || null;
+}
+
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
   const parsed = bookingInputSchema.safeParse(body);
@@ -22,7 +29,8 @@ export async function POST(request: NextRequest) {
     data: { user },
   } = await sessionSupabase.auth.getUser();
 
-  const resolvedCustomerEmail = parsed.data.customer_email?.trim() || user?.email || null;
+  const resolvedCustomerEmail =
+    normalizeEmail(parsed.data.customer_email) ?? normalizeEmail(user?.email) ?? null;
 
   const supabase = createSupabaseAdminClient();
 

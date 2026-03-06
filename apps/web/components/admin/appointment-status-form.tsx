@@ -9,12 +9,28 @@ interface AdminAppointmentStatusFormProps {
   appointmentId: string;
   status: string;
   shopId: string;
+  compact?: boolean;
 }
+
+const compactSelectClassNames = {
+  label: 'text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-300/90',
+  trigger:
+    'h-11 min-h-[44px] rounded-xl border border-white/12 bg-slate-900/55 shadow-none',
+  value: 'text-sm text-slate-100',
+  selectorIcon: 'text-slate-300',
+} as const;
+
+const compactSubmitClass =
+  'action-secondary h-10 min-h-[40px] w-full rounded-xl px-3 text-xs font-semibold leading-none';
+
+const defaultSubmitClass =
+  'action-secondary h-14 min-h-[56px] px-4 text-xs font-semibold leading-none';
 
 export function AdminAppointmentStatusForm({
   appointmentId,
   status,
   shopId,
+  compact = false,
 }: AdminAppointmentStatusFormProps) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -46,17 +62,19 @@ export function AdminAppointmentStatusForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-2">
-      <div className="flex flex-wrap items-stretch gap-2">
+    <form onSubmit={handleSubmit} className={compact ? 'w-full space-y-3' : 'space-y-2'}>
+      <div className={compact ? 'grid w-full gap-2' : 'flex flex-wrap items-stretch gap-2'}>
         <input type="hidden" name="appointment_id" value={appointmentId} />
         <input type="hidden" name="shop_id" value={shopId} />
         <Select
           name="status"
           aria-label="Actualizar estado"
           label="Estado"
-          labelPlacement="inside"
+          labelPlacement={compact ? 'outside' : 'inside'}
           defaultSelectedKeys={[status]}
-          className="w-48 shrink-0"
+          size={compact ? 'sm' : 'md'}
+          className={compact ? 'w-full min-w-[15rem]' : 'w-48 shrink-0'}
+          {...(compact ? { classNames: compactSelectClassNames } : {})}
         >
           <SelectItem key="confirmed">Confirmada</SelectItem>
           <SelectItem key="cancelled">Cancelada</SelectItem>
@@ -68,7 +86,7 @@ export function AdminAppointmentStatusForm({
           variant="flat"
           color="default"
           isLoading={isPending}
-          className="action-secondary h-14 min-h-[56px] px-4 text-xs font-semibold leading-none"
+          className={compact ? compactSubmitClass : defaultSubmitClass}
         >
           Guardar
         </Button>
@@ -77,7 +95,7 @@ export function AdminAppointmentStatusForm({
       {error ? <p className="text-xs text-rose-600">{error}</p> : null}
 
       {reviewLink ? (
-        <a href={reviewLink} className="text-xs font-medium text-ink underline">
+        <a href={reviewLink} className="text-xs font-medium text-ink underline dark:text-slate-200">
           Abrir enlace de resena
         </a>
       ) : null}

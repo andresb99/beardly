@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
+import { parseCurrencyInputToCents } from '@navaja/shared';
 import { ActionButton, Card, Field, Label, MutedText, Screen } from '../../components/ui/primitives';
 import { getAuthContext } from '../../lib/auth';
 import { env } from '../../lib/env';
@@ -130,8 +131,14 @@ export default function AdminAppointmentsScreen() {
 
     const updatePayload: Record<string, unknown> = { status };
     const priceRaw = priceOverrides[appointmentId];
-    if (status === 'done' && priceRaw && Number(priceRaw) >= 0) {
-      updatePayload.price_cents = Number(priceRaw);
+    if (status === 'done' && priceRaw) {
+      const priceCents = parseCurrencyInputToCents(priceRaw);
+      if (!Number.isFinite(priceCents) || priceCents < 0) {
+        setSavingId(null);
+        setError('El precio override no es valido.');
+        return;
+      }
+      updatePayload.price_cents = priceCents;
     }
 
     const { error: updateError } = await supabase.from('appointments').update(updatePayload).eq('id', appointmentId);
@@ -199,12 +206,12 @@ export default function AdminAppointmentsScreen() {
             <Text style={styles.itemMeta}>{item.customer_name} - {item.customer_phone || '-'}</Text>
             <Text style={styles.itemMeta}>{item.service_name} - {item.staff_name}</Text>
             <Text style={styles.itemMeta}>Estado: {item.status} - {formatCurrency(item.price_cents)}</Text>
-            <Label>Precio override (cents, opcional)</Label>
+            <Label>Precio override (pesos UYU, opcional)</Label>
             <Field
               value={priceOverrides[item.id] || ''}
               onChangeText={(value) => setPriceOverrides((current) => ({ ...current, [item.id]: value }))}
               keyboardType="numeric"
-              placeholder="Ej: 4500"
+              placeholder="Ej: 450"
             />
             <View style={styles.actions}>
               {STATUS_OPTIONS.map((status) => (

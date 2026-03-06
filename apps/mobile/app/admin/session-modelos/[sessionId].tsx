@@ -2,10 +2,12 @@ import { useCallback, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import {
+  centsToCurrencyInput,
   modelApplicationStatusUpdateSchema,
   modelRequirementsInputSchema,
   ModelApplicationStatus,
   ModelCompensationType,
+  parseCurrencyInputToCents,
 } from '@navaja/shared';
 import {
   ActionButton,
@@ -87,7 +89,7 @@ export default function AdminSessionModelosScreen() {
   >('indistinto');
   const [hairType, setHairType] = useState('');
   const [compensationType, setCompensationType] = useState<ModelCompensationType>('gratis');
-  const [compensationValueCents, setCompensationValueCents] = useState('');
+  const [compensationValueUy, setCompensationValueUy] = useState('');
   const [notesPublic, setNotesPublic] = useState('');
   const [isOpen, setIsOpen] = useState(true);
 
@@ -208,10 +210,12 @@ export default function AdminSessionModelosScreen() {
     setCompensationType(
       (String(requirementRow?.compensation_type || 'gratis') as ModelCompensationType) || 'gratis',
     );
-    setCompensationValueCents(
-      requirementRow?.compensation_value_cents == null
-        ? ''
-        : String(requirementRow.compensation_value_cents),
+    setCompensationValueUy(
+      centsToCurrencyInput(
+        requirementRow?.compensation_value_cents == null
+          ? null
+          : Number(requirementRow.compensation_value_cents),
+      ),
     );
     setNotesPublic(String(requirementRow?.notes_public || ''));
     setIsOpen(requirementRow ? Boolean(requirementRow.is_open) : true);
@@ -238,7 +242,9 @@ export default function AdminSessionModelosScreen() {
       hair_length_category: hairLengthCategory,
       hair_type: hairType || null,
       compensation_type: compensationType,
-      compensation_value_cents: compensationValueCents ? Number(compensationValueCents) : undefined,
+      compensation_value_cents: compensationValueUy
+        ? parseCurrencyInputToCents(compensationValueUy)
+        : undefined,
       notes_public: notesPublic || null,
       is_open: isOpen,
     });
@@ -431,10 +437,10 @@ export default function AdminSessionModelosScreen() {
             </View>
             {compensationType !== 'gratis' ? (
               <>
-                <Label>Valor compensacion (cents)</Label>
+                <Label>Valor compensacion (pesos UYU)</Label>
                 <Field
-                  value={compensationValueCents}
-                  onChangeText={setCompensationValueCents}
+                  value={compensationValueUy}
+                  onChangeText={setCompensationValueUy}
                   keyboardType="numeric"
                 />
               </>

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { bookingInputSchema } from '@navaja/shared';
+import { bookingInputSchema, formatCurrency } from '@navaja/shared';
 import { Button, Card, CardBody, Input, Select, SelectItem, Textarea } from '@heroui/react';
 
 interface ServiceOption {
@@ -242,7 +242,7 @@ export function BookingFlow({ shopId, services, staff, initialCustomerEmail }: B
               }}
               renderValue={() =>
                 selectedService
-                  ? `${selectedService.name} - $${(selectedService.price_cents / 100).toFixed(2)} (${selectedService.duration_minutes}m)`
+                  ? `${selectedService.name} - ${formatCurrency(selectedService.price_cents)} (${selectedService.duration_minutes}m)`
                   : null
               }
               onSelectionChange={(keys) => {
@@ -256,9 +256,9 @@ export function BookingFlow({ shopId, services, staff, initialCustomerEmail }: B
               {services.map((item) => (
                 <SelectItem
                   key={item.id}
-                  textValue={`${item.name} - $${(item.price_cents / 100).toFixed(2)} (${item.duration_minutes}m)`}
+                  textValue={`${item.name} - ${formatCurrency(item.price_cents)} (${item.duration_minutes}m)`}
                 >
-                  {item.name} - ${(item.price_cents / 100).toFixed(2)} ({item.duration_minutes}m)
+                  {item.name} - {formatCurrency(item.price_cents)} ({item.duration_minutes}m)
                 </SelectItem>
               ))}
             </Select>

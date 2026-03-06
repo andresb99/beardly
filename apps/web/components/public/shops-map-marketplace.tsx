@@ -324,7 +324,7 @@ const DEFAULT_MARKETPLACE_CENTER = {
 const DEFAULT_MARKETPLACE_ZOOM = 11;
 const MOBILE_MARKETPLACE_FALLBACK_TOP_OFFSET_PX = 76;
 type MobileSheetStage = 'collapsed' | 'mid' | 'expanded';
-const MOBILE_SHEET_COLLAPSED_PEEK_PX = 84;
+const MOBILE_SHEET_COLLAPSED_PEEK_PX = 68;
 const MOBILE_SHEET_STAGE_TRANSLATE: Record<MobileSheetStage, number> = {
   mid: 42,
   expanded: 0,
@@ -381,9 +381,10 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
     googleMapsApiKey ? null : 'Configura NEXT_PUBLIC_GOOGLE_MAPS_API_KEY para mostrar el mapa.',
   );
   const [isMapReady, setIsMapReady] = useState(false);
+  const [hasMapSettled, setHasMapSettled] = useState(false);
   const [isViewportLoading, setIsViewportLoading] = useState(initialShops.length === 0);
   const [isDarkTheme, setIsDarkTheme] = useState(false);
-  const [isMobileViewport, setIsMobileViewport] = useState(false);
+  const [isMobileViewport, setIsMobileViewport] = useState<boolean | null>(null);
   const [mobileViewportHeight, setMobileViewportHeight] = useState<number | null>(null);
   const [mobileSheetStage, setMobileSheetStage] = useState<MobileSheetStage>('collapsed');
   const [mobileSheetDragOffset, setMobileSheetDragOffset] = useState(0);
@@ -480,7 +481,7 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
   }, []);
 
   useEffect(() => {
-    if (isMobileViewport) {
+    if (isMobileViewport === true || isMobileViewport === null) {
       return;
     }
 
@@ -660,7 +661,7 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
   }, [deferredSearchQuery]);
 
   useEffect(() => {
-    if (!googleMapsApiKey || !mapElementRef.current || mapRef.current) {
+    if (isMobileViewport === null || !googleMapsApiKey || !mapElementRef.current || mapRef.current) {
       return;
     }
 
@@ -693,6 +694,8 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
         });
 
         mapRef.current.addListener('idle', () => {
+          setHasMapSettled(true);
+
           if (activeSearchModeRef.current === 'name') {
             return;
           }
@@ -716,6 +719,7 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
 
         setMapError(null);
         setIsMapReady(true);
+        setHasMapSettled(false);
       })
       .catch((loadError) => {
         if (isCancelled) {
@@ -729,7 +733,7 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
     return () => {
       isCancelled = true;
     };
-  }, [googleMapsApiKey, isDarkTheme]);
+  }, [googleMapsApiKey, isDarkTheme, isMobileViewport]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -743,6 +747,10 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
   useEffect(() => {
     const map = mapRef.current;
     if (!map) {
+      return;
+    }
+
+    if (isMobileViewport === null) {
       return;
     }
 
@@ -1481,10 +1489,11 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
   const mobileCollapsedCountLabel = `${filteredShops.length} ${
     filteredShops.length === 1 ? 'barberia' : 'barberias'
   } en esta zona`;
-  const mobileViewportContentHeight = isMobileViewport && mobileViewportHeight ? mobileViewportHeight : null;
+  const isMobileViewportActive = isMobileViewport === true;
+  const mobileViewportContentHeight = isMobileViewportActive && mobileViewportHeight ? mobileViewportHeight : null;
   const mobileSheetHeight = mobileViewportContentHeight ? Math.max(mobileViewportContentHeight - 16, 0) : null;
-  const shouldHideMobileSheetForMapPreview = isMobileViewport && Boolean(mapPreviewShop);
-  const mobileSheetStyle = isMobileViewport
+  const shouldHideMobileSheetForMapPreview = isMobileViewportActive && Boolean(mapPreviewShop);
+  const mobileSheetStyle = isMobileViewportActive
     ? {
         transform: shouldHideMobileSheetForMapPreview
           ? 'translateY(calc(100% + 1.5rem))'
@@ -1505,20 +1514,50 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
       ? 'h-full min-h-full max-h-full rounded-none border-0 bg-transparent p-0 shadow-none backdrop-blur-0'
       : 'h-[20rem] rounded-[2rem] border border-white/70 bg-white/88 p-2 shadow-[0_24px_44px_-30px_rgba(15,23,42,0.22)] md:h-[26rem] dark:border-white/10 dark:bg-slate-950/78 xl:h-[calc(100vh-8rem)] xl:min-h-[44rem]',
   );
+  const showInitialMapOverlay = !mapError && (!isMapReady || !hasMapSettled);
+  const loadingPillClassName = isDarkTheme
+    ? 'border-white/12 bg-slate-950/94 text-slate-100'
+    : 'border-slate-200 bg-white text-slate-900';
   const mobileSheetClassName = cn(
     'pointer-events-auto relative z-10',
-    isMobileViewport
+    isMobileViewportActive
       ? 'mobile-marketplace-sheet flex w-full h-[calc(100svh-9.5rem)] max-h-[calc(100svh-9.5rem)] flex-col rounded-t-[2.25rem] rounded-b-none border border-slate-200 bg-white shadow-[0_-28px_48px_-32px_rgba(15,23,42,0.32)] dark:border-white/10 dark:bg-slate-950'
       : 'relative z-10 rounded-[2.25rem] border border-white/70 bg-white/95 p-4 shadow-[0_-28px_48px_-32px_rgba(15,23,42,0.32)] backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/94 xl:rounded-none xl:border-0 xl:bg-transparent xl:p-0 xl:shadow-none xl:backdrop-blur-0',
-    !isMobileViewport && '-mt-14 xl:mt-0',
+    !isMobileViewportActive && '-mt-14 xl:mt-0',
     shouldHideMobileSheetForMapPreview && 'pointer-events-none opacity-0',
-    !isMobileSheetDragging && isMobileViewport && 'transition-transform duration-300 ease-out',
+    !isMobileSheetDragging && isMobileViewportActive && 'transition-transform duration-300 ease-out',
   );
+
+  if (isMobileViewport === null) {
+    return (
+      <div className="relative -mx-4 -mb-16 -mt-5 flex h-[calc(100dvh-4.75rem)] flex-col overflow-hidden sm:-mx-6 md:-mb-[4.5rem] md:-mt-7 xl:mx-0 xl:mb-0 xl:mt-0">
+        <div className="marketplace-map-shell relative h-full min-h-0 overflow-hidden rounded-none border-0 bg-transparent p-0 shadow-none">
+          <Skeleton className="h-full w-full rounded-none bg-slate-200/88 dark:bg-slate-800/72 xl:rounded-[1.4rem]" />
+          <div className="pointer-events-none absolute inset-x-3 top-3 z-20 xl:hidden">
+            <div className="rounded-[1.7rem] border border-white/75 bg-white/94 p-3 shadow-[0_20px_42px_-28px_rgba(15,23,42,0.32)] backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/92">
+              <Skeleton className="h-11 w-full rounded-2xl bg-slate-200/88 dark:bg-slate-800/72" />
+            </div>
+          </div>
+          <div
+            className={cn(
+              'pointer-events-none absolute inset-x-3 bottom-4 z-20 rounded-[1.25rem] border px-4 py-3 shadow-[0_20px_40px_-28px_rgba(15,23,42,0.38)] xl:inset-x-auto xl:left-4 xl:w-[21rem]',
+              loadingPillClassName,
+            )}
+          >
+            <div className="flex items-center gap-2 text-sm font-semibold">
+              <LoaderCircle className="h-4 w-4 animate-spin" />
+              Cargando mapa y barberias...
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
       ref={mobileStageRef}
-      className="relative -mx-4 -mb-16 -mt-5 flex h-[calc(100dvh-4.75rem)] flex-col gap-4 overflow-hidden sm:-mx-6 md:-mb-[4.5rem] md:-mt-7 xl:mx-0 xl:mb-0 xl:mt-0 xl:grid xl:h-auto xl:min-h-0 xl:overflow-visible xl:grid-cols-[minmax(0,1.02fr)_minmax(28rem,0.98fr)] xl:gap-6 xl:items-start"
+      className="shops-marketplace-stage relative -mx-4 -mb-16 -mt-5 flex h-[calc(100dvh-4.75rem)] flex-col gap-4 overflow-hidden sm:-mx-6 md:-mb-[4.5rem] md:-mt-7 xl:mx-0 xl:mb-0 xl:mt-0 xl:grid xl:h-auto xl:min-h-0 xl:overflow-visible xl:grid-cols-[minmax(0,1.02fr)_minmax(28rem,0.98fr)] xl:gap-6 xl:items-start"
       style={mobileStageStyle}
     >
       <div className="pointer-events-none absolute inset-0 z-20 flex items-end overflow-hidden xl:pointer-events-auto xl:relative xl:inset-auto xl:block xl:overflow-visible xl:order-1 xl:pr-4">
@@ -1628,7 +1667,7 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
 
         <div ref={mobileSheetRef} className={mobileSheetClassName} style={mobileSheetStyle}>
           <div
-            className="mobile-sheet-surface absolute inset-x-0 top-0 z-10 flex h-7 cursor-grab touch-none justify-center pt-3 select-none active:cursor-grabbing xl:hidden"
+            className="mobile-sheet-surface absolute inset-x-0 top-0 z-10 flex h-7 cursor-grab touch-none justify-center pt-2 select-none active:cursor-grabbing xl:hidden"
             onPointerDown={handleMobileSheetDragStart}
           >
             <div className="h-1.5 w-14 rounded-full bg-black/20 dark:bg-white/20" />
@@ -1638,13 +1677,13 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
             className={cn(
               'mobile-sheet-surface relative z-10 xl:hidden cursor-grab touch-none select-none active:cursor-grabbing',
               mobileSheetStage === 'collapsed'
-                ? 'h-[5.25rem] px-4 py-0 flex items-center justify-center'
+                ? 'h-10 px-4 py-0 flex justify-center'
                 : 'px-4 pb-3 pt-7',
             )}
             onPointerDown={handleMobileSheetDragStart}
           >
             {mobileSheetStage === 'collapsed' ? (
-              <p className="whitespace-nowrap text-base font-semibold leading-none text-ink dark:text-slate-100">
+              <p className="px-4 text-center whitespace-nowrap text-base font-semibold leading-none text-ink dark:text-slate-100">
                 {mobileCollapsedCountLabel}
               </p>
             ) : (
@@ -1925,6 +1964,25 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
             <div ref={mapElementRef} className="h-full w-full rounded-none xl:rounded-[1.4rem]" />
           )}
 
+          {showInitialMapOverlay ? (
+            <div className="pointer-events-none absolute inset-0 z-20">
+              <div className="h-full w-full rounded-none bg-white/42 backdrop-blur-[1.5px] dark:bg-slate-950/44 xl:rounded-[1.4rem]" />
+              <div
+                className={cn(
+                  'absolute inset-x-3 bottom-3 rounded-[1.2rem] border px-4 py-3 text-sm shadow-[0_20px_40px_-28px_rgba(15,23,42,0.38)] xl:inset-x-auto xl:left-4 xl:w-[21rem]',
+                  loadingPillClassName,
+                )}
+              >
+                <div className="flex items-center gap-2">
+                  <LoaderCircle className="h-4 w-4 animate-spin" />
+                  <span className="font-semibold">
+                  Cargando mapa...
+                  </span>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
           <div className="hidden xl:block">
             <div className="map-overlay-chip">
               <span>Marketplace Uruguay</span>
@@ -1933,108 +1991,101 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
           </div>
 
           {mapPreviewShop ? (
-            <div className="pointer-events-none absolute inset-x-3 top-[5.35rem] z-30 xl:inset-x-auto xl:bottom-4 xl:left-4 xl:right-auto xl:top-auto xl:max-w-[24rem]">
-              <Card isFooterBlurred className="soft-panel pointer-events-auto overflow-hidden rounded-[1.7rem] border-0 p-0 shadow-none">
-                <CardHeader className="absolute inset-x-0 top-0 z-10 items-start justify-between gap-3 p-3">
-                  <div className="min-w-0">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/72">
+            <div className="pointer-events-none absolute inset-x-3 bottom-4 z-30 xl:inset-x-auto xl:bottom-4 xl:left-4 xl:right-auto xl:w-[23.5rem]">
+              <div className="pointer-events-auto overflow-hidden rounded-[1.65rem] border border-white/70 bg-white p-0 shadow-[0_26px_50px_-30px_rgba(15,23,42,0.62)] dark:border-white/12 dark:bg-slate-950">
+                <div className="relative bg-slate-950">
+                  <MediaShowcase
+                    alt={`Vista de ${mapPreviewShop.name}`}
+                    images={mapPreviewShop.imageUrls}
+                    className="aspect-[16/10] w-full"
+                    dotsClassName="bottom-2.5"
+                    fallback={
+                      <div
+                        className="h-full w-full"
+                        style={{
+                          ...getFallbackCoverStyle(mapPreviewShop),
+                          opacity: 1,
+                        }}
+                      />
+                    }
+                  />
+
+                  <div className="absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-3 p-3">
+                    <span className="rounded-full bg-white/95 px-3 py-1 text-[11px] font-semibold text-slate-900 shadow-[0_12px_24px_-18px_rgba(15,23,42,0.35)] dark:bg-slate-950/95 dark:text-slate-100">
                       {getShopHighlight(mapPreviewShop, mapPreviewDistanceKm)}
-                    </p>
-                    <h3 className="mt-2 line-clamp-1 font-[family-name:var(--font-heading)] text-lg font-semibold text-white">
-                      {mapPreviewShop.name}
-                    </h3>
-                  </div>
+                    </span>
 
-                  <div className="flex items-center gap-2">
-                    <div className="rounded-full bg-white/92 px-3 py-1 text-[11px] font-semibold text-ink shadow-[0_12px_24px_-18px_rgba(15,23,42,0.35)] dark:bg-slate-950/90 dark:text-slate-100">
-                      <Star className="mr-1 inline h-3.5 w-3.5 fill-current text-amber-500" />
-                      {formatRating(mapPreviewShop.averageRating)}
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMapPreviewShopId(null);
+                          if (isMobileViewport) {
+                            setMobileSheetSnap('collapsed');
+                          }
+                        }}
+                        aria-label="Cerrar vista previa"
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white/95 text-slate-900 shadow-[0_12px_24px_-18px_rgba(15,23,42,0.35)] transition hover:bg-white dark:bg-slate-950/95 dark:text-slate-100 dark:hover:bg-slate-900"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setMapPreviewShopId(null);
-                        if (isMobileViewport) {
-                          setMobileSheetSnap('collapsed');
-                        }
-                      }}
-                      aria-label="Cerrar vista previa"
-                      className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white/92 text-ink shadow-[0_12px_24px_-18px_rgba(15,23,42,0.35)] transition hover:bg-white dark:bg-slate-950/90 dark:text-slate-100 dark:hover:bg-slate-900"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
                   </div>
-                </CardHeader>
+                </div>
 
-                <MediaShowcase
-                  alt={`Vista de ${mapPreviewShop.name}`}
-                  images={mapPreviewShop.imageUrls}
-                  className="aspect-[16/10] w-full"
-                  dotsClassName="bottom-[1.1rem]"
-                  fallback={<div className="h-full w-full" style={getFallbackCoverStyle(mapPreviewShop)} />}
-                />
-
-                <div className="absolute inset-x-0 top-0 h-[40%] z-[1] bg-gradient-to-b from-slate-950/62 to-transparent" />
-
-                <CardBody className="p-4">
+                <div className="space-y-3 bg-white p-4 dark:bg-slate-950">
                   <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-base font-semibold text-ink dark:text-slate-100">{mapPreviewShop.name}</p>
-                      <p className="mt-1 text-xs text-slate/75 dark:text-slate-400">
+                    <div className="min-w-0">
+                      <p className="line-clamp-1 text-[1.08rem] font-semibold text-ink dark:text-slate-100">
+                        {mapPreviewShop.name}
+                      </p>
+                      <p className="mt-1 line-clamp-1 text-sm text-slate/80 dark:text-slate-300">
                         {getLocationSummary(mapPreviewShop)}
                       </p>
                     </div>
+                    <p className="shrink-0 whitespace-nowrap text-sm font-semibold text-ink dark:text-slate-100">
+                      <Star className="mr-1 inline h-3.5 w-3.5 fill-current text-amber-500" />
+                      {formatRating(mapPreviewShop.averageRating)} ({mapPreviewShop.reviewCount || 0})
+                    </p>
+                  </div>
+
+                  <p className="line-clamp-2 text-sm text-slate/80 dark:text-slate-300">
+                    {mapPreviewShop.description || getShopReviewSummary(mapPreviewShop)}
+                  </p>
+
+                  <div className="flex flex-wrap gap-2 text-[11px] font-semibold text-slate/80 dark:text-slate-300">
                     {mapPreviewDistanceKm !== null ? (
-                      <span className="rounded-full bg-sky-500/[0.12] px-2.5 py-1 text-[11px] font-semibold text-sky-700 dark:bg-sky-400/[0.12] dark:text-sky-200">
+                      <span className="rounded-full bg-sky-500/[0.12] px-2.5 py-1 text-sky-700 dark:bg-sky-400/[0.12] dark:text-sky-200">
                         {mapPreviewDistanceKm.toFixed(1)} km
+                      </span>
+                    ) : null}
+                    <span className="rounded-full bg-slate-500/[0.12] px-2.5 py-1 text-slate-700 dark:bg-white/[0.08] dark:text-slate-200">
+                      {mapPreviewShop.activeServiceCount} servicios
+                    </span>
+                    {mapPreviewShop.minServicePriceCents !== null ? (
+                      <span className="rounded-full bg-emerald-500/[0.14] px-2.5 py-1 text-emerald-700 dark:bg-emerald-400/[0.14] dark:text-emerald-200">
+                        Desde {formatCurrency(mapPreviewShop.minServicePriceCents)}
                       </span>
                     ) : null}
                   </div>
 
-                  <p className="mt-3 text-sm text-slate/80 dark:text-slate-300">
-                    {getShopReviewSummary(mapPreviewShop)}
-                  </p>
-
-                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                    <Card className="rounded-2xl border-0 bg-white/70 shadow-[0_14px_24px_-22px_rgba(15,23,42,0.24)] dark:bg-white/[0.06]">
-                      <CardBody className="px-3 py-3">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate/60 dark:text-slate-400">
-                          Reputacion
-                        </p>
-                        <p className="mt-1 text-sm font-semibold text-ink dark:text-slate-100">
-                          {formatRating(mapPreviewShop.averageRating)} ({mapPreviewShop.reviewCount || 0})
-                        </p>
-                      </CardBody>
-                    </Card>
-                    <Card className="rounded-2xl border-0 bg-white/70 shadow-[0_14px_24px_-22px_rgba(15,23,42,0.24)] dark:bg-white/[0.06]">
-                      <CardBody className="px-3 py-3">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate/60 dark:text-slate-400">
-                          Servicios
-                        </p>
-                        <p className="mt-1 text-sm font-semibold text-ink dark:text-slate-100">
-                          {mapPreviewShop.activeServiceCount} activos
-                        </p>
-                      </CardBody>
-                    </Card>
+                  <div className="flex flex-wrap gap-3">
+                    <Link
+                      href={buildShopHref(mapPreviewShop.slug)}
+                      className="action-secondary rounded-2xl px-4 py-2 text-sm font-semibold"
+                    >
+                      Ver perfil
+                    </Link>
+                    <Link
+                      href={buildShopHref(mapPreviewShop.slug, 'book')}
+                      className="action-primary inline-flex items-center gap-1 rounded-2xl px-4 py-2 text-sm font-semibold"
+                    >
+                      Reservar
+                      <ArrowUpRight className="h-4 w-4" />
+                    </Link>
                   </div>
-                </CardBody>
-
-                <CardFooter className="flex flex-wrap gap-3 px-4 pb-4 pt-0">
-                  <Link
-                    href={buildShopHref(mapPreviewShop.slug)}
-                    className="action-secondary rounded-2xl px-4 py-2 text-sm font-semibold"
-                  >
-                    Ver perfil
-                  </Link>
-                  <Link
-                    href={buildShopHref(mapPreviewShop.slug, 'book')}
-                    className="action-primary inline-flex items-center gap-1 rounded-2xl px-4 py-2 text-sm font-semibold"
-                  >
-                    Reservar
-                    <ArrowUpRight className="h-4 w-4" />
-                  </Link>
-                </CardFooter>
-              </Card>
+                </div>
+              </div>
             </div>
           ) : null}
         </div>

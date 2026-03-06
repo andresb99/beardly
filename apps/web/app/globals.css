@@ -64,30 +64,12 @@ body::before {
   z-index: -2;
 }
 
-body::after {
-  content: '';
-  position: fixed;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.34) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.34) 1px, transparent 1px);
-  background-size: 120px 120px;
-  mask-image: radial-gradient(circle at center, black, transparent 72%);
-  opacity: 0.4;
-  pointer-events: none;
-  z-index: -3;
-}
-
 html.dark body::before {
   background:
     radial-gradient(circle at 24% 18%, rgba(56, 189, 248, 0.15), transparent 24%),
     radial-gradient(circle at 76% 20%, rgba(234, 176, 72, 0.14), transparent 20%),
     radial-gradient(circle at 64% 58%, rgba(236, 72, 153, 0.12), transparent 18%);
   opacity: 0.72;
-}
-
-html.dark body::after {
-  opacity: 0.18;
 }
 
 h1,
@@ -157,6 +139,14 @@ table tbody tr:hover td {
 
 html.dark table tbody tr:hover td {
   background-color: rgb(30 41 59 / 0.46);
+}
+
+.admin-dark-table table tbody tr:hover td {
+  background-color: rgb(15 23 42 / 0.06);
+}
+
+html.dark .admin-dark-table table tbody tr:hover td {
+  background-color: rgb(255 255 255 / 0.08);
 }
 
 label {

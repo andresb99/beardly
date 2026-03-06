@@ -55,6 +55,13 @@ function getInitialBookingDate() {
   return utcDate.toISOString().slice(0, 10);
 }
 
+function normalizeEmail(value: string | null | undefined) {
+  const normalized = String(value || '')
+    .trim()
+    .toLowerCase();
+  return normalized || null;
+}
+
 export default function ReservasScreen() {
   const { colors } = useNavajaTheme();
   const [shops, setShops] = useState<MarketplaceShop[]>([]);
@@ -233,6 +240,12 @@ export default function ReservasScreen() {
       return;
     }
 
+    const {
+      data: { user: authUser },
+    } = await supabase.auth.getUser();
+    const resolvedCustomerEmail =
+      normalizeEmail(customerEmail) ?? normalizeEmail(authUser?.email) ?? null;
+
     const parsed = bookingInputSchema.safeParse({
       shop_id: selectedShopId,
       service_id: selectedService.id,
@@ -240,7 +253,7 @@ export default function ReservasScreen() {
       start_at: selectedSlot.start_at,
       customer_name: customerName,
       customer_phone: customerPhone,
-      customer_email: customerEmail || null,
+      customer_email: resolvedCustomerEmail,
       notes: notes || null,
     });
 
@@ -276,20 +289,59 @@ export default function ReservasScreen() {
         return;
       }
 
-      const { data: customer, error: customerError } = await supabase
+      const { data: existingCustomer, error: existingCustomerError } = await supabase
         .from('customers')
-        .insert({
-          shop_id: parsed.data.shop_id,
-          name: parsed.data.customer_name,
-          phone: parsed.data.customer_phone,
-          email: parsed.data.customer_email || null,
-        })
         .select('id')
-        .single();
+        .eq('shop_id', parsed.data.shop_id)
+        .eq('phone', parsed.data.customer_phone)
+        .maybeSingle();
 
-      if (customerError || !customer) {
-        setError(customerError?.message || 'No se pudo crear el cliente.');
+      if (existingCustomerError) {
+        setError(existingCustomerError.message || 'No se pudo validar el cliente.');
         return;
+      }
+
+      let customerId = existingCustomer?.id ? String(existingCustomer.id) : '';
+      if (customerId) {
+        const customerUpdatePayload: {
+          name: string;
+          email?: string | null;
+        } = {
+          name: parsed.data.customer_name,
+        };
+
+        if (parsed.data.customer_email) {
+          customerUpdatePayload.email = parsed.data.customer_email;
+        }
+
+        const { error: customerUpdateError } = await supabase
+          .from('customers')
+          .update(customerUpdatePayload)
+          .eq('id', customerId)
+          .eq('shop_id', parsed.data.shop_id);
+
+        if (customerUpdateError) {
+          setError(customerUpdateError.message || 'No se pudo actualizar el cliente.');
+          return;
+        }
+      } else {
+        const { data: customer, error: customerError } = await supabase
+          .from('customers')
+          .insert({
+            shop_id: parsed.data.shop_id,
+            name: parsed.data.customer_name,
+            phone: parsed.data.customer_phone,
+            email: parsed.data.customer_email || null,
+          })
+          .select('id')
+          .single();
+
+        if (customerError || !customer) {
+          setError(customerError?.message || 'No se pudo crear el cliente.');
+          return;
+        }
+
+        customerId = String(customer.id);
       }
 
       const { data: appointment, error: appointmentError } = await supabase
@@ -297,7 +349,7 @@ export default function ReservasScreen() {
         .insert({
           shop_id: parsed.data.shop_id,
           staff_id: parsed.data.staff_id,
-          customer_id: customer.id,
+          customer_id: customerId,
           service_id: parsed.data.service_id,
           start_at: parsed.data.start_at,
           status: 'pending',

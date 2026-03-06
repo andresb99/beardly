@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { useFocusEffect } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { Card, MutedText, Screen } from '../../components/ui/primitives';
 import { getAuthContext } from '../../lib/auth';
 import { formatCurrency } from '../../lib/format';
@@ -140,14 +140,42 @@ export default function AdminMetricsScreen() {
               {metrics.revenueByStaff.length === 0 ? (
                 <MutedText>Sin datos</MutedText>
               ) : (
-                metrics.revenueByStaff.map((item) => (
-                  <BarRow
-                    key={item.staff}
-                    label={item.staff}
-                    valueLabel={formatCurrency(item.revenue_cents)}
-                    widthPercent={(item.revenue_cents / maxRevenueByStaff) * 100}
-                  />
-                ))
+                metrics.revenueByStaff.map((item) => {
+                  const canOpenDetail = item.staff_id !== 'unassigned';
+
+                  return (
+                    <Pressable
+                      key={`${item.staff_id}-${item.staff}`}
+                      style={[
+                        styles.staffRowPressable,
+                        !canOpenDetail ? styles.staffRowDisabled : null,
+                      ]}
+                      onPress={() => {
+                        if (!canOpenDetail) {
+                          return;
+                        }
+
+                        router.push({
+                          pathname: '/admin/performance/[staffId]',
+                          params: {
+                            staffId: item.staff_id,
+                            range,
+                          },
+                        });
+                      }}
+                      disabled={!canOpenDetail}
+                    >
+                      <BarRow
+                        label={item.staff}
+                        valueLabel={formatCurrency(item.revenue_cents)}
+                        widthPercent={(item.revenue_cents / maxRevenueByStaff) * 100}
+                      />
+                      {canOpenDetail ? (
+                        <Text style={styles.staffDetailLink}>Ver detalle</Text>
+                      ) : null}
+                    </Pressable>
+                  );
+                })
               )}
             </View>
           </Card>
@@ -265,6 +293,17 @@ const styles = StyleSheet.create({
   },
   barRow: {
     gap: 4,
+  },
+  staffRowPressable: {
+    gap: 6,
+  },
+  staffRowDisabled: {
+    opacity: 0.75,
+  },
+  staffDetailLink: {
+    color: '#0f172a',
+    fontSize: 11,
+    fontWeight: '700',
   },
   barTrack: {
     height: 8,

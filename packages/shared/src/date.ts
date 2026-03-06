@@ -1,8 +1,51 @@
-export function formatCurrency(cents: number, currency = 'USD'): string {
-  return new Intl.NumberFormat('en-US', {
+export function formatCurrency(cents: number, currency = 'UYU', locale = 'es-UY'): string {
+  return new Intl.NumberFormat(locale, {
     style: 'currency',
     currency,
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 0,
   }).format(cents / 100);
+}
+
+export function parseCurrencyInputToCents(value: string | number | null | undefined): number {
+  const raw = String(value ?? '').trim();
+  if (!raw) {
+    return Number.NaN;
+  }
+
+  const cleaned = raw.replace(/[^\d.,-]/g, '');
+  if (!cleaned) {
+    return Number.NaN;
+  }
+
+  const hasDot = cleaned.includes('.');
+  const hasComma = cleaned.includes(',');
+
+  let normalized = cleaned;
+  if (hasDot && hasComma) {
+    normalized =
+      cleaned.lastIndexOf(',') > cleaned.lastIndexOf('.')
+        ? cleaned.replace(/\./g, '').replace(',', '.')
+        : cleaned.replace(/,/g, '');
+  } else if (hasComma) {
+    normalized = cleaned.replace(',', '.');
+  }
+
+  const amount = Number(normalized);
+  if (!Number.isFinite(amount)) {
+    return Number.NaN;
+  }
+
+  return Math.round(amount * 100);
+}
+
+export function centsToCurrencyInput(cents: number | null | undefined): string {
+  if (typeof cents !== 'number' || !Number.isFinite(cents)) {
+    return '';
+  }
+
+  const normalized = Number((cents / 100).toFixed(2));
+  return String(normalized);
 }
 
 export function toDateOnly(input: string | Date): string {

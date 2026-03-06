@@ -1,5 +1,6 @@
 import * as Location from 'expo-location';
 import { Linking, Platform } from 'react-native';
+import { env } from './env';
 import { formatMarketplaceLocation, type MarketplaceShop } from './marketplace';
 
 type NativeMapStyle = Array<{
@@ -13,11 +14,35 @@ export interface GeoPoint {
   longitude: number;
 }
 
+interface AreaRegion {
+  latitude: number;
+  longitude: number;
+  latitudeDelta: number;
+  longitudeDelta: number;
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function getDeltaFromZoom(zoom: number) {
+  const normalizedZoom = clamp(zoom, 1, 20);
+  const latitudeDelta = 360 / Math.pow(2, normalizedZoom);
+  return clamp(latitudeDelta, 0.003, 40);
+}
+
 export const URUGUAY_REGION = {
   latitude: -32.5228,
   longitude: -55.7658,
   latitudeDelta: 7.2,
   longitudeDelta: 6.2,
+} as const;
+
+export const URUGUAY_BOUNDS = {
+  north: -30.05,
+  south: -35.25,
+  west: -58.55,
+  east: -53.05,
 } as const;
 
 export const lightMapStyles: NativeMapStyle = [
@@ -181,8 +206,8 @@ export function getShopRegion(shop: MarketplaceShop) {
   return {
     latitude: Number(shop.latitude),
     longitude: Number(shop.longitude),
-    latitudeDelta: 0.65,
-    longitudeDelta: 0.65,
+    latitudeDelta: getDeltaFromZoom(15),
+    longitudeDelta: getDeltaFromZoom(15),
   };
 }
 
@@ -193,6 +218,258 @@ export function getPointRegion(point: GeoPoint) {
     latitudeDelta: 0.95,
     longitudeDelta: 0.95,
   };
+}
+
+interface GoogleGeocodeResult {
+  types?: string[];
+  address_components?: Array<{
+    types?: string[];
+  }>;
+  geometry?: {
+    location?: {
+      lat?: number;
+      lng?: number;
+    };
+    viewport?: {
+      northeast?: {
+        lat?: number;
+        lng?: number;
+      };
+      southwest?: {
+        lat?: number;
+        lng?: number;
+      };
+    };
+    location_type?: string;
+  };
+}
+
+interface GoogleGeocodeResponse {
+  status?: string;
+  results?: GoogleGeocodeResult[];
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number) {
+  return new Promise<T>((resolve, reject) => {
+    const timeoutId = setTimeout(() => {
+      reject(new Error('timeout'));
+    }, timeoutMs);
+
+    promise
+      .then((value) => {
+        clearTimeout(timeoutId);
+        resolve(value);
+      })
+      .catch((error) => {
+        clearTimeout(timeoutId);
+        reject(error);
+      });
+  });
+}
+
+const PRECISE_GEOCODER_TYPES = new Set([
+  'street_address',
+  'premise',
+  'subpremise',
+  'intersection',
+  'establishment',
+  'point_of_interest',
+]);
+
+const AREA_GEOCODER_TYPES = new Set([
+  'locality',
+  'neighborhood',
+  'sublocality',
+  'sublocality_level_1',
+  'administrative_area_level_1',
+  'administrative_area_level_2',
+  'administrative_area_level_3',
+  'postal_code',
+  'country',
+]);
+
+function normalizeSearchTerm(value: string | null | undefined) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+function getAreaDelta(
+  query: string,
+  options?: {
+    locationType?: string;
+    resultTypes?: string[];
+    componentTypes?: string[];
+  },
+) {
+  const normalizedQuery = normalizeSearchTerm(query);
+  const looksLikeSpecificAddress =
+    /\d/.test(query) ||
+    /[&/]/.test(query) ||
+    /\b(esquina|interseccion|calle|av|avenida|ruta)\b/i.test(query) ||
+    options?.locationType === 'ROOFTOP' ||
+    options?.locationType === 'RANGE_INTERPOLATED';
+  const hasStreetNumber = (options?.componentTypes || []).includes('street_number');
+  const hasRoute = (options?.componentTypes || []).includes('route');
+  const hasPreciseType = (options?.resultTypes || []).some((type) => PRECISE_GEOCODER_TYPES.has(type));
+  const hasAreaType = (options?.resultTypes || []).some((type) => AREA_GEOCODER_TYPES.has(type));
+
+  if (hasStreetNumber || hasPreciseType || (hasRoute && looksLikeSpecificAddress)) {
+    return 0.025;
+  }
+
+  if (hasAreaType) {
+    return 0.2;
+  }
+
+  if (looksLikeSpecificAddress) {
+    return normalizedQuery.length >= 22 ? 0.03 : 0.05;
+  }
+
+  return 0.45;
+}
+
+function getRegionFromGoogleViewport(
+  latitude: number,
+  longitude: number,
+  viewport?: {
+    northeast?: { lat?: number; lng?: number };
+    southwest?: { lat?: number; lng?: number };
+  },
+): AreaRegion | null {
+  const north = viewport?.northeast?.lat;
+  const east = viewport?.northeast?.lng;
+  const south = viewport?.southwest?.lat;
+  const west = viewport?.southwest?.lng;
+
+  if (
+    typeof north !== 'number' ||
+    typeof east !== 'number' ||
+    typeof south !== 'number' ||
+    typeof west !== 'number' ||
+    !Number.isFinite(north) ||
+    !Number.isFinite(east) ||
+    !Number.isFinite(south) ||
+    !Number.isFinite(west)
+  ) {
+    return null;
+  }
+
+  const latitudeDelta = clamp(Math.abs(north - south) * 1.15, 0.008, 6);
+  const longitudeDelta = clamp(Math.abs(east - west) * 1.15, 0.008, 6);
+
+  return {
+    latitude,
+    longitude,
+    latitudeDelta,
+    longitudeDelta,
+  };
+}
+
+async function geocodeAreaWithGoogleMaps(query: string): Promise<AreaRegion | null> {
+  const googleMapsApiKey = env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
+  if (!googleMapsApiKey) {
+    return null;
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => {
+    controller.abort();
+  }, 2000);
+
+  try {
+    const url = new URL('https://maps.googleapis.com/maps/api/geocode/json');
+    url.searchParams.set('address', query);
+    url.searchParams.set('region', 'uy');
+    url.searchParams.set('language', 'es');
+    url.searchParams.set('key', googleMapsApiKey);
+
+    const response = await fetch(url.toString(), {
+      method: 'GET',
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const payload = (await response.json()) as GoogleGeocodeResponse;
+    if (payload.status !== 'OK') {
+      return null;
+    }
+
+    const first = payload.results?.[0];
+    const latitude = first?.geometry?.location?.lat;
+    const longitude = first?.geometry?.location?.lng;
+
+    if (typeof latitude !== 'number' || typeof longitude !== 'number') {
+      return null;
+    }
+
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+      return null;
+    }
+
+    const resultTypes = (first?.types || []).map((type) => String(type || '').toLowerCase());
+    const componentTypes = (first?.address_components || [])
+      .flatMap((component) => component.types || [])
+      .map((type) => String(type || '').toLowerCase());
+    const viewportRegion = getRegionFromGoogleViewport(latitude, longitude, first?.geometry?.viewport);
+    if (viewportRegion) {
+      return viewportRegion;
+    }
+
+    const delta = getAreaDelta(query, {
+      resultTypes,
+      componentTypes,
+      ...(first?.geometry?.location_type ? { locationType: first.geometry.location_type } : {}),
+    });
+
+    return {
+      latitude,
+      longitude,
+      latitudeDelta: delta,
+      longitudeDelta: delta,
+    };
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+export async function geocodeMarketplaceArea(query: string): Promise<AreaRegion | null> {
+  const trimmedQuery = query.trim();
+  if (!trimmedQuery) {
+    return null;
+  }
+
+  const googleResult = await geocodeAreaWithGoogleMaps(trimmedQuery);
+  if (googleResult) {
+    return googleResult;
+  }
+
+  try {
+    const fallbackQuery = /uruguay/i.test(trimmedQuery) ? trimmedQuery : `${trimmedQuery}, Uruguay`;
+    const results = await withTimeout(Location.geocodeAsync(fallbackQuery), 2000);
+    const first = results[0];
+    if (!first) {
+      return null;
+    }
+
+    const delta = getAreaDelta(trimmedQuery);
+
+    return {
+      latitude: first.latitude,
+      longitude: first.longitude,
+      latitudeDelta: delta,
+      longitudeDelta: delta,
+    };
+  } catch {
+    return null;
+  }
 }
 
 export async function requestCurrentDeviceLocation() {

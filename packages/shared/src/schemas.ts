@@ -191,6 +191,38 @@ export const timeOffSchema = z.object({
   reason: z.string().max(500).nullable().optional(),
 });
 
+const courseModelCategorySchema = z
+  .string()
+  .trim()
+  .min(2, 'Cada categoria debe tener al menos 2 caracteres.')
+  .max(40, 'Cada categoria puede tener hasta 40 caracteres.');
+
+const courseModelCategoriesSchema = z
+  .array(courseModelCategorySchema)
+  .max(10, 'Puedes agregar hasta 10 categorias.')
+  .default([])
+  .transform((categories) => {
+    const seen = new Set<string>();
+    const normalized: string[] = [];
+
+    for (const category of categories) {
+      const trimmed = category.trim();
+      if (!trimmed) {
+        continue;
+      }
+
+      const key = trimmed.toLowerCase();
+      if (seen.has(key)) {
+        continue;
+      }
+
+      seen.add(key);
+      normalized.push(trimmed);
+    }
+
+    return normalized;
+  });
+
 export const courseSchema = z.object({
   id: uuidSchema,
   shop_id: uuidSchema,
@@ -210,9 +242,19 @@ export const courseSchema = z.object({
     .trim()
     .min(2, 'Selecciona un nivel valido.')
     .max(80, 'El nivel no puede superar los 80 caracteres.'),
+  requires_model: z.boolean().default(false),
+  model_categories: courseModelCategoriesSchema,
   is_active: z.boolean(),
   image_url: z.string().url().nullable().optional(),
   created_at: isoDateTimeSchema.optional(),
+}).superRefine((value, ctx) => {
+  if (value.requires_model && value.model_categories.length === 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Selecciona al menos una categoria para la convocatoria de modelos.',
+      path: ['model_categories'],
+    });
+  }
 });
 
 export const courseSessionSchema = z.object({
@@ -407,8 +449,18 @@ export const courseUpsertSchema = z.object({
     .trim()
     .min(2, 'Selecciona un nivel valido.')
     .max(80, 'El nivel no puede superar los 80 caracteres.'),
+  requires_model: z.boolean().default(false),
+  model_categories: courseModelCategoriesSchema,
   is_active: z.boolean().default(true),
   image_url: z.string().url().optional().nullable(),
+}).superRefine((value, ctx) => {
+  if (value.requires_model && value.model_categories.length === 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Selecciona al menos una categoria para la convocatoria de modelos.',
+      path: ['model_categories'],
+    });
+  }
 });
 
 export const courseSessionUpsertSchema = z.object({

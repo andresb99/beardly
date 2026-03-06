@@ -61,11 +61,15 @@ export default async function ModelRegistrationPage({ searchParams }: ModelRegis
           label: [shop.name, shop.city || shop.region].filter(Boolean).join(' - '),
         }))}
         {...(params.session_id ? { initialSessionId: params.session_id } : {})}
-        sessions={openCalls.map((call) => ({
-          session_id: call.session_id,
-          shop_id: call.shop_id,
-          label: `${call.shop_name} - ${call.course_title} - ${new Date(call.start_at).toLocaleString('es-UY')}`,
-        }))}
+        sessions={openCalls.map((call) => {
+          const modelCategories = Array.isArray(call.model_categories) ? call.model_categories : [];
+
+          return {
+            session_id: call.session_id,
+            shop_id: call.shop_id,
+            label: `${call.shop_name} - ${call.course_title} - ${new Date(call.start_at).toLocaleString('es-UY')}${modelCategories.length ? ` - ${modelCategories.join(', ')}` : ''}`,
+          };
+        })}
       />
     </section>
   );

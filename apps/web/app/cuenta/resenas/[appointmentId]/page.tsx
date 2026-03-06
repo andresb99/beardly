@@ -3,6 +3,7 @@ import { Card, CardBody } from '@heroui/card';
 import { requireAuthenticated } from '@/lib/auth';
 import { getAppointmentReviewAccessForUser } from '@/lib/account-reviews';
 import { AccountAppointmentReviewForm } from '@/components/public/account-appointment-review-form';
+import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 
 interface CuentaAppointmentReviewPageProps {
   params: Promise<{ appointmentId: string }>;
@@ -41,6 +42,20 @@ export default async function CuentaAppointmentReviewPage({ params }: CuentaAppo
         </Card>
       </section>
     );
+  }
+
+  if (ctx.userId) {
+    const admin = createSupabaseAdminClient();
+    await admin
+      .from('account_notifications')
+      .update({
+        is_read: true,
+        read_at: new Date().toISOString(),
+      })
+      .eq('user_id', ctx.userId)
+      .eq('appointment_id', access.appointment.id)
+      .eq('notification_type', 'review_requested')
+      .eq('is_read', false);
   }
 
   return (

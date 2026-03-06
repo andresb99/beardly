@@ -23,6 +23,23 @@ const roleLabel: Record<'guest' | 'user' | 'staff' | 'admin', string> = {
   admin: 'Administrador',
 };
 
+function isMissingAccountNotificationsTableError(error: unknown) {
+  if (!error) {
+    return false;
+  }
+
+  const maybeError = error as { code?: string; message?: string };
+  const code = String(maybeError.code || '').toUpperCase();
+  const message = String(maybeError.message || error || '').toLowerCase();
+
+  return (
+    code === 'PGRST205' ||
+    code === '42P01' ||
+    (message.includes('account_notifications') &&
+      (message.includes('does not exist') || message.includes('schema cache') || message.includes('not found')))
+  );
+}
+
 export default async function CuentaPage() {
   const ctx = await requireAuthenticated('/cuenta');
   const supabase = await createSupabaseServerClient();
@@ -116,6 +133,45 @@ export default async function CuentaPage() {
     };
   });
 
+  const { data: accountNotificationsRows, error: accountNotificationsError } = ctx.userId
+    ? await supabase
+        .from('account_notifications')
+        .select('id, notification_type, title, message, action_url, is_read, created_at')
+        .eq('user_id', ctx.userId)
+        .order('created_at', { ascending: false })
+        .limit(40)
+    : {
+        data: [] as Array<{
+          id: string;
+          notification_type: string;
+          title: string;
+          message: string;
+          action_url: string | null;
+          is_read: boolean;
+          created_at: string;
+        }>,
+        error: null,
+      };
+
+  const accountNotifications = !accountNotificationsError
+    ? (accountNotificationsRows || []).map((item) => ({
+        id: String(item.id),
+        type: String(item.notification_type || 'info'),
+        title: String(item.title || 'Notificacion'),
+        message: String(item.message || ''),
+        actionUrl:
+          typeof item.action_url === 'string' && item.action_url.trim()
+            ? String(item.action_url)
+            : null,
+        isRead: Boolean(item.is_read),
+        createdAt: String(item.created_at),
+      }))
+    : [];
+
+  if (accountNotificationsError && !isMissingAccountNotificationsTableError(accountNotificationsError)) {
+    throw new Error(accountNotificationsError.message);
+  }
+
   const appointments =
     ctx.role === 'user' && ctx.email ? await getAccountAppointments(ctx.email) : [];
   const reviewableAppointments = appointments.filter(
@@ -145,7 +201,10 @@ export default async function CuentaPage() {
         </CardBody>
       </Card>
 
-      <AccountNotificationsPanel invitations={invitationItems} />
+      <AccountNotificationsPanel
+        invitations={invitationItems}
+        notifications={accountNotifications}
+      />
 
       {ctx.role === 'user' ? (
         <>

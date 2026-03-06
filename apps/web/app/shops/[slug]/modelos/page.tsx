@@ -74,8 +74,11 @@ export default async function ShopModelosPage({ params }: ShopModelosPageProps) 
           </div>
         ) : null}
 
-        {openCalls.map((call) => (
-          <article key={call.session_id} className="soft-panel rounded-[1.8rem] p-5">
+        {openCalls.map((call) => {
+          const modelCategories = Array.isArray(call.model_categories) ? call.model_categories : [];
+
+          return (
+            <article key={call.session_id} className="soft-panel rounded-[1.8rem] p-5">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate/60 dark:text-slate-400">
@@ -109,6 +112,18 @@ export default async function ShopModelosPage({ params }: ShopModelosPageProps) 
             <p className="mt-4 text-sm text-slate/80 dark:text-slate-300">
               {call.notes_public || 'Sin notas publicas.'}
             </p>
+            {modelCategories.length ? (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {modelCategories.map((category) => (
+                  <span
+                    key={`${call.session_id}-${category}`}
+                    className="meta-chip border-cyan-400/24 bg-cyan-500/10 text-cyan-700 dark:text-cyan-200"
+                  >
+                    {category}
+                  </span>
+                ))}
+              </div>
+            ) : null}
 
             <Link
               href={`${buildShopHref(shop.slug, 'modelos')}/registro?session_id=${call.session_id}`}
@@ -116,8 +131,9 @@ export default async function ShopModelosPage({ params }: ShopModelosPageProps) 
             >
               Anotarme en esta sesion
             </Link>
-          </article>
-        ))}
+            </article>
+          );
+        })}
       </div>
     </section>
   );

@@ -29,6 +29,7 @@ function RootNavigator() {
         <Stack.Screen name="admin/index" options={{ title: 'Panel admin' }} />
         <Stack.Screen name="admin/appointments" options={{ title: 'Citas' }} />
         <Stack.Screen name="admin/staff" options={{ title: 'Equipo' }} />
+        <Stack.Screen name="admin/barbershop" options={{ title: 'Barbería' }} />
         <Stack.Screen name="admin/services" options={{ title: 'Servicios' }} />
         <Stack.Screen name="admin/courses" options={{ title: 'Cursos' }} />
         <Stack.Screen name="admin/modelos" options={{ title: 'Modelos' }} />
@@ -38,7 +39,10 @@ function RootNavigator() {
         />
         <Stack.Screen name="admin/applicants" options={{ title: 'Postulantes' }} />
         <Stack.Screen name="admin/metrics" options={{ title: 'Metricas' }} />
+        <Stack.Screen name="admin/performance/[staffId]" options={{ title: 'Performance' }} />
         <Stack.Screen name="appointment/[id]" options={{ title: 'Detalle de cita' }} />
+        <Stack.Screen name="cuenta/resenas/[appointmentId]" options={{ title: 'Calificar cita' }} />
+        <Stack.Screen name="review/[token]" options={{ title: 'Reseña' }} />
       </Stack>
     </>
   );

@@ -1,11 +1,18 @@
 import { formatCurrency } from '@navaja/shared';
 import { AdminAppointmentsFilters } from '@/components/admin/appointments-filters';
-import { AdminAppointmentsTable } from '@/components/admin/appointments-table';
+import { AdminAppointmentsViewSwitcher } from '@/components/admin/appointments-view-switcher';
 import { requireAdmin } from '@/lib/auth';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 interface AppointmentsPageProps {
-  searchParams: Promise<{ from?: string; to?: string; staff_id?: string; status?: string; shop?: string }>;
+  searchParams: Promise<{
+    from?: string;
+    to?: string;
+    staff_id?: string;
+    status?: string;
+    shop?: string;
+    view?: string;
+  }>;
 }
 
 function formatDateInput(date: Date, timeZone: string) {
@@ -26,6 +33,7 @@ function formatDateInput(date: Date, timeZone: string) {
 export default async function AppointmentsPage({ searchParams }: AppointmentsPageProps) {
   const params = await searchParams;
   const ctx = await requireAdmin({ shopSlug: params.shop });
+  const viewMode = params.view === 'cards' ? 'cards' : 'table';
   const supabase = await createSupabaseServerClient();
   const shopTimeZone = ctx.shopTimezone;
 
@@ -71,6 +79,18 @@ export default async function AppointmentsPage({ searchParams }: AppointmentsPag
 
   const pendingCount = appointments.filter((item) => item.status === 'pending').length;
   const doneCount = appointments.filter((item) => item.status === 'done').length;
+  const appointmentRows = appointments.map((item) => ({
+    id: String(item.id),
+    startAtLabel: new Date(String(item.start_at)).toLocaleString('es-UY', {
+      timeZone: shopTimeZone,
+    }),
+    customerName: String((item.customers as { name?: string } | null)?.name || 'Sin nombre'),
+    customerPhone: String((item.customers as { phone?: string } | null)?.phone || ''),
+    serviceName: String((item.services as { name?: string } | null)?.name || 'Servicio'),
+    staffName: String((item.staff as { name?: string } | null)?.name || 'Barbero'),
+    status: String(item.status),
+    priceLabel: formatCurrency(Number(item.price_cents || 0)),
+  }));
 
   return (
     <section className="space-y-5">
@@ -119,6 +139,7 @@ export default async function AppointmentsPage({ searchParams }: AppointmentsPag
         shopSlug={ctx.shopSlug}
         from={from}
         to={to}
+        selectedView={viewMode}
         selectedStaffId={selectedStaffId}
         selectedStatus={selectedStatus}
         staff={(staff || []).map((item) => ({
@@ -127,20 +148,10 @@ export default async function AppointmentsPage({ searchParams }: AppointmentsPag
         }))}
       />
 
-      <AdminAppointmentsTable
+      <AdminAppointmentsViewSwitcher
         shopId={ctx.shopId}
-        appointments={appointments.map((item) => ({
-          id: String(item.id),
-          startAtLabel: new Date(String(item.start_at)).toLocaleString('es-UY', {
-            timeZone: shopTimeZone,
-          }),
-          customerName: String((item.customers as { name?: string } | null)?.name || 'Sin nombre'),
-          customerPhone: String((item.customers as { phone?: string } | null)?.phone || ''),
-          serviceName: String((item.services as { name?: string } | null)?.name || 'Servicio'),
-          staffName: String((item.staff as { name?: string } | null)?.name || 'Barbero'),
-          status: String(item.status),
-          priceLabel: formatCurrency(Number(item.price_cents || 0)),
-        }))}
+        appointments={appointmentRows}
+        initialView={viewMode}
       />
     </section>
   );

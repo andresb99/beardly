@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { modelRequirementsInputSchema, modelRegistrationInputSchema } from '../src/schemas';
+import {
+  courseUpsertSchema,
+  modelRequirementsInputSchema,
+  modelRegistrationInputSchema,
+} from '../src/schemas';
 
 describe('modelos schemas', () => {
   it('accepts a basic public model registration', () => {
@@ -39,5 +43,21 @@ describe('modelos schemas', () => {
     });
 
     expect(parsed.success).toBe(true);
+  });
+
+  it('requires categories when the course requires models', () => {
+    const parsed = courseUpsertSchema.safeParse({
+      shop_id: '11111111-1111-1111-1111-111111111111',
+      title: 'Curso de practica avanzada',
+      description: 'Entrenamiento practico con trabajos reales guiados en clase.',
+      price_cents: 10000,
+      duration_hours: 5,
+      level: 'Intermedio',
+      requires_model: true,
+      model_categories: [],
+      is_active: true,
+    });
+
+    expect(parsed.success).toBe(false);
   });
 });

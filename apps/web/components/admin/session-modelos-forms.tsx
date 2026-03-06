@@ -96,7 +96,8 @@ export function AdminModelRequirementsForm({
         name="compensation_value_cents"
         type="number"
         min={0}
-        label="Valor compensacion (cents)"
+        step={0.01}
+        label="Valor compensacion (pesos UYU)"
         labelPlacement="inside"
         defaultValue={compensationValueCents}
       />

@@ -3,6 +3,7 @@ import { z } from 'zod';
 const urlSchema = z.string().url();
 const anonKeySchema = z.string().min(20);
 const shopIdSchema = z.string().uuid();
+const googleMapsKeySchema = z.string().min(20);
 
 const fallbackEnv = {
   EXPO_PUBLIC_SUPABASE_URL: 'https://invalid.supabase.co',
@@ -23,6 +24,9 @@ const rawEnv = {
   EXPO_PUBLIC_SUPABASE_ANON_KEY: normalizeEnvValue(process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY),
   EXPO_PUBLIC_SHOP_ID: normalizeEnvValue(process.env.EXPO_PUBLIC_SHOP_ID),
   EXPO_PUBLIC_API_BASE_URL: normalizeEnvValue(process.env.EXPO_PUBLIC_API_BASE_URL),
+  EXPO_PUBLIC_GOOGLE_MAPS_API_KEY:
+    normalizeEnvValue(process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY) ??
+    normalizeEnvValue(process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY),
 };
 
 const urlResult = urlSchema.safeParse(rawEnv.EXPO_PUBLIC_SUPABASE_URL);
@@ -30,6 +34,9 @@ const anonKeyResult = anonKeySchema.safeParse(rawEnv.EXPO_PUBLIC_SUPABASE_ANON_K
 const shopIdResult = shopIdSchema.safeParse(rawEnv.EXPO_PUBLIC_SHOP_ID);
 const apiBaseUrlCandidate = rawEnv.EXPO_PUBLIC_API_BASE_URL?.replace(/\/+$/g, '');
 const apiBaseUrlResult = apiBaseUrlCandidate ? urlSchema.safeParse(apiBaseUrlCandidate) : null;
+const googleMapsApiKeyResult = rawEnv.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY
+  ? googleMapsKeySchema.safeParse(rawEnv.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY)
+  : null;
 
 const invalidKeys: string[] = [];
 if (!urlResult.success) {
@@ -40,6 +47,9 @@ if (!anonKeyResult.success) {
 }
 if (!shopIdResult.success) {
   invalidKeys.push('EXPO_PUBLIC_SHOP_ID');
+}
+if (rawEnv.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY && (!googleMapsApiKeyResult || !googleMapsApiKeyResult.success)) {
+  invalidKeys.push('EXPO_PUBLIC_GOOGLE_MAPS_API_KEY');
 }
 
 export const env = {
@@ -54,6 +64,10 @@ export const env = {
     : fallbackEnv.EXPO_PUBLIC_SHOP_ID,
   EXPO_PUBLIC_API_BASE_URL:
     apiBaseUrlResult && apiBaseUrlResult.success ? apiBaseUrlResult.data : undefined,
+  EXPO_PUBLIC_GOOGLE_MAPS_API_KEY:
+    googleMapsApiKeyResult && googleMapsApiKeyResult.success
+      ? googleMapsApiKeyResult.data
+      : undefined,
 };
 
 export const envValidation = {

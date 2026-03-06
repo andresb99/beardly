@@ -8,6 +8,7 @@ export interface OpenModelCall {
   course_title: string;
   start_at: string;
   location: string;
+  model_categories: string[];
   compensation_type: 'gratis' | 'descuento' | 'pago';
   compensation_value_cents: number | null;
   notes_public: string | null;
@@ -30,6 +31,44 @@ export function getModelsNeededFromRequirements(input: unknown): number {
     return 0;
   }
   return Math.trunc(parsed);
+}
+
+function normalizeModelCategories(input: unknown): string[] {
+  if (!Array.isArray(input)) {
+    return [];
+  }
+
+  const seen = new Set<string>();
+  const normalized: string[] = [];
+
+  for (const category of input) {
+    if (typeof category !== 'string') {
+      continue;
+    }
+
+    const trimmed = category.trim();
+    if (!trimmed) {
+      continue;
+    }
+
+    const dedupeKey = trimmed.toLowerCase();
+    if (seen.has(dedupeKey)) {
+      continue;
+    }
+
+    seen.add(dedupeKey);
+    normalized.push(trimmed);
+  }
+
+  return normalized;
+}
+
+function getModelCategoriesFromRequirements(input: unknown): string[] {
+  if (!input || typeof input !== 'object') {
+    return [];
+  }
+
+  return normalizeModelCategories((input as Record<string, unknown>).categories);
 }
 
 export async function listMarketplaceOpenModelCalls(): Promise<MarketplaceOpenModelCall[]> {
@@ -58,7 +97,7 @@ export async function listMarketplaceOpenModelCalls(): Promise<MarketplaceOpenMo
   const courseIds = sessionRows.map((row) => String(row.course_id));
   const { data: courseRows } = await supabase
     .from('courses')
-    .select('id, title, shop_id, is_active')
+    .select('id, title, shop_id, is_active, model_categories')
     .in('id', courseIds)
     .eq('is_active', true);
 
@@ -94,6 +133,9 @@ export async function listMarketplaceOpenModelCalls(): Promise<MarketplaceOpenMo
         return null;
       }
 
+      const categoriesFromRequirements = getModelCategoriesFromRequirements(req.requirements);
+      const categoriesFromCourse = normalizeModelCategories(course.model_categories);
+
       return {
         session_id: String(req.session_id),
         shop_id: String(shop.id),
@@ -102,6 +144,8 @@ export async function listMarketplaceOpenModelCalls(): Promise<MarketplaceOpenMo
         course_title: String(course.title),
         start_at: String(session.start_at),
         location: String(session.location),
+        model_categories:
+          categoriesFromRequirements.length > 0 ? categoriesFromRequirements : categoriesFromCourse,
         compensation_type: req.compensation_type as 'gratis' | 'descuento' | 'pago',
         compensation_value_cents:
           req.compensation_value_cents === null ? null : Number(req.compensation_value_cents || 0),
@@ -133,6 +177,7 @@ export async function getOpenModelCalls(shopId?: string): Promise<OpenModelCall[
       course_title: call.course_title,
       start_at: call.start_at,
       location: call.location,
+      model_categories: call.model_categories,
       compensation_type: call.compensation_type,
       compensation_value_cents: call.compensation_value_cents,
       notes_public: call.notes_public,

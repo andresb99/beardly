@@ -77,6 +77,7 @@ export default function AdminHomeScreen() {
         <View style={styles.grid}>
           <AdminNav label="Citas" onPress={() => router.push('/admin/appointments')} />
           <AdminNav label="Equipo" onPress={() => router.push('/admin/staff')} />
+          <AdminNav label="Barbería" onPress={() => router.push('/admin/barbershop')} />
           <AdminNav label="Servicios" onPress={() => router.push('/admin/services')} />
           <AdminNav label="Cursos" onPress={() => router.push('/admin/courses')} />
           <AdminNav label="Modelos" onPress={() => router.push('/admin/modelos')} />

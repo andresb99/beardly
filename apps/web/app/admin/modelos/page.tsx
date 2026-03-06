@@ -1,16 +1,17 @@
-import Link from 'next/link';
 import { Button } from '@heroui/button';
 import { Card, CardBody } from '@heroui/card';
 import { Chip } from '@heroui/chip';
 import { Input, Textarea } from '@heroui/input';
 import { requireAdmin } from '@/lib/auth';
 import { updateModelInternalNotesAction } from '@/app/admin/actions';
+import { AdminModelsViewSwitcher } from '@/components/admin/models-view-switcher';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { buildAdminHref } from '@/lib/workspace-routes';
 
 interface ModelosAdminPageProps {
   searchParams: Promise<{
     q?: string;
+    view?: string;
     model_id?: string;
     ok?: string;
     error?: string;
@@ -33,6 +34,7 @@ export default async function ModelosAdminPage({ searchParams }: ModelosAdminPag
   const params = await searchParams;
   const ctx = await requireAdmin({ shopSlug: params.shop });
   const q = (params.q || '').trim();
+  const viewMode = params.view === 'cards' ? 'cards' : 'table';
   const selectedId = params.model_id || '';
 
   const supabase = await createSupabaseServerClient();
@@ -51,6 +53,24 @@ export default async function ModelosAdminPage({ searchParams }: ModelosAdminPag
   }
 
   const { data: models } = await query;
+  const modelRows = (models || []).map((model) => ({
+    id: String(model.id),
+    fullName: String(model.full_name || 'Sin nombre'),
+    phone: String(model.phone || 'Sin telefono'),
+    email: String(model.email || 'No informado'),
+    instagram: String(model.instagram || 'Sin instagram'),
+    preferences: formatPreferences(model.attributes),
+    notesInternal: String(model.notes_internal || 'Sin notas'),
+    marketingOptIn: Boolean(model.marketing_opt_in),
+    createdAtLabel: new Date(String(model.created_at)).toLocaleString('es-UY'),
+    href: buildAdminHref('/admin/modelos', ctx.shopSlug, {
+      ...(q ? { q } : {}),
+      ...(viewMode === 'cards' ? { view: 'cards' } : {}),
+      model_id: String(model.id),
+    }),
+    isSelected: String(model.id) === selectedId,
+  }));
+
   let selectedModel = (models || []).find((item) => String(item.id) === selectedId) || null;
 
   if (!selectedModel && selectedId) {
@@ -113,6 +133,7 @@ export default async function ModelosAdminPage({ searchParams }: ModelosAdminPag
 
       <form method="get" className="soft-panel flex gap-2 rounded-[1.8rem] border-0 p-4">
         <input type="hidden" name="shop" value={ctx.shopSlug} />
+        {viewMode === 'cards' ? <input type="hidden" name="view" value="cards" /> : null}
         <Input
           name="q"
           label="Buscar modelo"
@@ -125,112 +146,80 @@ export default async function ModelosAdminPage({ searchParams }: ModelosAdminPag
         </Button>
       </form>
 
-      <div className="grid gap-4 lg:grid-cols-[340px_1fr]">
-        <Card className="soft-panel rounded-[1.8rem] border-0 shadow-none">
-          <CardBody className="p-5">
-            <h3 className="text-xl font-semibold text-ink dark:text-slate-100">Listado</h3>
-            <ul className="mt-3 space-y-2 text-sm">
-              {(models || []).map((model) => {
-                const href = buildAdminHref('/admin/modelos', ctx.shopSlug, {
-                  ...(q ? { q } : {}),
-                  model_id: String(model.id),
-                });
-                const active = String(model.id) === selectedId;
-                return (
-                  <li key={String(model.id)}>
-                    <Link
-                      href={href}
-                      className={`block rounded-2xl px-3 py-2 no-underline transition ${
-                        active
-                          ? 'bg-slate-950 text-white shadow-[0_18px_28px_-22px_rgba(15,23,42,0.5)] dark:bg-white dark:text-slate-950'
-                          : 'bg-white/55 hover:bg-white/82 dark:bg-white/[0.04] dark:hover:bg-white/[0.06]'
-                      }`}
-                    >
-                      <p className="font-medium">{String(model.full_name)}</p>
-                      <p className={`text-xs ${active ? 'text-white/80' : 'text-slate/70'}`}>
-                        {String(model.phone)}
-                      </p>
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          </CardBody>
-        </Card>
+      <AdminModelsViewSwitcher rows={modelRows} initialView={viewMode} />
 
-        <Card className="soft-panel rounded-[1.8rem] border-0 shadow-none">
-          <CardBody className="p-5">
-            {!selectedModel ? (
-              <>
+      <Card className="soft-panel rounded-[1.8rem] border-0 shadow-none">
+        <CardBody className="p-5">
+          {!selectedModel ? (
+            <>
+              <h3 className="text-xl font-semibold text-ink dark:text-slate-100">
+                Detalle de modelo
+              </h3>
+              <p className="text-sm text-slate/80 dark:text-slate-300">
+                Usa la columna Acciones y presiona Ver ficha para editar notas internas.
+              </p>
+            </>
+          ) : (
+            <>
+              <div className="flex flex-wrap items-center gap-2">
                 <h3 className="text-xl font-semibold text-ink dark:text-slate-100">
-                  Detalle de modelo
+                  {String(selectedModel.full_name)}
                 </h3>
-                <p className="text-sm text-slate/80 dark:text-slate-300">
-                  Selecciona un modelo del listado para ver su ficha.
-                </p>
-              </>
-            ) : (
-              <>
-                <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="text-xl font-semibold text-ink dark:text-slate-100">
-                    {String(selectedModel.full_name)}
-                  </h3>
-                  {selectedModel.marketing_opt_in ? (
-                    <Chip size="sm" radius="full" variant="flat" color="success">
-                      Acepta novedades
-                    </Chip>
-                  ) : null}
+                {selectedModel.marketing_opt_in ? (
+                  <Chip size="sm" radius="full" variant="flat" color="success">
+                    Acepta novedades
+                  </Chip>
+                ) : null}
+              </div>
+              <p className="text-sm text-slate/80 dark:text-slate-300">
+                Registrado el {new Date(String(selectedModel.created_at)).toLocaleString('es-UY')}
+              </p>
+
+              <dl className="mt-4 grid gap-2 text-sm md:grid-cols-2">
+                <div className="surface-card">
+                  <dt className="font-medium text-slate/80">Telefono</dt>
+                  <dd>{String(selectedModel.phone)}</dd>
                 </div>
-                <p className="text-sm text-slate/80 dark:text-slate-300">
-                  Registrado el {new Date(String(selectedModel.created_at)).toLocaleString('es-UY')}
-                </p>
+                <div className="surface-card">
+                  <dt className="font-medium text-slate/80">Email</dt>
+                  <dd>{String(selectedModel.email || 'No informado')}</dd>
+                </div>
+                <div className="surface-card">
+                  <dt className="font-medium text-slate/80">Instagram</dt>
+                  <dd>{String(selectedModel.instagram || 'No informado')}</dd>
+                </div>
+                <div className="surface-card">
+                  <dt className="font-medium text-slate/80">Preferencias</dt>
+                  <dd>{formatPreferences(selectedModel.attributes)}</dd>
+                </div>
+              </dl>
 
-                <dl className="mt-4 grid gap-2 text-sm">
-                  <div className="surface-card">
-                    <dt className="font-medium text-slate/80">Telefono</dt>
-                    <dd>{String(selectedModel.phone)}</dd>
-                  </div>
-                  <div className="surface-card">
-                    <dt className="font-medium text-slate/80">Email</dt>
-                    <dd>{String(selectedModel.email || 'No informado')}</dd>
-                  </div>
-                  <div className="surface-card">
-                    <dt className="font-medium text-slate/80">Instagram</dt>
-                    <dd>{String(selectedModel.instagram || 'No informado')}</dd>
-                  </div>
-                  <div className="surface-card">
-                    <dt className="font-medium text-slate/80">Preferencias</dt>
-                    <dd>{formatPreferences(selectedModel.attributes)}</dd>
-                  </div>
-                </dl>
-
-                <form action={updateModelInternalNotesAction} className="mt-5 space-y-2">
-                  <input type="hidden" name="model_id" value={String(selectedModel.id)} />
-                  <input type="hidden" name="shop_id" value={ctx.shopId} />
-                  <input type="hidden" name="shop_slug" value={ctx.shopSlug} />
-                  <Textarea
-                    id="notes_internal"
-                    name="notes_internal"
-                    rows={5}
-                    label="Notas internas"
-                    labelPlacement="inside"
-                    defaultValue={String(selectedModel.notes_internal || '')}
-                    placeholder="Comentarios privados para el equipo."
-                  />
-                  <Button
-                    type="submit"
-                    variant="flat"
-                    color="default"
-                    className="action-secondary px-5 text-sm font-semibold"
-                  >
-                    Guardar notas
-                  </Button>
-                </form>
-              </>
-            )}
-          </CardBody>
-        </Card>
-      </div>
+              <form action={updateModelInternalNotesAction} className="mt-5 space-y-2">
+                <input type="hidden" name="model_id" value={String(selectedModel.id)} />
+                <input type="hidden" name="shop_id" value={ctx.shopId} />
+                <input type="hidden" name="shop_slug" value={ctx.shopSlug} />
+                <Textarea
+                  id="notes_internal"
+                  name="notes_internal"
+                  rows={5}
+                  label="Notas internas"
+                  labelPlacement="inside"
+                  defaultValue={String(selectedModel.notes_internal || '')}
+                  placeholder="Comentarios privados para el equipo."
+                />
+                <Button
+                  type="submit"
+                  variant="flat"
+                  color="default"
+                  className="action-secondary px-5 text-sm font-semibold"
+                >
+                  Guardar notas
+                </Button>
+              </form>
+            </>
+          )}
+        </CardBody>
+      </Card>
     </section>
   );
 }

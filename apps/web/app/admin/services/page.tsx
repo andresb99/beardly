@@ -79,8 +79,10 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
             <Input
               name="price_cents"
               type="number"
-              label="Precio en cents"
+              label="Precio (pesos UYU)"
               labelPlacement="inside"
+              step="0.01"
+              min="0"
               required
             />
             <Input

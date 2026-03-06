@@ -2,6 +2,7 @@
 
 import { randomUUID } from 'node:crypto';
 import {
+  parseCurrencyInputToCents,
   courseSessionUpsertSchema,
   courseUpsertSchema,
   jobApplicationUpdateSchema,
@@ -77,12 +78,50 @@ function parsePriceCentsValue(value?: string): number {
     return 0;
   }
 
-  const digitsOnly = value.replace(/[^\d]/g, '');
-  if (!digitsOnly) {
+  const cents = parseCurrencyInputToCents(value);
+  if (!Number.isFinite(cents) || !Number.isInteger(cents) || cents < 0) {
     return Number.NaN;
   }
 
-  return Number(digitsOnly);
+  return cents;
+}
+
+function normalizeStringArray(values: unknown[]): string[] {
+  const seen = new Set<string>();
+  const normalized: string[] = [];
+
+  for (const value of values) {
+    if (typeof value !== 'string') {
+      continue;
+    }
+
+    const trimmed = value.trim();
+    if (!trimmed) {
+      continue;
+    }
+
+    const dedupeKey = trimmed.toLowerCase();
+    if (seen.has(dedupeKey)) {
+      continue;
+    }
+
+    seen.add(dedupeKey);
+    normalized.push(trimmed);
+  }
+
+  return normalized;
+}
+
+function formStringArray(formData: FormData, key: string): string[] {
+  return normalizeStringArray(formData.getAll(key));
+}
+
+function unknownStringArray(input: unknown): string[] {
+  if (!Array.isArray(input)) {
+    return [];
+  }
+
+  return normalizeStringArray(input);
 }
 
 function isBucketAlreadyExistsError(error: unknown) {
@@ -172,6 +211,33 @@ const markAppointmentCompletedInputSchema = z.object({
   priceCents: z.number().int().nonnegative().optional(),
 });
 
+const workingHoursRangeUpsertSchema = z
+  .object({
+    shop_id: uuidSchema,
+    staff_id: uuidSchema,
+    day_from: z
+      .number()
+      .int()
+      .min(0, 'Selecciona un dia inicial valido.')
+      .max(6, 'Selecciona un dia inicial valido.'),
+    day_to: z
+      .number()
+      .int()
+      .min(0, 'Selecciona un dia final valido.')
+      .max(6, 'Selecciona un dia final valido.'),
+    start_time: z
+      .string()
+      .regex(/^([01]\d|2[0-3]):([0-5]\d)$/, 'Ingresa una hora de inicio valida.'),
+    end_time: z
+      .string()
+      .regex(/^([01]\d|2[0-3]):([0-5]\d)$/, 'Ingresa una hora de fin valida.'),
+    replace_existing: z.boolean().default(true),
+  })
+  .refine((value) => value.start_time < value.end_time, {
+    message: 'La hora de fin debe ser posterior a la hora de inicio.',
+    path: ['end_time'],
+  });
+
 function requireFormShopId(formData: FormData) {
   const parsed = uuidSchema.safeParse(formValue(formData, 'shop_id'));
   if (!parsed.success) {
@@ -183,6 +249,17 @@ function requireFormShopId(formData: FormData) {
 
 function requireFormShopSlug(formData: FormData) {
   return formValue(formData, 'shop_slug') || undefined;
+}
+
+function resolveWeekdayRange(dayFrom: number, dayTo: number) {
+  if (dayFrom <= dayTo) {
+    return Array.from({ length: dayTo - dayFrom + 1 }, (_, index) => dayFrom + index);
+  }
+
+  return [
+    ...Array.from({ length: 7 - dayFrom }, (_, index) => dayFrom + index),
+    ...Array.from({ length: dayTo + 1 }, (_, index) => index),
+  ];
 }
 
 function getUserDisplayName(
@@ -881,7 +958,7 @@ export async function upsertServiceAction(formData: FormData) {
     id: formValue(formData, 'id'),
     shop_id: shopId,
     name: formValue(formData, 'name'),
-    price_cents: Number(formValue(formData, 'price_cents') || 0),
+    price_cents: parsePriceCentsValue(formValue(formData, 'price_cents')),
     duration_minutes: Number(formValue(formData, 'duration_minutes') || 0),
     is_active: formData.get('is_active') === 'on',
   });
@@ -939,6 +1016,74 @@ export async function upsertWorkingHoursAction(formData: FormData) {
       .eq('shop_id', parsed.data.shop_id);
   } else {
     await supabase.from('working_hours').insert(parsed.data);
+  }
+
+  revalidatePath('/admin/staff');
+}
+
+export async function upsertWorkingHoursRangeAction(formData: FormData) {
+  const shopId = requireFormShopId(formData);
+  await requireAdmin({ shopId });
+
+  const parsed = workingHoursRangeUpsertSchema.safeParse({
+    shop_id: shopId,
+    staff_id: formValue(formData, 'staff_id'),
+    day_from: Number(formValue(formData, 'day_from') || -1),
+    day_to: Number(formValue(formData, 'day_to') || -1),
+    start_time: formValue(formData, 'start_time'),
+    end_time: formValue(formData, 'end_time'),
+    replace_existing: formData.get('replace_existing') === 'on',
+  });
+
+  if (!parsed.success) {
+    throw new Error(
+      getValidationErrorMessage(parsed.error, 'Datos de horario invalidos.', {
+        staff_id: 'Personal',
+        day_from: 'Dia inicial',
+        day_to: 'Dia final',
+        start_time: 'Desde',
+        end_time: 'Hasta',
+      }),
+    );
+  }
+
+  const supabase = await createSupabaseServerClient();
+  await ensureStaffBelongsToShop(supabase, parsed.data.staff_id, parsed.data.shop_id);
+
+  const dayRange = resolveWeekdayRange(parsed.data.day_from, parsed.data.day_to);
+  if (!dayRange.length) {
+    throw new Error('Selecciona un rango de dias valido.');
+  }
+
+  if (parsed.data.replace_existing) {
+    const { error: deleteError } = await supabase
+      .from('working_hours')
+      .delete()
+      .eq('shop_id', parsed.data.shop_id)
+      .eq('staff_id', parsed.data.staff_id)
+      .in('day_of_week', dayRange);
+
+    if (deleteError) {
+      throw new Error(deleteError.message);
+    }
+  }
+
+  const rows = dayRange.map((dayOfWeek) => ({
+    shop_id: parsed.data.shop_id,
+    staff_id: parsed.data.staff_id,
+    day_of_week: dayOfWeek,
+    start_time: parsed.data.start_time,
+    end_time: parsed.data.end_time,
+  }));
+
+  const mutation = parsed.data.replace_existing
+    ? await supabase.from('working_hours').insert(rows)
+    : await supabase
+        .from('working_hours')
+        .upsert(rows, { onConflict: 'staff_id,day_of_week,start_time,end_time', ignoreDuplicates: true });
+
+  if (mutation.error) {
+    throw new Error(mutation.error.message);
   }
 
   revalidatePath('/admin/staff');
@@ -1108,7 +1253,9 @@ export async function updateAppointmentStatusAction(formData: FormData) {
   const parsed = updateAppointmentStatusSchema.safeParse({
     appointment_id: formValue(formData, 'appointment_id'),
     status: formValue(formData, 'status'),
-    price_cents: formValue(formData, 'price_cents') ? Number(formValue(formData, 'price_cents')) : undefined,
+    price_cents: formValue(formData, 'price_cents')
+      ? parsePriceCentsValue(formValue(formData, 'price_cents'))
+      : undefined,
   });
 
   if (!parsed.success) {
@@ -1157,6 +1304,8 @@ export async function upsertCourseAction(formData: FormData) {
   const shopId = requireFormShopId(formData);
   const shopSlug = requireFormShopSlug(formData);
   await requireAdmin({ shopId });
+  const requiresModel = formData.get('requires_model') === 'on';
+  const modelCategories = formStringArray(formData, 'model_categories');
   const rawImageFile = formData.get('image_file');
   const imageFile = rawImageFile instanceof File && rawImageFile.size > 0 ? rawImageFile : null;
 
@@ -1178,6 +1327,8 @@ export async function upsertCourseAction(formData: FormData) {
     price_cents: parsePriceCentsValue(formValue(formData, 'price_cents')),
     duration_hours: parseIntegerValue(formValue(formData, 'duration_hours')),
     level: formValue(formData, 'level'),
+    requires_model: requiresModel,
+    model_categories: requiresModel ? modelCategories : [],
     is_active: formData.get('is_active') === 'on',
     image_url: formValue(formData, 'image_url') || null,
   });
@@ -1190,6 +1341,7 @@ export async function upsertCourseAction(formData: FormData) {
         price_cents: 'Precio',
         duration_hours: 'Horas',
         level: 'Nivel',
+        model_categories: 'Categorias de modelo',
         image_url: 'Imagen',
       }),
     );
@@ -1286,16 +1438,21 @@ export async function upsertCourseAction(formData: FormData) {
 
   revalidatePath('/admin/courses');
   revalidatePath('/courses');
+  revalidatePath('/modelos');
+  revalidatePath('/modelos/registro');
   if (shopSlug) {
     revalidatePath(`/shops/${shopSlug}/courses`);
     if (parsed.data.id) {
       revalidatePath(`/shops/${shopSlug}/courses/${parsed.data.id}`);
     }
+    revalidatePath(`/shops/${shopSlug}/modelos`);
+    revalidatePath(`/shops/${shopSlug}/modelos/registro`);
   }
 }
 
 export async function upsertCourseSessionAction(formData: FormData) {
   const shopId = requireFormShopId(formData);
+  const shopSlug = requireFormShopSlug(formData);
   await requireAdmin({ shopId });
 
   const parsed = courseSessionUpsertSchema.safeParse({
@@ -1313,15 +1470,96 @@ export async function upsertCourseSessionAction(formData: FormData) {
 
   const supabase = await createSupabaseServerClient();
   await ensureCourseBelongsToShop(supabase, parsed.data.course_id, shopId);
+  const { data: course, error: courseError } = await supabase
+    .from('courses')
+    .select('id, title, requires_model, model_categories')
+    .eq('id', parsed.data.course_id)
+    .eq('shop_id', shopId)
+    .maybeSingle();
+
+  if (courseError) {
+    throw new Error(courseError.message);
+  }
+
+  if (!course?.id) {
+    throw new Error('No se encontro el curso seleccionado para esta barberia.');
+  }
+
+  let sessionId = parsed.data.id ? String(parsed.data.id) : '';
   if (parsed.data.id) {
     await ensureSessionBelongsToShop(supabase, parsed.data.id, shopId);
-    await supabase.from('course_sessions').update(parsed.data).eq('id', parsed.data.id);
+    const { error: sessionUpdateError } = await supabase
+      .from('course_sessions')
+      .update(parsed.data)
+      .eq('id', parsed.data.id);
+
+    if (sessionUpdateError) {
+      throw new Error(sessionUpdateError.message);
+    }
   } else {
-    await supabase.from('course_sessions').insert(parsed.data);
+    const { data: insertedSession, error: sessionInsertError } = await supabase
+      .from('course_sessions')
+      .insert(parsed.data)
+      .select('id')
+      .single();
+
+    if (sessionInsertError || !insertedSession?.id) {
+      throw new Error(sessionInsertError?.message || 'No se pudo crear la sesion.');
+    }
+
+    sessionId = String(insertedSession.id);
+  }
+
+  if (Boolean(course.requires_model) && sessionId) {
+    const { data: existingRequirement, error: requirementLookupError } = await supabase
+      .from('model_requirements')
+      .select('id')
+      .eq('session_id', sessionId)
+      .maybeSingle();
+
+    if (requirementLookupError) {
+      throw new Error(requirementLookupError.message);
+    }
+
+    if (!existingRequirement?.id) {
+      const modelCategories = unknownStringArray(course.model_categories);
+      const defaultModelsNeeded = Math.max(1, Math.min(3, Number(parsed.data.capacity) || 1));
+      const notesSuffix = modelCategories.length
+        ? `Categorias: ${modelCategories.join(', ')}.`
+        : '';
+
+      const { error: requirementInsertError } = await supabase
+        .from('model_requirements')
+        .insert({
+          session_id: sessionId,
+          requirements: {
+            models_needed: defaultModelsNeeded,
+            beard_required: false,
+            hair_length_category: 'indistinto',
+            hair_type: null,
+            categories: modelCategories,
+          },
+          compensation_type: 'gratis',
+          compensation_value_cents: null,
+          notes_public: `Convocatoria para practica de ${String(course.title)}. ${notesSuffix}`.trim(),
+          is_open: true,
+        });
+
+      if (requirementInsertError) {
+        throw new Error(requirementInsertError.message);
+      }
+    }
   }
 
   revalidatePath('/admin/courses');
   revalidatePath('/courses');
+  revalidatePath('/modelos');
+  revalidatePath('/modelos/registro');
+
+  if (shopSlug) {
+    revalidatePath(`/shops/${shopSlug}/modelos`);
+    revalidatePath(`/shops/${shopSlug}/modelos/registro`);
+  }
 }
 
 export async function updateJobApplicationAction(formData: FormData) {
@@ -1370,7 +1608,7 @@ export async function upsertModelRequirementsAction(formData: FormData) {
     hair_type: formValue(formData, 'hair_type') || null,
     compensation_type: formValue(formData, 'compensation_type'),
     compensation_value_cents: formValue(formData, 'compensation_value_cents')
-      ? Number(formValue(formData, 'compensation_value_cents'))
+      ? parsePriceCentsValue(formValue(formData, 'compensation_value_cents'))
       : undefined,
     notes_public: formValue(formData, 'notes_public') || null,
     is_open: formData.get('is_open') === 'on',
@@ -1387,15 +1625,38 @@ export async function upsertModelRequirementsAction(formData: FormData) {
     redirect(`${redirectBase}?error=${encodeURIComponent('No se pudieron guardar los requisitos de modelos.')}`);
   }
 
+  const supabase = await createSupabaseServerClient();
+  await ensureSessionBelongsToShop(supabase, parsed.data.session_id, shopId);
+
+  const { data: existingRequirement } = await supabase
+    .from('model_requirements')
+    .select('requirements')
+    .eq('session_id', parsed.data.session_id)
+    .maybeSingle();
+
+  const existingRequirements = (existingRequirement?.requirements as Record<string, unknown> | null) || {};
+  let categories = unknownStringArray(existingRequirements.categories);
+
+  if (!categories.length) {
+    const { data: sessionWithCourse } = await supabase
+      .from('course_sessions')
+      .select('id, courses(model_categories)')
+      .eq('id', parsed.data.session_id)
+      .maybeSingle();
+
+    const course = (sessionWithCourse?.courses as { model_categories?: unknown } | null) || null;
+    categories = unknownStringArray(course?.model_categories);
+  }
+
   const requirements = {
+    ...existingRequirements,
     models_needed: parsed.data.models_needed,
     beard_required: parsed.data.beard_required || false,
     hair_length_category: parsed.data.hair_length_category || 'indistinto',
     hair_type: parsed.data.hair_type || null,
+    categories,
   };
 
-  const supabase = await createSupabaseServerClient();
-  await ensureSessionBelongsToShop(supabase, parsed.data.session_id, shopId);
   const { error } = await supabase.from('model_requirements').upsert(
     {
       session_id: parsed.data.session_id,

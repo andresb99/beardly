@@ -1,16 +1,16 @@
-import { Card, CardBody } from '@heroui/card';
-import { ApplicantUpdateForm } from '@/components/admin/applicant-update-form';
+import { AdminApplicantsViewSwitcher } from '@/components/admin/applicants-view-switcher';
 import { requireAdmin } from '@/lib/auth';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 interface ApplicantsPageProps {
-  searchParams: Promise<{ shop?: string }>;
+  searchParams: Promise<{ shop?: string; view?: string }>;
 }
 
 export default async function ApplicantsPage({ searchParams }: ApplicantsPageProps) {
   const params = await searchParams;
   const ctx = await requireAdmin({ shopSlug: params.shop });
+  const viewMode = params.view === 'cards' ? 'cards' : 'table';
   const supabase = await createSupabaseServerClient();
   const admin = createSupabaseAdminClient();
 
@@ -32,6 +32,19 @@ export default async function ApplicantsPage({ searchParams }: ApplicantsPagePro
       signedUrls.set(String(item.id), data.signedUrl);
     }
   }
+  const applicantRows = (applications || []).map((application) => ({
+    id: String(application.id),
+    name: String(application.name || 'Sin nombre'),
+    email: String(application.email || '-'),
+    phone: String(application.phone || '-'),
+    instagram: String(application.instagram || 'Sin instagram'),
+    experienceYearsLabel: `${String(application.experience_years || 0)} anios`,
+    availability: String(application.availability || 'No informado'),
+    status: String(application.status || 'new'),
+    notes: String(application.notes || ''),
+    createdAtLabel: new Date(String(application.created_at)).toLocaleString('es-UY'),
+    cvUrl: signedUrls.get(String(application.id)) || null,
+  }));
 
   return (
     <section className="space-y-6">
@@ -76,55 +89,7 @@ export default async function ApplicantsPage({ searchParams }: ApplicantsPagePro
         </div>
       </div>
 
-      <div className="space-y-4">
-        {(applications || []).map((application) => (
-          <Card
-            key={String(application.id)}
-            className="soft-panel rounded-[1.8rem] border-0 shadow-none"
-          >
-            <CardBody className="p-5">
-              <h3 className="text-xl font-semibold text-ink dark:text-slate-100">
-                {String(application.name)}
-              </h3>
-              <p className="text-sm text-slate/80 dark:text-slate-300">
-                {String(application.email)} - {String(application.phone)} -{' '}
-                {String(application.experience_years)} anios
-              </p>
-
-              <p className="mt-2 text-sm text-slate/80">
-                Instagram: {String(application.instagram || 'No informado')}
-                <br />
-                Disponibilidad: {String(application.availability)}
-              </p>
-
-              <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
-                {signedUrls.get(String(application.id)) ? (
-                  <a
-                    href={signedUrls.get(String(application.id))}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="action-secondary inline-flex rounded-full px-4 py-2 no-underline text-xs font-semibold uppercase tracking-[0.14em]"
-                  >
-                    Descargar CV
-                  </a>
-                ) : (
-                  <span className="text-slate/60">CV no disponible</span>
-                )}
-                <span className="text-slate/60">
-                  Postulacion: {new Date(String(application.created_at)).toLocaleString('es-UY')}
-                </span>
-              </div>
-
-              <ApplicantUpdateForm
-                applicationId={String(application.id)}
-                shopId={ctx.shopId}
-                status={String(application.status)}
-                notes={String(application.notes || '')}
-              />
-            </CardBody>
-          </Card>
-        ))}
-      </div>
+      <AdminApplicantsViewSwitcher rows={applicantRows} shopId={ctx.shopId} initialView={viewMode} />
     </section>
   );
 }

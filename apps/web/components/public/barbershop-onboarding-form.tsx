@@ -3,7 +3,7 @@
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button, Input, Textarea } from '@heroui/react';
-import { MapPin, Search } from 'lucide-react';
+import { MapPin, Search, X } from 'lucide-react';
 import {
   type GoogleAutocompleteService,
   type GoogleGeocoder,
@@ -55,6 +55,10 @@ function getLocalTimezone() {
 
 function pickAddressComponent(components: Array<{ long_name?: string; short_name?: string; types?: string[] }>, type: string) {
   return components.find((component) => component.types?.includes(type));
+}
+
+function getPhotoFingerprint(file: File) {
+  return `${file.name}:${file.size}:${file.lastModified}`;
 }
 
 export function BarbershopOnboardingForm() {
@@ -194,15 +198,40 @@ export function BarbershopOnboardingForm() {
 
   const handlePhotosChange = useEffectEvent((files: FileList | null) => {
     if (!files) {
-      setShopPhotos([]);
       return;
     }
 
-    const nextPhotos = Array.from(files)
+    const incomingPhotos = Array.from(files)
       .filter((file) => file.size > 0)
       .slice(0, MAX_SHOP_IMAGES);
 
-    setShopPhotos(nextPhotos);
+    if (incomingPhotos.length === 0) {
+      return;
+    }
+
+    setShopPhotos((current) => {
+      const mergedByFingerprint = new Map<string, File>();
+
+      for (const file of current) {
+        mergedByFingerprint.set(getPhotoFingerprint(file), file);
+      }
+
+      for (const file of incomingPhotos) {
+        mergedByFingerprint.set(getPhotoFingerprint(file), file);
+      }
+
+      return Array.from(mergedByFingerprint.values()).slice(0, MAX_SHOP_IMAGES);
+    });
+  });
+
+  const removePhoto = useEffectEvent((targetFingerprint: string) => {
+    setShopPhotos((current) =>
+      current.filter((file) => getPhotoFingerprint(file) !== targetFingerprint),
+    );
+  });
+
+  const clearPhotos = useEffectEvent(() => {
+    setShopPhotos([]);
   });
 
   useEffect(() => {
@@ -482,6 +511,8 @@ export function BarbershopOnboardingForm() {
     latitude !== null && longitude !== null
       ? [city, region, countryCode].filter(Boolean).join(' - ')
       : 'Uruguay';
+  const remainingRecommendedPhotos = Math.max(RECOMMENDED_SHOP_IMAGES - shopPhotos.length, 0);
+  const reachedRecommendedPhotos = shopPhotos.length >= RECOMMENDED_SHOP_IMAGES;
 
   const showSearchDropdown =
     placesMode === 'ready' && isSearchOpen && locationQuery.trim().length >= 3 && (isSearchingPlaces || predictions.length > 0);
@@ -552,6 +583,15 @@ export function BarbershopOnboardingForm() {
               {shopPhotos.length}/{RECOMMENDED_SHOP_IMAGES} recomendadas
             </span>
           </div>
+          {reachedRecommendedPhotos ? (
+            <p className="status-banner success">
+              Excelente: ya subiste al menos {RECOMMENDED_SHOP_IMAGES} fotos. Eso mejora la confianza de quienes visitan tu perfil.
+            </p>
+          ) : (
+            <p className="status-banner warning">
+              Te faltan {remainingRecommendedPhotos} foto{remainingRecommendedPhotos === 1 ? '' : 's'} para llegar al recomendado de {RECOMMENDED_SHOP_IMAGES}.
+            </p>
+          )}
 
           <label className="block">
             <span className="sr-only">Seleccionar fotos del local</span>
@@ -559,23 +599,56 @@ export function BarbershopOnboardingForm() {
               type="file"
               accept="image/jpeg,image/png,image/webp"
               multiple
-              required
-              onChange={(event) => handlePhotosChange(event.target.files)}
+              disabled={shopPhotos.length >= MAX_SHOP_IMAGES}
+              onChange={(event) => {
+                handlePhotosChange(event.target.files);
+                event.currentTarget.value = '';
+              }}
               className="block w-full cursor-pointer rounded-2xl border border-white/70 bg-white/70 px-4 py-3 text-sm text-slate-700 shadow-[0_16px_28px_-24px_rgba(15,23,42,0.16)] file:mr-4 file:rounded-xl file:border-0 file:bg-slate-900 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white hover:bg-white/85 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-200 dark:file:bg-white dark:file:text-slate-950"
             />
           </label>
 
           <p className="text-xs text-slate/70 dark:text-slate-400">
-            La primera foto seleccionada se usara como portada publica de la barberia. Puedes subir hasta {MAX_SHOP_IMAGES}.
+            Puedes agregar fotos en varias tandas. La primera foto seleccionada se usara como portada publica de la barberia. Maximo: {MAX_SHOP_IMAGES}.
           </p>
+          {shopPhotos.length >= MAX_SHOP_IMAGES ? (
+            <p className="text-xs font-medium text-sky-700 dark:text-sky-200">
+              Ya alcanzaste el maximo de {MAX_SHOP_IMAGES} fotos.
+            </p>
+          ) : null}
 
           {shopPhotos.length > 0 ? (
-            <div className="flex flex-wrap gap-2 pt-1">
-              {shopPhotos.map((file, index) => (
-                <span key={`${file.name}-${file.lastModified}-${index}`} className="meta-chip">
-                  {index === 0 ? 'Portada:' : `Foto ${index + 1}:`} {file.name}
-                </span>
-              ))}
+            <div className="space-y-2 pt-1">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs text-slate/70 dark:text-slate-400">Fotos seleccionadas</p>
+                <button
+                  type="button"
+                  className="text-xs font-semibold text-rose-600 underline-offset-2 hover:underline dark:text-rose-300"
+                  onClick={clearPhotos}
+                >
+                  Limpiar seleccion
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {shopPhotos.map((file, index) => {
+                  const fingerprint = getPhotoFingerprint(file);
+                  return (
+                    <span key={fingerprint} className="meta-chip inline-flex items-center gap-2">
+                      <span>
+                        {index === 0 ? 'Portada:' : `Foto ${index + 1}:`} {file.name}
+                      </span>
+                      <button
+                        type="button"
+                        aria-label={`Quitar ${file.name}`}
+                        className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-rose-500/15 text-rose-700 transition hover:bg-rose-500/25 dark:text-rose-200"
+                        onClick={() => removePhoto(fingerprint)}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </span>
+                  );
+                })}
+              </div>
             </div>
           ) : (
             <p className="text-xs font-medium text-rose-600 dark:text-rose-300">

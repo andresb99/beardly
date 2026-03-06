@@ -166,6 +166,8 @@ insert into public.courses (
   price_cents,
   duration_hours,
   level,
+  requires_model,
+  model_categories,
   is_active
 )
 values (
@@ -176,6 +178,8 @@ values (
   15900,
   6,
   'Beginner / Intermediate',
+  true,
+  array['fade', 'degradado', 'barba'],
   true
 )
 on conflict (id) do update
@@ -184,6 +188,8 @@ set title = excluded.title,
     price_cents = excluded.price_cents,
     duration_hours = excluded.duration_hours,
     level = excluded.level,
+    requires_model = excluded.requires_model,
+    model_categories = excluded.model_categories,
     is_active = excluded.is_active;
 
 insert into public.course_sessions (

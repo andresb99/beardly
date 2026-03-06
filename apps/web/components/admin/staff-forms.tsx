@@ -11,7 +11,7 @@ import {
   createStaffInvitationsAction,
   createTimeOffAction,
   searchStaffInviteeAction,
-  upsertWorkingHoursAction,
+  upsertWorkingHoursRangeAction,
 } from '@/app/admin/actions';
 
 interface StaffOption {
@@ -320,7 +320,7 @@ export function AdminStaffForms({ shopId, shopSlug, staff, weekdays }: AdminStaf
                 Primero crea al menos un miembro del equipo para asignarle horarios.
               </p>
             ) : null}
-            <form action={upsertWorkingHoursAction} className="mt-4 grid gap-3">
+            <form action={upsertWorkingHoursRangeAction} className="mt-4 grid gap-3">
               <input type="hidden" name="shop_id" value={shopId} />
               <input type="hidden" name="shop_slug" value={shopSlug} />
               <Select
@@ -339,21 +339,38 @@ export function AdminStaffForms({ shopId, shopSlug, staff, weekdays }: AdminStaf
                   <SelectItem key={item.id}>{item.name}</SelectItem>
                 ))}
               </Select>
-              <Select
-                name="day_of_week"
-                aria-label="Dia de la semana"
-                label="Dia"
-                labelPlacement="inside"
-                classNames={adminSelectClassNames}
-                disallowEmptySelection
-                isDisabled={!hasStaff}
-                isRequired
-                defaultSelectedKeys={['1']}
-              >
-                {weekdays.map((day, index) => (
-                  <SelectItem key={String(index)}>{day}</SelectItem>
-                ))}
-              </Select>
+              <div className="grid grid-cols-2 gap-3">
+                <Select
+                  name="day_from"
+                  aria-label="Dia inicial"
+                  label="Desde dia"
+                  labelPlacement="inside"
+                  classNames={adminSelectClassNames}
+                  disallowEmptySelection
+                  isDisabled={!hasStaff}
+                  isRequired
+                  defaultSelectedKeys={['1']}
+                >
+                  {weekdays.map((day, index) => (
+                    <SelectItem key={String(index)}>{day}</SelectItem>
+                  ))}
+                </Select>
+                <Select
+                  name="day_to"
+                  aria-label="Dia final"
+                  label="Hasta dia"
+                  labelPlacement="inside"
+                  classNames={adminSelectClassNames}
+                  disallowEmptySelection
+                  isDisabled={!hasStaff}
+                  isRequired
+                  defaultSelectedKeys={['5']}
+                >
+                  {weekdays.map((day, index) => (
+                    <SelectItem key={String(index)}>{day}</SelectItem>
+                  ))}
+                </Select>
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <Input
                   id="working-hours-start-time"
@@ -382,12 +399,21 @@ export function AdminStaffForms({ shopId, shopSlug, staff, weekdays }: AdminStaf
                   required
                 />
               </div>
+              <label className="inline-flex items-center gap-2 rounded-full border border-white/65 bg-white/72 px-3 py-1.5 text-xs font-semibold text-ink dark:border-white/10 dark:bg-white/[0.05] dark:text-slate-100">
+                <input type="checkbox" name="replace_existing" defaultChecked />
+                Reemplazar horarios existentes en ese rango
+              </label>
+              <p className="text-xs text-slate/70 dark:text-slate-400">
+                Puedes cargar un bloque de una sola vez (por ejemplo, lunes a viernes de 09:00 a
+                18:00). Si eliges un rango invertido, se toma con salto de fin de semana (ej.
+                viernes a lunes).
+              </p>
               <Button
                 type="submit"
                 isDisabled={!hasStaff}
                 className="action-primary w-fit px-5 text-sm font-semibold"
               >
-                Guardar horario
+                Aplicar horario al rango
               </Button>
             </form>
           </CardBody>
