@@ -3,6 +3,7 @@ import { formatCurrency } from '@navaja/shared';
 import { CourseEnrollmentForm } from '@/components/public/course-enrollment-form';
 import { getMarketplaceShopBySlug } from '@/lib/shops';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 interface ShopCourseDetailsPageProps {
   params: Promise<{ slug: string; id: string }>;
@@ -16,6 +17,10 @@ export default async function ShopCourseDetailsPage({ params }: ShopCourseDetail
     notFound();
   }
 
+  const sessionSupabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await sessionSupabase.auth.getUser();
   const supabase = createSupabaseAdminClient();
 
   const { data: course } = await supabase
@@ -50,6 +55,53 @@ export default async function ShopCourseDetailsPage({ params }: ShopCourseDetail
     const key = String(item.session_id);
     enrollmentCount.set(key, (enrollmentCount.get(key) || 0) + 1);
   });
+
+  const metadata = (user?.user_metadata as Record<string, unknown> | undefined) ?? undefined;
+  const metadataFullName =
+    (typeof metadata?.full_name === 'string' && metadata.full_name.trim()) ||
+    (typeof metadata?.name === 'string' && metadata.name.trim()) ||
+    '';
+
+  const { data: profile } = user?.id
+    ? await sessionSupabase
+        .from('user_profiles')
+        .select(
+          'full_name, phone, preferred_payment_method, preferred_card_brand, preferred_card_last4',
+        )
+        .eq('auth_user_id', user.id)
+        .maybeSingle()
+    : {
+        data: null as {
+          full_name?: string | null;
+          phone?: string | null;
+          preferred_payment_method?: string | null;
+          preferred_card_brand?: string | null;
+          preferred_card_last4?: string | null;
+        } | null,
+      };
+
+  const initialName =
+    (typeof profile?.full_name === 'string' && profile.full_name.trim()) || metadataFullName || '';
+  const initialPhone = (typeof profile?.phone === 'string' && profile.phone.trim()) || '';
+  const initialEmail = user?.email || '';
+  const preferredMethodRaw =
+    (typeof profile?.preferred_payment_method === 'string' &&
+      profile.preferred_payment_method.trim()) ||
+    null;
+  const preferredCardBrand =
+    (typeof profile?.preferred_card_brand === 'string' && profile.preferred_card_brand.trim()) ||
+    null;
+  const preferredCardLast4 =
+    (typeof profile?.preferred_card_last4 === 'string' && profile.preferred_card_last4.trim()) ||
+    null;
+  const preferredPaymentMethod =
+    preferredMethodRaw === 'card'
+      ? `Tarjeta${preferredCardBrand ? ` ${preferredCardBrand}` : ''}${preferredCardLast4 ? ` ****${preferredCardLast4}` : ''}`
+      : preferredMethodRaw === 'mercado_pago'
+        ? 'Mercado Pago'
+        : preferredMethodRaw === 'cash'
+          ? 'Efectivo en local'
+          : null;
 
   return (
     <section className="space-y-6">
@@ -124,7 +176,13 @@ export default async function ShopCourseDetailsPage({ params }: ShopCourseDetail
                   {seatsLeft} cupos disponibles
                 </p>
               </div>
-              <CourseEnrollmentForm sessionId={String(session.id)} />
+              <CourseEnrollmentForm
+                sessionId={String(session.id)}
+                initialName={initialName}
+                initialPhone={initialPhone}
+                initialEmail={initialEmail}
+                preferredPaymentMethod={preferredPaymentMethod}
+              />
             </div>
           );
         })}

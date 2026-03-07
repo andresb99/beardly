@@ -23,6 +23,15 @@ const roleLabel: Record<'guest' | 'user' | 'staff' | 'admin', string> = {
   admin: 'Administrador',
 };
 
+function resolvePreferredPaymentMethod(value: unknown): 'mercado_pago' | 'card' | 'cash' | '' {
+  const normalized = String(value || '').trim();
+  if (normalized === 'mercado_pago' || normalized === 'card' || normalized === 'cash') {
+    return normalized;
+  }
+
+  return '';
+}
+
 function isMissingAccountNotificationsTableError(error: unknown) {
   if (!error) {
     return false;
@@ -60,7 +69,9 @@ export default async function CuentaPage() {
 
   const { data: profile } = await supabase
     .from('user_profiles')
-    .select('full_name, phone, avatar_url')
+    .select(
+      'full_name, phone, avatar_url, preferred_payment_method, preferred_card_brand, preferred_card_last4',
+    )
     .eq('auth_user_id', ctx.userId as string)
     .maybeSingle();
 
@@ -69,11 +80,24 @@ export default async function CuentaPage() {
   const savedPhone = (typeof profile?.phone === 'string' && profile.phone.trim()) || null;
   const savedAvatarUrl =
     (typeof profile?.avatar_url === 'string' && profile.avatar_url.trim()) || null;
+  const savedPreferredPaymentMethod =
+    (typeof profile?.preferred_payment_method === 'string' &&
+      profile.preferred_payment_method.trim()) ||
+    null;
+  const savedPreferredCardBrand =
+    (typeof profile?.preferred_card_brand === 'string' && profile.preferred_card_brand.trim()) ||
+    null;
+  const savedPreferredCardLast4 =
+    (typeof profile?.preferred_card_last4 === 'string' && profile.preferred_card_last4.trim()) ||
+    null;
 
   let resolvedProfile = {
     full_name: savedFullName || metadataFullName,
     phone: savedPhone,
     avatar_url: savedAvatarUrl || metadataAvatarUrl,
+    preferred_payment_method: savedPreferredPaymentMethod,
+    preferred_card_brand: savedPreferredCardBrand,
+    preferred_card_last4: savedPreferredCardLast4,
   };
 
   const shouldSyncProfile =
@@ -89,6 +113,9 @@ export default async function CuentaPage() {
           full_name: resolvedProfile.full_name,
           phone: resolvedProfile.phone,
           avatar_url: resolvedProfile.avatar_url,
+          preferred_payment_method: resolvedProfile.preferred_payment_method,
+          preferred_card_brand: resolvedProfile.preferred_card_brand,
+          preferred_card_last4: resolvedProfile.preferred_card_last4,
         },
         { onConflict: 'auth_user_id' },
       );
@@ -195,6 +222,18 @@ export default async function CuentaPage() {
             initialPhone={String(resolvedProfile?.phone || '')}
             initialAvatarUrl={String(
               (resolvedProfile as { avatar_url?: string | null } | null)?.avatar_url || '',
+            )}
+            initialPreferredPaymentMethod={resolvePreferredPaymentMethod(
+              (resolvedProfile as { preferred_payment_method?: string | null } | null)
+                ?.preferred_payment_method,
+            )}
+            initialPreferredCardBrand={String(
+              (resolvedProfile as { preferred_card_brand?: string | null } | null)
+                ?.preferred_card_brand || '',
+            )}
+            initialPreferredCardLast4={String(
+              (resolvedProfile as { preferred_card_last4?: string | null } | null)
+                ?.preferred_card_last4 || '',
             )}
             email={ctx.email || ''}
           />

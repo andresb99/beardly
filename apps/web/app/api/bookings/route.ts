@@ -1,5 +1,10 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { bookingInputSchema } from '@navaja/shared';
+import { createAppointmentFromBookingIntent } from '@/lib/booking-payments.server';
+import { resolveShopTierForUser } from '@/lib/billing.server';
+import { env } from '@/lib/env';
+import { getMercadoPagoServerEnv } from '@/lib/env.server';
+import { createMercadoPagoCheckoutPreference } from '@/lib/mercado-pago.server';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
@@ -43,14 +48,14 @@ export async function POST(request: NextRequest) {
       .maybeSingle(),
     supabase
       .from('services')
-      .select('id')
+      .select('id, name, price_cents')
       .eq('id', parsed.data.service_id)
       .eq('shop_id', parsed.data.shop_id)
       .eq('is_active', true)
       .maybeSingle(),
     supabase
       .from('staff')
-      .select('id')
+      .select('id, name')
       .eq('id', parsed.data.staff_id)
       .eq('shop_id', parsed.data.shop_id)
       .eq('is_active', true)
@@ -69,80 +74,146 @@ export async function POST(request: NextRequest) {
     return new NextResponse('El barbero seleccionado no esta disponible.', { status: 400 });
   }
 
-  const { data: existingCustomer, error: existingCustomerError } = await supabase
-    .from('customers')
-    .select('id')
-    .eq('shop_id', parsed.data.shop_id)
-    .eq('phone', parsed.data.customer_phone)
-    .maybeSingle();
+  const tierResolution = await resolveShopTierForUser(parsed.data.shop_id, user?.id ?? null);
 
-  if (existingCustomerError) {
-    return new NextResponse(existingCustomerError.message || 'No se pudo validar el cliente.', { status: 400 });
-  }
+  if (tierResolution.requiresReservationPayment) {
+    if (!resolvedCustomerEmail) {
+      return new NextResponse('Para completar el pago necesitas ingresar un email valido.', {
+        status: 400,
+      });
+    }
 
-  let customerId = existingCustomer?.id as string | undefined;
+    const externalReference = [
+      'booking',
+      parsed.data.shop_id.slice(0, 8),
+      Date.now().toString(36),
+      Math.random().toString(36).slice(2, 10),
+    ].join('-');
+    const serviceName = String((service as { name?: string } | null)?.name || 'Servicio');
+    const staffName = String((staffMember as { name?: string } | null)?.name || 'Barbero');
+    const amountCents = Number((service as { price_cents?: number } | null)?.price_cents || 0);
 
-  if (customerId) {
-    const customerUpdatePayload: {
-      name: string;
-      email?: string | null;
-    } = {
-      name: parsed.data.customer_name,
+    const paymentPayload = {
+      shop_id: parsed.data.shop_id,
+      service_id: parsed.data.service_id,
+      staff_id: parsed.data.staff_id,
+      start_at: parsed.data.start_at,
+      customer_name: parsed.data.customer_name,
+      customer_phone: parsed.data.customer_phone,
+      customer_email: resolvedCustomerEmail,
+      notes: parsed.data.notes || null,
+      service_name: serviceName,
+      staff_name: staffName,
     };
 
-    if (resolvedCustomerEmail) {
-      customerUpdatePayload.email = resolvedCustomerEmail;
-    }
-
-    const { error: customerUpdateError } = await supabase
-      .from('customers')
-      .update(customerUpdatePayload)
-      .eq('id', customerId)
-      .eq('shop_id', parsed.data.shop_id);
-
-    if (customerUpdateError) {
-      return new NextResponse(customerUpdateError.message || 'No se pudo actualizar el cliente.', { status: 400 });
-    }
-  } else {
-    const { data: customer, error: customerError } = await supabase
-      .from('customers')
+    const { data: paymentIntent, error: paymentIntentError } = await supabase
+      .from('payment_intents')
       .insert({
         shop_id: parsed.data.shop_id,
-        name: parsed.data.customer_name,
-        phone: parsed.data.customer_phone,
-        email: resolvedCustomerEmail,
+        intent_type: 'booking',
+        status: 'pending',
+        provider: 'mercado_pago',
+        external_reference: externalReference,
+        amount_cents: amountCents,
+        currency_code: 'UYU',
+        payer_email: resolvedCustomerEmail,
+        payload: paymentPayload,
+        created_by_user_id: user?.id || null,
       })
       .select('id')
       .single();
 
-    if (customerError || !customer) {
-      return new NextResponse(customerError?.message || 'No se pudo crear el cliente.', { status: 400 });
+    if (paymentIntentError || !paymentIntent) {
+      return new NextResponse(paymentIntentError?.message || 'No se pudo iniciar el pago.', {
+        status: 400,
+      });
     }
 
-    customerId = customer.id as string;
+    const bookingStateParams = new URLSearchParams({
+      payment_intent: String(paymentIntent.id),
+      service: serviceName,
+      staff: staffName,
+      start: parsed.data.start_at,
+    });
+
+    try {
+      const mercadoPagoEnv = getMercadoPagoServerEnv();
+      const webhookToken = mercadoPagoEnv.MERCADO_PAGO_WEBHOOK_TOKEN?.trim() || null;
+      const webhookUrl = webhookToken
+        ? `${env.NEXT_PUBLIC_APP_URL}/api/payments/mercadopago/webhook?token=${encodeURIComponent(webhookToken)}`
+        : `${env.NEXT_PUBLIC_APP_URL}/api/payments/mercadopago/webhook`;
+
+      const checkout = await createMercadoPagoCheckoutPreference({
+        item: {
+          id: parsed.data.service_id,
+          title: `Reserva - ${serviceName}`,
+          description: `Reserva en barbershop ${parsed.data.shop_id.slice(0, 8)}`,
+          amountCents,
+        },
+        payerEmail: resolvedCustomerEmail,
+        externalReference,
+        successUrl: `${env.NEXT_PUBLIC_APP_URL}/book/success?${bookingStateParams.toString()}&payment_status=approved`,
+        pendingUrl: `${env.NEXT_PUBLIC_APP_URL}/book/success?${bookingStateParams.toString()}&payment_status=pending`,
+        failureUrl: `${env.NEXT_PUBLIC_APP_URL}/book/success?${bookingStateParams.toString()}&payment_status=failure`,
+        notificationUrl: webhookUrl,
+        metadata: {
+          intent_id: String(paymentIntent.id),
+          intent_type: 'booking',
+        },
+      });
+
+      await supabase
+        .from('payment_intents')
+        .update({
+          provider_preference_id: checkout.preferenceId,
+          checkout_url: checkout.checkoutUrl,
+        })
+        .eq('id', paymentIntent.id);
+
+      return NextResponse.json({
+        requires_payment: true,
+        payment_intent_id: paymentIntent.id,
+        checkout_url: checkout.checkoutUrl,
+      });
+    } catch (checkoutError) {
+      await supabase
+        .from('payment_intents')
+        .update({
+          status: 'rejected',
+          failure_reason:
+            checkoutError instanceof Error ? checkoutError.message : 'No se pudo crear el checkout.',
+        })
+        .eq('id', paymentIntent.id);
+
+      return new NextResponse(
+        checkoutError instanceof Error ? checkoutError.message : 'No se pudo iniciar el pago.',
+        { status: 400 },
+      );
+    }
   }
 
-  const { data: appointment, error: appointmentError } = await supabase
-    .from('appointments')
-    .insert({
+  try {
+    const appointment = await createAppointmentFromBookingIntent({
       shop_id: parsed.data.shop_id,
-      staff_id: parsed.data.staff_id,
-      customer_id: customerId,
       service_id: parsed.data.service_id,
+      staff_id: parsed.data.staff_id,
       start_at: parsed.data.start_at,
-      status: 'pending',
+      customer_name: parsed.data.customer_name,
+      customer_phone: parsed.data.customer_phone,
+      customer_email: resolvedCustomerEmail,
       notes: parsed.data.notes || null,
-    })
-    .select('id, start_at')
-    .single();
+    });
 
-  if (appointmentError || !appointment) {
-    return new NextResponse(appointmentError?.message || 'No se pudo crear la cita.', { status: 400 });
+    return NextResponse.json({
+      appointment_id: appointment.appointmentId,
+      start_at: appointment.startAt,
+      requires_payment: false,
+    });
+  } catch (createError) {
+    return new NextResponse(
+      createError instanceof Error ? createError.message : 'No se pudo crear la cita.',
+      { status: 400 },
+    );
   }
-
-  return NextResponse.json({
-    appointment_id: appointment.id,
-    start_at: appointment.start_at,
-  });
 }
 

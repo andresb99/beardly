@@ -6,7 +6,7 @@ export const isoDateTimeSchema = z.string().datetime({ offset: true });
 export const staffRoleSchema = z.enum(['admin', 'staff']);
 export const shopMembershipRoleSchema = z.enum(['owner', 'admin', 'staff']);
 export const shopStatusSchema = z.enum(['draft', 'setup_in_progress', 'active', 'suspended']);
-export const subscriptionPlanSchema = z.enum(['starter', 'pro', 'growth', 'enterprise']);
+export const subscriptionPlanSchema = z.enum(['free', 'pro', 'business', 'app_admin']);
 export const subscriptionStatusSchema = z.enum(['trialing', 'active', 'past_due', 'cancelled']);
 export const appointmentStatusSchema = z.enum([
   'pending',

@@ -21,6 +21,7 @@ function resolveInitialMode(value: string | undefined): 'login' | 'register' | '
 export default async function LoginPage({ searchParams }: LoginPageProps) {
   const params = await searchParams;
   const nextPath = resolveSafeNextPath(params.next, '/cuenta');
+  const hasExplicitNext = typeof params.next === 'string' && params.next.trim().length > 0;
   const initialMode = resolveInitialMode(params.mode);
 
   if (initialMode !== 'reset' && !isMockRuntime()) {
@@ -31,6 +32,9 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
     } = await supabase.auth.getUser();
 
     if (user) {
+      if (!hasExplicitNext) {
+        redirect('/suscripcion');
+      }
       redirect(nextPath);
     }
   }

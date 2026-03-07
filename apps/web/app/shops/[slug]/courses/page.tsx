@@ -90,12 +90,23 @@ export default async function ShopCoursesPage({ params }: ShopCoursesPageProps) 
             key={String(course.id)}
             title={String(course.title)}
             description={String(course.description)}
-            topLabel={String(course.level)}
+            topLabel="Curso"
             imageUrls={[course.image_url, ...shop.imageUrls]}
             chips={[
               `${String(course.duration_hours)} horas`,
               formatCurrency(Number(course.price_cents || 0)),
             ]}
+            avatarUrl={shop.logoUrl}
+            avatarName={shop.name}
+            metaRows={[
+              { label: 'Nivel', value: String(course.level) },
+              { label: 'Duracion', value: `${String(course.duration_hours)}h` },
+              { label: 'Barberia', value: shop.name },
+            ]}
+            priceLabel={formatCurrency(Number(course.price_cents || 0))}
+            subPriceLabel={`Hasta 12 cuotas sin interes de ${formatCurrency(
+              Math.max(1, Math.round(Number(course.price_cents || 0) / 12)),
+            )}`}
             primaryHref={`/shops/${shop.slug}/courses/${course.id}`}
             primaryLabel="Ver detalle"
           />

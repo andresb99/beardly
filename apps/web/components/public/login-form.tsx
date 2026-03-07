@@ -1,11 +1,25 @@
 'use client';
 
 import Link from 'next/link';
-import { ChevronRight, LockKeyhole, MailCheck, ShieldCheck, Sparkles, UserRound } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import {
+  Check,
+  ChevronRight,
+  KeyRound,
+  LockKeyhole,
+  LogIn,
+  Sparkles,
+  UserPlus,
+} from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button, Input } from '@heroui/react';
 import { APP_NAME } from '@/lib/constants';
 import { resolveSafeNextPath } from '@/lib/navigation';
+import {
+  getMaxAnnualSavingsPercent,
+  getSubscriptionPlanDescriptor,
+  type SubscriptionBillingMode,
+  PUBLIC_MARKETPLACE_PLANS,
+} from '@/lib/subscription-plans';
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
 
 type AuthMode = 'login' | 'register' | 'recover' | 'reset';
@@ -18,11 +32,22 @@ type AuthAction =
   | 'google'
   | 'facebook';
 type SocialProvider = 'google' | 'facebook';
+type MarketplacePlanId = (typeof PUBLIC_MARKETPLACE_PLANS)[number];
 
 interface LoginFormProps {
   initialMode?: AuthMode;
   nextPath?: string;
   initialMessage?: string | null;
+}
+
+const UYU_FORMATTER = new Intl.NumberFormat('es-UY', {
+  style: 'currency',
+  currency: 'UYU',
+  maximumFractionDigits: 0,
+});
+
+function formatUyuCents(amountCents: number) {
+  return UYU_FORMATTER.format(Math.round(amountCents / 100));
 }
 
 export function isEmailValid(value: string) {
@@ -73,6 +98,12 @@ export function LoginForm({
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(initialMessage);
   const [hasRecoverySession, setHasRecoverySession] = useState(initialMode !== 'reset');
+  const [billingMode, setBillingMode] = useState<SubscriptionBillingMode>('monthly');
+  const [selectedPlanId, setSelectedPlanId] = useState<MarketplacePlanId>('pro');
+  const [planSelectionIntent, setPlanSelectionIntent] = useState<{
+    planId: MarketplacePlanId;
+    billingMode: SubscriptionBillingMode;
+  } | null>(null);
 
   useEffect(() => {
     setMode(initialMode);
@@ -129,8 +160,24 @@ export function LoginForm({
     return `${protocol}//localhost${port ? `:${port}` : ''}`;
   }
 
+  function getPlanOnboardingPath(planId: MarketplacePlanId, mode: SubscriptionBillingMode) {
+    const query = new URLSearchParams({
+      plan: planId,
+      billing: mode,
+    });
+    return `/onboarding/barbershop?${query.toString()}`;
+  }
+
+  function getPostAuthNextPath() {
+    if (!planSelectionIntent) {
+      return safeNextPath;
+    }
+
+    return getPlanOnboardingPath(planSelectionIntent.planId, planSelectionIntent.billingMode);
+  }
+
   function redirectAfterAuthSuccess() {
-    window.location.replace(`${getPublicOrigin()}${safeNextPath}`);
+    window.location.replace(`${getPublicOrigin()}${getPostAuthNextPath()}`);
   }
 
   async function loginWithPassword(event: React.FormEvent<HTMLFormElement>) {
@@ -180,10 +227,15 @@ export function LoginForm({
       return;
     }
 
-    const redirectUrl = `${getPublicOrigin()}/auth/callback?next=${encodeURIComponent(safeNextPath)}`;
-    const signUpOptions = fullName
-      ? { emailRedirectTo: redirectUrl, data: { full_name: fullName.trim() } }
-      : { emailRedirectTo: redirectUrl };
+    const redirectUrl = `${getPublicOrigin()}/auth/callback?next=${encodeURIComponent(getPostAuthNextPath())}`;
+    const signUpOptions = {
+      emailRedirectTo: redirectUrl,
+      data: {
+        ...(fullName ? { full_name: fullName.trim() } : {}),
+        selected_plan: (planSelectionIntent?.planId || selectedPlanId) as string,
+        selected_billing_mode: (planSelectionIntent?.billingMode || billingMode) as string,
+      },
+    };
 
     try {
       const { data, error: signUpError } = await supabase.auth.signUp({
@@ -231,7 +283,7 @@ export function LoginForm({
       return;
     }
 
-    const redirectUrl = `${getPublicOrigin()}/auth/callback?next=${encodeURIComponent(safeNextPath)}`;
+    const redirectUrl = `${getPublicOrigin()}/auth/callback?next=${encodeURIComponent(getPostAuthNextPath())}`;
     try {
       const { error: otpError } = await supabase.auth.signInWithOtp({
         email: normalizedEmail,
@@ -333,7 +385,7 @@ export function LoginForm({
   async function signInWithSocialProvider(provider: SocialProvider) {
     beginRequest(provider);
 
-    const redirectUrl = `${getPublicOrigin()}/auth/callback?next=${encodeURIComponent(safeNextPath)}`;
+    const redirectUrl = `${getPublicOrigin()}/auth/callback?next=${encodeURIComponent(getPostAuthNextPath())}`;
     const providerLabel = getSocialProviderLabel(provider);
 
     try {
@@ -385,114 +437,236 @@ export function LoginForm({
   };
 
   const isPasswordMode = mode === 'login' || mode === 'register';
+  const selectedPlan = useMemo(
+    () => getSubscriptionPlanDescriptor(selectedPlanId),
+    [selectedPlanId],
+  );
+  const selectedPlanFeatures = useMemo(
+    () => selectedPlan?.features || [],
+    [selectedPlan],
+  );
+  const planOptions = useMemo(
+    () =>
+      PUBLIC_MARKETPLACE_PLANS.map((planId) => {
+        const plan = getSubscriptionPlanDescriptor(planId);
+        const isSelected = selectedPlan?.id === plan.id;
+        const optionPrice =
+          billingMode === 'monthly'
+            ? `${formatUyuCents(plan.monthlyPriceCents)} / mes`
+            : plan.annualInstallmentCents > 0
+              ? `12x ${formatUyuCents(plan.annualInstallmentCents)}`
+              : 'Gratis';
+
+        return {
+          id: plan.id,
+          name: plan.name,
+          isSelected,
+          optionPrice,
+        };
+      }),
+    [billingMode, selectedPlan],
+  );
+  const maxAnnualSavingsPercent = getMaxAnnualSavingsPercent();
+  const planCtaLabel = selectedPlan?.name || 'plan';
+  const handleSelectPlanCta = useCallback(() => {
+    if (isBusy) {
+      return;
+    }
+
+    setPlanSelectionIntent({
+      planId: selectedPlanId,
+      billingMode,
+    });
+    setError(null);
+    setMessage(
+      selectedPlanId === 'free'
+        ? 'Plan Free seleccionado. Crea tu cuenta para empezar.'
+        : `Plan ${planCtaLabel} seleccionado. Crea tu cuenta y luego activa la suscripcion desde tu panel.`,
+    );
+    setMode('register');
+  }, [billingMode, isBusy, planCtaLabel, selectedPlanId]);
+  const handleModeChange = useCallback(
+    (nextMode: AuthMode) => {
+      if (!isBusy) {
+        setMode(nextMode);
+      }
+    },
+    [isBusy],
+  );
+  const handleSelectPlanId = useCallback((planId: MarketplacePlanId) => {
+    setSelectedPlanId(planId);
+  }, []);
   const modeButtonClassName = (isActive: boolean) =>
-    `flex min-h-[3.2rem] flex-col items-start justify-center rounded-[1rem] border px-3 py-2 text-left transition ${
+    `group relative flex h-11 items-center justify-center gap-2 rounded-[0.95rem] border text-[0.82rem] font-semibold transition ${
       isActive
-        ? 'border-sky-300/55 bg-white/90 text-ink shadow-[0_14px_28px_-20px_rgba(14,165,233,0.4)] dark:border-sky-300/35 dark:bg-white/[0.1] dark:text-slate-100'
-        : 'border-white/70 bg-white/55 text-slate/80 dark:border-white/10 dark:bg-white/[0.02] dark:text-slate-300'
+        ? 'border-transparent bg-white text-slate-900 shadow-[0_16px_26px_-18px_rgba(15,23,42,0.58)]'
+        : 'border-transparent bg-transparent text-slate/80 hover:bg-white/70 hover:text-ink dark:text-slate-200 dark:hover:bg-white/[0.08] dark:hover:text-slate-100'
     }`;
 
   return (
     <div className="grid gap-5 lg:grid-cols-[0.92fr_1.08fr] xl:gap-6">
-      <aside className="section-hero p-6 text-ink md:p-8 dark:text-white">
+      <aside className="relative overflow-hidden rounded-[2rem] border border-white/12 bg-[#05070f] p-6 text-white shadow-[0_36px_60px_-42px_rgba(2,6,23,0.9)] md:p-8">
+        <div className="pointer-events-none absolute inset-0">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_8%_0%,rgba(56,189,248,0.2),transparent_36%),radial-gradient(circle_at_100%_100%,rgba(244,63,94,0.16),transparent_38%)]" />
+          <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.04),transparent_42%,rgba(255,255,255,0.02)_75%,transparent)]" />
+        </div>
         <div className="relative z-10 flex h-full flex-col">
-          <p className="hero-eyebrow w-fit dark:border-white/10 dark:bg-white/[0.04] dark:text-white/82">
+          <p className="hero-eyebrow w-fit border-white/20 bg-white/[0.05] text-white/85">
             <Sparkles className="h-3.5 w-3.5" />
-            Acceso unificado
+            Planes de suscripcion
           </p>
-          <h1 className="mt-4 font-[family-name:var(--font-heading)] text-3xl font-semibold leading-tight text-ink md:text-4xl dark:text-white">
-            {mode === 'reset' ? 'Actualiza tu clave' : `Tu cuenta en ${APP_NAME}`}
+          <p className="mt-4 text-sm text-white/78">
+            Los planes de {APP_NAME} empiezan desde {formatUyuCents(getSubscriptionPlanDescriptor('free').monthlyPriceCents)} / mes
+          </p>
+          <h1 className="mt-7 text-balance text-3xl font-[family-name:var(--font-heading)] font-semibold leading-[1.07] tracking-tight text-white md:text-[2.15rem]">
+            Elige el mejor plan para tu barberia
           </h1>
-          <p className="mt-3 max-w-md text-sm text-slate/80 dark:text-white/80">
-            Gestiona reservas, historial y accesos de usuario/staff/admin con una sola autenticacion.
+          <p className="mt-3 max-w-md text-sm text-white/72">
+            Compara precios, funcionalidades y cambia entre pago mensual o anual en cuotas.
           </p>
 
-          <div className="mt-6 grid gap-3 sm:grid-cols-2">
-            <div className="surface-card rounded-[1.35rem] p-3">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate/62 dark:text-slate-400">
-                Seguridad
-              </p>
-              <p className="mt-2 text-sm font-semibold text-ink dark:text-slate-100">
-                Validacion por correo y recuperacion de clave.
-              </p>
-            </div>
-            <div className="surface-card rounded-[1.35rem] p-3">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate/62 dark:text-slate-400">
-                Continuidad
-              </p>
-              <p className="mt-2 text-sm font-semibold text-ink dark:text-slate-100">
-                Sigue como invitado o entra para guardar historial.
-              </p>
+          <div className="mt-5 w-full rounded-[1.25rem] border border-white/12 bg-white/[0.03] p-2">
+            <p className="mb-2 text-right text-[10px] font-semibold uppercase tracking-[0.16em] text-white/72">
+              Ahorra hasta {maxAnnualSavingsPercent}%
+            </p>
+            <div className="relative grid grid-cols-2 items-center rounded-full border border-white/12 bg-white/[0.04] p-1">
+              <span
+                aria-hidden="true"
+                className={`pointer-events-none absolute bottom-1 left-1 top-1 w-[calc(50%-0.25rem)] rounded-full bg-white shadow-[0_14px_24px_-18px_rgba(148,163,184,0.45)] transition-transform duration-300 ${
+                  billingMode === 'monthly' ? 'translate-x-0' : 'translate-x-full'
+                }`}
+              />
+              <button
+                type="button"
+                className={`relative z-10 rounded-full px-3 py-2 text-xs font-semibold transition ${
+                  billingMode === 'monthly' ? 'text-slate-900' : 'text-white/78'
+                }`}
+                aria-pressed={billingMode === 'monthly'}
+                onClick={() => {
+                  setBillingMode('monthly');
+                }}
+              >
+                Mensual
+              </button>
+              <button
+                type="button"
+                className={`relative z-10 rounded-full px-3 py-2 text-xs font-semibold transition ${
+                  billingMode === 'annual_installments' ? 'text-slate-900' : 'text-white/78'
+                }`}
+                aria-pressed={billingMode === 'annual_installments'}
+                onClick={() => {
+                  setBillingMode('annual_installments');
+                }}
+              >
+                Anual en cuotas
+              </button>
             </div>
           </div>
 
-          <ul className="mt-5 space-y-2.5 rounded-[1.45rem] border border-white/75 bg-white/58 p-4 text-sm text-slate/85 dark:border-white/10 dark:bg-white/[0.04] dark:text-white/85">
-            <li className="flex items-center gap-2">
-              <ShieldCheck className="h-4 w-4 text-brass" />
-              Sesiones protegidas y separacion por rol.
-            </li>
-            <li className="flex items-center gap-2">
-              <MailCheck className="h-4 w-4 text-brass" />
-              Confirmacion y recuperacion por email.
-            </li>
-            <li className="flex items-center gap-2">
-              <UserRound className="h-4 w-4 text-brass" />
-              Perfil conectado a reservas y notificaciones.
-            </li>
-          </ul>
+          <div className="mt-3 grid grid-cols-3 gap-2">
+            {planOptions.map((plan) => {
+              return (
+                <button
+                  key={`plan-option-${plan.id}`}
+                  type="button"
+                  onClick={() => handleSelectPlanId(plan.id)}
+                  className={`rounded-[1rem] border px-3 py-2 text-left transition ${
+                    plan.isSelected
+                      ? 'border-sky-300/45 bg-sky-400/15 shadow-[0_16px_26px_-20px_rgba(56,189,248,0.4)]'
+                      : 'border-white/12 bg-white/[0.03] hover:bg-white/[0.07]'
+                  }`}
+                >
+                  <p className={`text-sm font-semibold ${plan.isSelected ? 'text-white' : 'text-white/86'}`}>{plan.name}</p>
+                  <p className="mt-1 text-[11px] text-white/62">{plan.optionPrice}</p>
+                </button>
+              );
+            })}
+          </div>
+
+          <article className="mt-3 rounded-[1.35rem] border border-sky-300/28 bg-[linear-gradient(145deg,rgba(8,14,28,0.94),rgba(8,17,37,0.88))] p-4 text-white shadow-[0_24px_34px_-24px_rgba(56,189,248,0.42)]">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-2xl font-semibold leading-tight text-white">{selectedPlan?.name}</p>
+                <p className="mt-1 text-xs text-white/65">{selectedPlan?.description}</p>
+              </div>
+              {selectedPlan?.badge ? (
+                <span className="inline-flex shrink-0 rounded-full border border-sky-300/45 bg-sky-400/18 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-sky-100">
+                  {selectedPlan.badge}
+                </span>
+              ) : null}
+            </div>
+
+            <div className="mt-3 border-t border-white/10 pt-3">
+              <p className="text-4xl font-semibold leading-none tracking-[-0.02em] text-white">
+                {billingMode === 'monthly'
+                  ? `${formatUyuCents(selectedPlan?.monthlyPriceCents || 0)} / mes`
+                  : (selectedPlan?.annualInstallmentCents || 0) > 0
+                    ? `12x ${formatUyuCents(selectedPlan?.annualInstallmentCents || 0)} / mes`
+                    : 'Gratis'}
+              </p>
+              <p className="mt-2 text-sm text-white/68">
+                {billingMode === 'monthly'
+                  ? 'Facturacion mes a mes'
+                  : (selectedPlan?.annualInstallmentCents || 0) > 0
+                    ? `Precio total anual ${formatUyuCents((selectedPlan?.annualInstallmentCents || 0) * 12)}`
+                    : 'Sin costo anual'}
+              </p>
+            </div>
+
+            <ul className="mt-4 space-y-1.5">
+              {selectedPlanFeatures.map((feature) => (
+                <li key={`${selectedPlan?.id || 'plan'}-${feature}`} className="flex items-start gap-2 text-sm text-white/86">
+                  <span className="mt-[0.1rem] inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-400/20 text-emerald-200">
+                    <Check className="h-3 w-3" />
+                  </span>
+                  <span>{feature}</span>
+                </li>
+              ))}
+            </ul>
+
+            <button
+              type="button"
+              className="mt-4 w-full rounded-xl border border-sky-300/45 bg-sky-400/18 px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-sky-100 transition hover:bg-sky-400/24"
+              onClick={handleSelectPlanCta}
+            >
+              Elegir {selectedPlan?.name}
+            </button>
+          </article>
         </div>
       </aside>
 
       <div className="soft-panel rounded-[2rem] border-0 p-4 md:p-6">
         <div className="rounded-[1.6rem] border border-white/75 bg-white/66 p-3 dark:border-white/10 dark:bg-white/[0.03]">
-          <div className="grid gap-2 sm:grid-cols-3">
+          <div className="grid grid-cols-3 gap-1 rounded-[1.2rem] border border-white/80 bg-white/72 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] dark:border-white/10 dark:bg-black/20 dark:shadow-none">
             <button
               type="button"
               className={modeButtonClassName(mode === 'login')}
               data-testid="auth-mode-login"
               data-active={String(mode === 'login')}
-              onClick={() => {
-                if (!isBusy) {
-                  setMode('login');
-                }
-              }}
+              onClick={() => handleModeChange('login')}
             >
-              <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate/65 dark:text-slate-400">
-                Modo
-              </span>
-              <span className="mt-1 text-sm font-semibold">Ingresar</span>
+              <LogIn className="h-3.5 w-3.5 opacity-90" />
+              Ingresar
             </button>
             <button
               type="button"
               className={modeButtonClassName(mode === 'register')}
               data-testid="auth-mode-register"
               data-active={String(mode === 'register')}
-              onClick={() => {
-                if (!isBusy) {
-                  setMode('register');
-                }
-              }}
+              onClick={() => handleModeChange('register')}
             >
-              <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate/65 dark:text-slate-400">
-                Modo
-              </span>
-              <span className="mt-1 text-sm font-semibold">Registro</span>
+              <UserPlus className="h-3.5 w-3.5 opacity-90" />
+              Registro
             </button>
             <button
               type="button"
               className={modeButtonClassName(mode === 'recover')}
               data-testid="auth-mode-recover"
               data-active={String(mode === 'recover')}
-              onClick={() => {
-                if (!isBusy) {
-                  setMode('recover');
-                }
-              }}
+              onClick={() => handleModeChange('recover')}
             >
-              <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate/65 dark:text-slate-400">
-                Modo
-              </span>
-              <span className="mt-1 text-sm font-semibold">Recuperar</span>
+              <KeyRound className="h-3.5 w-3.5 opacity-90" />
+              Recuperar
             </button>
           </div>
 
@@ -723,20 +897,6 @@ export function LoginForm({
           ) : null}
         </div>
 
-        <div className="mt-5 space-y-2 rounded-[1.6rem] border border-white/75 bg-white/62 p-4 dark:border-white/8 dark:bg-white/[0.04]">
-          <h3 className="font-[family-name:var(--font-heading)] text-lg font-semibold text-ink dark:text-slate-100">
-            Acceso por rol
-          </h3>
-          <p className="surface-card rounded-xl px-3 py-2 text-sm">
-            Invitado: reserva, ve cursos y puede postularse.
-          </p>
-          <p className="surface-card rounded-xl px-3 py-2 text-sm">
-            Usuario: cuenta personal y reservas vinculadas a su email.
-          </p>
-          <p className="surface-card rounded-xl px-3 py-2 text-sm">
-            Staff/Admin: acceso operativo segun permisos internos.
-          </p>
-        </div>
       </div>
     </div>
   );

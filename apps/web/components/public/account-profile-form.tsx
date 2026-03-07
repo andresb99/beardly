@@ -2,13 +2,16 @@
 
 import { useMemo, useRef, useState, useTransition } from 'react';
 import { Pencil } from 'lucide-react';
-import { Avatar, Button, Input } from '@heroui/react';
+import { Avatar, Button, Input, Select, SelectItem } from '@heroui/react';
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
 
 interface AccountProfileFormProps {
   initialFullName: string;
   initialPhone: string;
   initialAvatarUrl: string;
+  initialPreferredPaymentMethod?: 'mercado_pago' | 'card' | 'cash' | '';
+  initialPreferredCardBrand?: string;
+  initialPreferredCardLast4?: string;
   email: string;
 }
 
@@ -77,10 +80,26 @@ const editButtonClassName =
 
 const editButtonActiveClassName = 'text-brass';
 
+function getSingleSelectionValue(keys: 'all' | Iterable<unknown>) {
+  if (keys === 'all') {
+    return '';
+  }
+
+  const first = Array.from(keys)[0];
+  if (typeof first === 'string' || typeof first === 'number') {
+    return String(first);
+  }
+
+  return '';
+}
+
 export function AccountProfileForm({
   initialFullName,
   initialPhone,
   initialAvatarUrl,
+  initialPreferredPaymentMethod = '',
+  initialPreferredCardBrand = '',
+  initialPreferredCardLast4 = '',
   email,
 }: AccountProfileFormProps) {
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
@@ -91,9 +110,19 @@ export function AccountProfileForm({
   const [savedFullName, setSavedFullName] = useState(initialFullName);
   const [savedPhone, setSavedPhone] = useState(initialPhone);
   const [savedAvatarUrl, setSavedAvatarUrl] = useState(initialAvatarUrl);
+  const [savedPreferredPaymentMethod, setSavedPreferredPaymentMethod] = useState(
+    initialPreferredPaymentMethod,
+  );
+  const [savedPreferredCardBrand, setSavedPreferredCardBrand] = useState(initialPreferredCardBrand);
+  const [savedPreferredCardLast4, setSavedPreferredCardLast4] = useState(initialPreferredCardLast4);
   const [fullName, setFullName] = useState(initialFullName);
   const [phone, setPhone] = useState(initialPhone);
   const [avatarUrl, setAvatarUrl] = useState(initialAvatarUrl);
+  const [preferredPaymentMethod, setPreferredPaymentMethod] = useState<
+    'mercado_pago' | 'card' | 'cash' | ''
+  >(initialPreferredPaymentMethod);
+  const [preferredCardBrand, setPreferredCardBrand] = useState(initialPreferredCardBrand);
+  const [preferredCardLast4, setPreferredCardLast4] = useState(initialPreferredCardLast4);
   const [isEditingName, setIsEditingName] = useState(false);
   const [isEditingPhone, setIsEditingPhone] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -104,7 +133,10 @@ export function AccountProfileForm({
   const hasChanges =
     fullName.trim() !== savedFullName.trim() ||
     phone.trim() !== savedPhone.trim() ||
-    avatarUrl.trim() !== savedAvatarUrl.trim();
+    avatarUrl.trim() !== savedAvatarUrl.trim() ||
+    preferredPaymentMethod !== savedPreferredPaymentMethod ||
+    preferredCardBrand.trim() !== savedPreferredCardBrand.trim() ||
+    preferredCardLast4.trim() !== savedPreferredCardLast4.trim();
 
   function handleEditToggle(field: 'name' | 'phone') {
     if (field === 'name') {
@@ -162,6 +194,8 @@ export function AccountProfileForm({
     const normalizedName = fullName.trim();
     const normalizedPhone = phone.trim();
     const normalizedAvatarUrl = avatarUrl.trim();
+    const normalizedPreferredCardBrand = preferredCardBrand.trim();
+    const normalizedPreferredCardLast4 = preferredCardLast4.trim();
 
     if (normalizedName.length < 2) {
       setError('El nombre debe tener al menos 2 caracteres.');
@@ -171,6 +205,12 @@ export function AccountProfileForm({
 
     if (normalizedPhone && normalizedPhone.length < 7) {
       setError('El telefono debe tener al menos 7 caracteres.');
+      setMessage(null);
+      return;
+    }
+
+    if (preferredPaymentMethod === 'card' && !/^\d{4}$/.test(normalizedPreferredCardLast4)) {
+      setError('Para tarjeta debes indicar los ultimos 4 digitos.');
       setMessage(null);
       return;
     }
@@ -196,6 +236,11 @@ export function AccountProfileForm({
             full_name: normalizedName || null,
             phone: normalizedPhone || null,
             avatar_url: normalizedAvatarUrl || null,
+            preferred_payment_method: preferredPaymentMethod || null,
+            preferred_card_brand:
+              preferredPaymentMethod === 'card' ? normalizedPreferredCardBrand || null : null,
+            preferred_card_last4:
+              preferredPaymentMethod === 'card' ? normalizedPreferredCardLast4 || null : null,
           },
           { onConflict: 'auth_user_id' },
         );
@@ -208,8 +253,19 @@ export function AccountProfileForm({
         setSavedFullName(normalizedName);
         setSavedPhone(normalizedPhone);
         setSavedAvatarUrl(normalizedAvatarUrl);
+        setSavedPreferredPaymentMethod(preferredPaymentMethod);
+        setSavedPreferredCardBrand(
+          preferredPaymentMethod === 'card' ? normalizedPreferredCardBrand : '',
+        );
+        setSavedPreferredCardLast4(
+          preferredPaymentMethod === 'card' ? normalizedPreferredCardLast4 : '',
+        );
         setIsEditingName(false);
         setIsEditingPhone(false);
+        if (preferredPaymentMethod !== 'card') {
+          setPreferredCardBrand('');
+          setPreferredCardLast4('');
+        }
         setMessage('Perfil actualizado.');
         window.dispatchEvent(new CustomEvent('profile-updated'));
       } catch (requestError) {
@@ -327,6 +383,78 @@ export function AccountProfileForm({
           aria-label="Email"
           classNames={disabledInputClassNames}
         />
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <div className="md:col-span-1">
+          <Select
+            aria-label="Metodo de pago preferido"
+            label="Metodo de pago preferido"
+            labelPlacement="inside"
+            selectedKeys={preferredPaymentMethod ? [preferredPaymentMethod] : []}
+            disallowEmptySelection={false}
+            placeholder="Selecciona metodo"
+            classNames={{
+              label: 'text-[11px] font-semibold text-slate/55 dark:text-slate-400',
+              value: 'text-sm font-medium text-slate-100',
+              trigger:
+                'min-h-12 rounded-2xl border px-2 shadow-none data-[hover=true]:translate-x-0',
+            }}
+            onSelectionChange={(keys) => {
+              const value = getSingleSelectionValue(keys);
+              if (value === 'mercado_pago' || value === 'card' || value === 'cash') {
+                setPreferredPaymentMethod(value);
+                return;
+              }
+
+              setPreferredPaymentMethod('');
+              setPreferredCardBrand('');
+              setPreferredCardLast4('');
+            }}
+          >
+            <SelectItem key="mercado_pago" textValue="Mercado Pago">
+              Mercado Pago
+            </SelectItem>
+            <SelectItem key="card" textValue="Tarjeta">
+              Tarjeta
+            </SelectItem>
+            <SelectItem key="cash" textValue="Efectivo en local">
+              Efectivo en local
+            </SelectItem>
+          </Select>
+        </div>
+        {preferredPaymentMethod === 'card' ? (
+          <>
+            <Input
+              id="profile-card-brand"
+              label="Marca de tarjeta"
+              labelPlacement="inside"
+              value={preferredCardBrand}
+              onValueChange={setPreferredCardBrand}
+              variant="bordered"
+              radius="lg"
+              aria-label="Marca de tarjeta"
+              classNames={editableInputClassNames}
+              placeholder="Visa, Mastercard..."
+            />
+            <Input
+              id="profile-card-last4"
+              label="Ultimos 4 digitos"
+              labelPlacement="inside"
+              value={preferredCardLast4}
+              onValueChange={(value) => setPreferredCardLast4(value.replace(/\D/g, '').slice(0, 4))}
+              variant="bordered"
+              radius="lg"
+              aria-label="Ultimos 4 digitos"
+              classNames={editableInputClassNames}
+              placeholder="1234"
+            />
+          </>
+        ) : (
+          <p className="md:col-span-2 self-center text-xs text-slate/70 dark:text-slate-400">
+            No guardamos numero completo de tarjeta. Solo referencia de metodo preferido.
+          </p>
+        )}
       </div>
 
       {error ? <p className="text-sm text-rose-600">{error}</p> : null}

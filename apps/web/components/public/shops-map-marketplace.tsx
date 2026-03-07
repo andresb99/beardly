@@ -1,7 +1,19 @@
 'use client';
 
 import Link from 'next/link';
-import { useDeferredValue, useEffect, useMemo, useRef, useState, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react';
+import {
+  memo,
+  startTransition,
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type FormEvent,
+  type PointerEvent as ReactPointerEvent,
+} from 'react';
 import { Card, CardBody, CardFooter, CardHeader, Skeleton } from '@heroui/react';
 import {
   ArrowUpRight,
@@ -207,6 +219,10 @@ interface ViewportResponsePayload {
   items: MarketplaceShop[];
 }
 
+interface GoogleMapsEventListenerLike {
+  remove(): void;
+}
+
 type SearchSuggestion =
   | {
       key: string;
@@ -344,6 +360,236 @@ function getMobileSheetStageTranslate(stage: MobileSheetStage, sheetHeight?: num
   return Math.min(Math.max(collapsedTranslate, 0), 100);
 }
 
+function areShopCollectionsEqualById(left: MarketplaceShop[], right: MarketplaceShop[]) {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index]?.id !== right[index]?.id) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+interface MarketplaceShopCardProps {
+  shop: MarketplaceShop;
+  distanceKm: number | null;
+  isActive: boolean;
+  onFocus: (shop: MarketplaceShop) => void;
+}
+
+interface MarketplaceShopDistanceEntry {
+  shop: MarketplaceShop;
+  distanceKm: number | null;
+}
+
+const MarketplaceShopCard = memo(
+  function MarketplaceShopCard({ shop, distanceKm, isActive, onFocus }: MarketplaceShopCardProps) {
+    return (
+      <Card
+        as="article"
+        isFooterBlurred
+        className={cn(
+          'data-card no-hover-motion h-[22rem] cursor-pointer overflow-hidden rounded-[1.9rem] border-0 p-0 shadow-none',
+          isActive ? 'ring-2 ring-sky-400/35 dark:ring-sky-300/25' : 'ring-1 ring-transparent',
+        )}
+        data-active={String(isActive)}
+        onClick={() => onFocus(shop)}
+      >
+        <CardHeader className="absolute inset-x-0 top-0 z-10 items-start justify-between gap-3 p-4">
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/72">
+              {getShopHighlight(shop, distanceKm)}
+            </p>
+            <h3 className="mt-2 line-clamp-2 font-[family-name:var(--font-heading)] text-xl font-semibold text-white">
+              {shop.name}
+            </h3>
+          </div>
+          <div className="shrink-0 rounded-full bg-white/92 px-3 py-1 text-[11px] font-semibold text-ink shadow-[0_12px_24px_-18px_rgba(15,23,42,0.35)] dark:bg-slate-950/90 dark:text-slate-100">
+            <Star className="mr-1 inline h-3.5 w-3.5 fill-current text-amber-500" />
+            {formatRating(shop.averageRating)}
+          </div>
+        </CardHeader>
+
+        <MediaShowcase
+          alt={`Vista de ${shop.name}`}
+          images={shop.imageUrls}
+          className="h-full w-full"
+          dotsClassName="bottom-[7.1rem]"
+          fallback={<div className="h-full w-full" style={getFallbackCoverStyle(shop)} />}
+        />
+
+        <div className="absolute inset-0 z-[1] bg-gradient-to-t from-slate-950/88 via-slate-950/28 to-slate-950/10" />
+
+        <CardFooter className="absolute inset-x-0 bottom-0 z-10 border-t border-white/10 bg-black/40 px-4 py-4 backdrop-blur-md">
+          <div className="flex w-full flex-col gap-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="line-clamp-1 text-sm font-semibold text-white">
+                  {shop.locationLabel || shop.city || 'Ubicacion por confirmar'}
+                </p>
+                <p className="mt-1 line-clamp-2 text-xs text-white/68">
+                  {shop.description || 'Agenda online, perfil publico y reservas en pocos pasos.'}
+                </p>
+              </div>
+
+              {distanceKm !== null ? (
+                <span className="shrink-0 rounded-full bg-white/14 px-2.5 py-1 text-[11px] font-semibold text-white">
+                  {distanceKm.toFixed(1)} km
+                </span>
+              ) : null}
+            </div>
+
+            <div className="flex flex-wrap gap-2 text-[11px] font-semibold text-white/72">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1">
+                <MessageSquareText className="h-3.5 w-3.5" />
+                {shop.reviewCount || 0} resenas
+              </span>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1">
+                {shop.activeServiceCount} servicios
+              </span>
+              {shop.minServicePriceCents !== null ? (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1">
+                  Desde {formatCurrency(shop.minServicePriceCents)}
+                </span>
+              ) : null}
+              {shop.isVerified ? (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-400/14 px-2.5 py-1 text-emerald-100">
+                  <BadgeCheck className="h-3.5 w-3.5" />
+                  Verificada
+                </span>
+              ) : null}
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <Link
+                href={buildShopHref(shop.slug)}
+                className="action-secondary rounded-full px-4 py-2 text-sm font-semibold"
+                onClick={(event) => event.stopPropagation()}
+              >
+                Ver perfil
+              </Link>
+              <Link
+                href={buildShopHref(shop.slug, 'book')}
+                className="action-primary inline-flex items-center gap-1 rounded-full px-4 py-2 text-sm font-semibold"
+                onClick={(event) => event.stopPropagation()}
+              >
+                Reservar
+                <ArrowUpRight className="h-4 w-4" />
+              </Link>
+            </div>
+          </div>
+        </CardFooter>
+      </Card>
+    );
+  },
+  (prevProps, nextProps) => {
+    return (
+      prevProps.shop === nextProps.shop &&
+      prevProps.distanceKm === nextProps.distanceKm &&
+      prevProps.isActive === nextProps.isActive &&
+      prevProps.onFocus === nextProps.onFocus
+    );
+  },
+);
+
+interface MarketplaceCardsSectionProps {
+  showCardSkeletons: boolean;
+  filteredShops: MarketplaceShopDistanceEntry[];
+  selectedShopId: string | null;
+  activeSearchMode: MarketplaceSearchMode;
+  onFocus: (shop: MarketplaceShop) => void;
+}
+
+const MarketplaceCardsSection = memo(
+  function MarketplaceCardsSection({
+    showCardSkeletons,
+    filteredShops,
+    selectedShopId,
+    activeSearchMode,
+    onFocus,
+  }: MarketplaceCardsSectionProps) {
+    if (showCardSkeletons) {
+      return (
+        <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
+          {Array.from({ length: MARKETPLACE_CARD_SKELETON_COUNT }).map((_, index) => (
+            <Card
+              key={`shop-skeleton-${index}`}
+              className="data-card overflow-hidden rounded-[1.9rem] border-0 p-0 shadow-none ring-1 ring-white/10"
+            >
+              <Skeleton className="aspect-[4/3] w-full rounded-none" />
+              <CardBody className="space-y-4 p-4">
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-2/3 rounded-xl" />
+                  <Skeleton className="h-3 w-full rounded-xl" />
+                  <Skeleton className="h-3 w-5/6 rounded-xl" />
+                </div>
+                <div className="space-y-2">
+                  <Skeleton className="h-3 w-full rounded-xl" />
+                  <Skeleton className="h-3 w-4/5 rounded-xl" />
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Skeleton className="h-7 w-24 rounded-full" />
+                  <Skeleton className="h-7 w-24 rounded-full" />
+                  <Skeleton className="h-7 w-28 rounded-full" />
+                </div>
+                <div className="flex flex-wrap gap-3">
+                  <Skeleton className="h-10 w-24 rounded-2xl" />
+                  <Skeleton className="h-10 w-28 rounded-2xl" />
+                </div>
+              </CardBody>
+            </Card>
+          ))}
+        </div>
+      );
+    }
+
+    if (filteredShops.length > 0) {
+      return (
+        <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
+          {filteredShops.map(({ shop, distanceKm }) => {
+            const isActive = shop.id === selectedShopId;
+
+            return (
+              <MarketplaceShopCard
+                key={shop.id}
+                shop={shop}
+                distanceKm={distanceKm}
+                isActive={isActive}
+                onFocus={onFocus}
+              />
+            );
+          })}
+        </div>
+      );
+    }
+
+    return (
+      <Card className="soft-panel rounded-[1.8rem] border-0 shadow-none">
+        <CardBody className="p-5">
+          <p className="text-sm text-slate/80 dark:text-slate-300">
+            {activeSearchMode === 'all'
+              ? 'Aun no hay barberias visibles en esta vista.'
+              : 'No encontramos barberias para esa busqueda. Prueba con otra zona o limpia la busqueda.'}
+          </p>
+        </CardBody>
+      </Card>
+    );
+  },
+  (prevProps, nextProps) => {
+    return (
+      prevProps.showCardSkeletons === nextProps.showCardSkeletons &&
+      prevProps.filteredShops === nextProps.filteredShops &&
+      prevProps.selectedShopId === nextProps.selectedShopId &&
+      prevProps.activeSearchMode === nextProps.activeSearchMode &&
+      prevProps.onFocus === nextProps.onFocus
+    );
+  },
+);
+
 export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplaceProps) {
   const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY?.trim() ?? '';
   const mapElementRef = useRef<HTMLDivElement | null>(null);
@@ -354,6 +600,20 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
   const autocompleteServiceRef = useRef<GoogleAutocompleteService | null>(null);
   const geocoderRef = useRef<GoogleGeocoder | null>(null);
   const markersRef = useRef<Map<string, GoogleMarker>>(new Map());
+  const markerStateRef = useRef<
+    Map<
+      string,
+      {
+        latitude: number;
+        longitude: number;
+        title: string;
+        label: string;
+        isActive: boolean;
+        isDarkTheme: boolean;
+      }
+    >
+  >(new Map());
+  const markerListenersRef = useRef<Map<string, GoogleMapsEventListenerLike>>(new Map());
   const userMarkerRef = useRef<GoogleMarker | null>(null);
   const initialMapFrameDoneRef = useRef(false);
   const suggestionsRequestIdRef = useRef(0);
@@ -361,8 +621,11 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
   const viewportLoadRequestIdRef = useRef(0);
   const viewportIdleTimeoutRef = useRef<number | null>(null);
   const viewportCacheRef = useRef<Map<string, MarketplaceShop[]>>(new Map());
+  const viewportInFlightRef = useRef<Map<string, Promise<ViewportResponsePayload>>>(new Map());
   const skipNextAreaViewportSyncRef = useRef(false);
   const activeSearchModeRef = useRef<MarketplaceSearchMode>('all');
+  const isMobileViewportRef = useRef(false);
+  const mappableShopsByIdRef = useRef<Map<string, MarketplaceShop>>(new Map());
 
   const [selectedShopId, setSelectedShopId] = useState<string | null>(() => getInitialSelectedShop(initialShops));
   const [mapPreviewShopId, setMapPreviewShopId] = useState<string | null>(null);
@@ -392,7 +655,7 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const displayedShops = activeSearchMode === 'name' ? searchResults ?? [] : viewportShops;
 
-  const filteredShops = useMemo(() => {
+  const filteredShops = useMemo<MarketplaceShopDistanceEntry[]>(() => {
     const withDistance = displayedShops.map((shop) => {
       const distanceKm =
         userLocation && shop.latitude !== null && shop.longitude !== null
@@ -424,16 +687,34 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
     });
   }, [displayedShops, userLocation]);
 
-  const selectedShopEntry =
-    filteredShops.find((entry) => entry.shop.id === selectedShopId) || filteredShops[0] || null;
+  const selectedShopEntry = useMemo(
+    () => filteredShops.find((entry) => entry.shop.id === selectedShopId) || filteredShops[0] || null,
+    [filteredShops, selectedShopId],
+  );
   const selectedShop = selectedShopEntry?.shop || null;
-  const mapPreviewEntry = filteredShops.find((entry) => entry.shop.id === mapPreviewShopId) || null;
+  const mapPreviewEntry = useMemo(
+    () => filteredShops.find((entry) => entry.shop.id === mapPreviewShopId) || null,
+    [filteredShops, mapPreviewShopId],
+  );
   const mapPreviewShop = mapPreviewEntry?.shop || null;
   const mapPreviewDistanceKm = mapPreviewEntry?.distanceKm ?? null;
-  const mappableShops = filteredShops
-    .map((entry) => entry.shop)
-    .filter((shop) => shop.latitude !== null && shop.longitude !== null);
+  const mappableShops = useMemo(
+    () =>
+      filteredShops
+        .map((entry) => entry.shop)
+        .filter((shop) => shop.latitude !== null && shop.longitude !== null),
+    [filteredShops],
+  );
+  const mappableShopsById = useMemo(() => {
+    const byId = new Map<string, MarketplaceShop>();
+    for (const shop of mappableShops) {
+      byId.set(shop.id, shop);
+    }
+
+    return byId;
+  }, [mappableShops]);
   const activePins = mappableShops.length;
+  const selectedShopCardId = selectedShop?.id || null;
   const trimmedSearchQuery = searchQuery.trim();
   const trimmedDeferredSearchQuery = deferredSearchQuery.trim();
   const isWaitingForSuggestions =
@@ -446,7 +727,8 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
     const root = document.documentElement;
 
     const syncTheme = () => {
-      setIsDarkTheme(root.classList.contains('dark'));
+      const nextIsDark = root.classList.contains('dark');
+      setIsDarkTheme((currentIsDark) => (currentIsDark === nextIsDark ? currentIsDark : nextIsDark));
     };
 
     syncTheme();
@@ -469,7 +751,10 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
 
     const mediaQuery = window.matchMedia('(max-width: 1279px)');
     const syncViewport = () => {
-      setIsMobileViewport(mediaQuery.matches);
+      const nextIsMobile = mediaQuery.matches;
+      setIsMobileViewport((currentIsMobile) =>
+        currentIsMobile === nextIsMobile ? currentIsMobile : nextIsMobile,
+      );
     };
 
     syncViewport();
@@ -595,6 +880,14 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
   }, [activeSearchMode]);
 
   useEffect(() => {
+    isMobileViewportRef.current = isMobileViewport === true;
+  }, [isMobileViewport]);
+
+  useEffect(() => {
+    mappableShopsByIdRef.current = mappableShopsById;
+  }, [mappableShopsById]);
+
+  useEffect(() => {
     if (mapError) {
       setIsViewportLoading(false);
     }
@@ -694,7 +987,7 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
         });
 
         mapRef.current.addListener('idle', () => {
-          setHasMapSettled(true);
+          setHasMapSettled((currentHasSettled) => (currentHasSettled ? currentHasSettled : true));
 
           if (activeSearchModeRef.current === 'name') {
             return;
@@ -709,12 +1002,13 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
             window.clearTimeout(viewportIdleTimeoutRef.current);
           }
 
+          const viewportSyncDelayMs = isMobileViewportRef.current ? 180 : 260;
           viewportIdleTimeoutRef.current = window.setTimeout(() => {
             void loadViewportShops({
               preserveExistingOnEmpty: false,
               clearErrorOnSuccess: true,
             });
-          }, 160);
+          }, viewportSyncDelayMs);
         });
 
         setMapError(null);
@@ -769,39 +1063,99 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
     const visibleIds = new Set<string>();
 
     for (const shop of mappableShops) {
-      visibleIds.add(shop.id);
-      const position = {
-        lat: Number(shop.latitude),
-        lng: Number(shop.longitude),
-      };
-      const isActive = shop.id === selectedShop?.id;
-      const existingMarker = markersRef.current.get(shop.id);
+      const shopId = shop.id;
+      const latitude = Number(shop.latitude);
+      const longitude = Number(shop.longitude);
+      const isActive = shopId === selectedShopId;
+      const label = getMarkerLabel(shop);
+      const existingMarker = markersRef.current.get(shopId);
+      const previousMarkerState = markerStateRef.current.get(shopId);
+      visibleIds.add(shopId);
 
       if (!existingMarker) {
         const marker = new google.maps.Marker({
           map,
-          position,
+          position: {
+            lat: latitude,
+            lng: longitude,
+          },
           title: shop.name,
           icon: getShopMarkerIcon(google.maps, shop, isActive, isDarkTheme),
           optimized: true,
           zIndex: isActive ? 20 : 10,
         });
 
-        marker.addListener('click', () => {
-          focusShop(shop, {
-            openPreview: true,
-          });
+        const listener = marker.addListener('click', () => {
+          const currentShop = mappableShopsByIdRef.current.get(shopId);
+          if (!currentShop) {
+            return;
+          }
+
+          setSelectedShopId(shopId);
+          setMapPreviewShopId((currentPreviewShopId) =>
+            currentPreviewShopId === shopId ? null : shopId,
+          );
+
+          if (isMobileViewportRef.current) {
+            setMobileSheetSnap('collapsed');
+          }
+
+          if (currentShop.latitude !== null && currentShop.longitude !== null) {
+            centerMapOnCoordinates(Number(currentShop.latitude), Number(currentShop.longitude), 15);
+          }
         });
 
-        markersRef.current.set(shop.id, marker);
+        markersRef.current.set(shopId, marker);
+        markerListenersRef.current.set(shopId, listener as GoogleMapsEventListenerLike);
+        markerStateRef.current.set(shopId, {
+          latitude,
+          longitude,
+          title: shop.name,
+          label,
+          isActive,
+          isDarkTheme,
+        });
         continue;
       }
 
       existingMarker.setMap(map);
-      existingMarker.setPosition(position);
-      existingMarker.setTitle(shop.name);
-      existingMarker.setIcon(getShopMarkerIcon(google.maps, shop, isActive, isDarkTheme));
-      existingMarker.setZIndex(isActive ? 20 : 10);
+
+      if (
+        !previousMarkerState ||
+        previousMarkerState.latitude !== latitude ||
+        previousMarkerState.longitude !== longitude
+      ) {
+        existingMarker.setPosition({
+          lat: latitude,
+          lng: longitude,
+        });
+      }
+
+      if (!previousMarkerState || previousMarkerState.title !== shop.name) {
+        existingMarker.setTitle(shop.name);
+      }
+
+      if (
+        !previousMarkerState ||
+        previousMarkerState.label !== label ||
+        previousMarkerState.isActive !== isActive ||
+        previousMarkerState.isDarkTheme !== isDarkTheme
+      ) {
+        existingMarker.setIcon(getShopMarkerIcon(google.maps, shop, isActive, isDarkTheme));
+      }
+
+      if (!previousMarkerState || previousMarkerState.isActive !== isActive) {
+        existingMarker.setZIndex(isActive ? 20 : 10);
+      }
+
+      markerStateRef.current.set(shopId, {
+        latitude,
+        longitude,
+        title: shop.name,
+        label,
+        isActive,
+        isDarkTheme,
+      });
     }
 
     for (const [shopId, marker] of markersRef.current.entries()) {
@@ -810,8 +1164,13 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
       }
 
       marker.setMap(null);
+      markersRef.current.delete(shopId);
+      markerStateRef.current.delete(shopId);
+      const listener = markerListenersRef.current.get(shopId);
+      listener?.remove();
+      markerListenersRef.current.delete(shopId);
     }
-  }, [isDarkTheme, mappableShops, selectedShop]);
+  }, [isDarkTheme, mappableShops, selectedShopId]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -870,16 +1229,23 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
         window.clearTimeout(viewportIdleTimeoutRef.current);
       }
 
+      for (const listener of markerListenersRef.current.values()) {
+        listener.remove();
+      }
+
       for (const marker of markersRef.current.values()) {
         marker.setMap(null);
       }
 
+      markerListenersRef.current.clear();
+      markerStateRef.current.clear();
       markersRef.current.clear();
+      viewportInFlightRef.current.clear();
       userMarkerRef.current?.setMap(null);
     };
   }, []);
 
-  function centerMapOnCoordinates(latitude: number, longitude: number, zoom: number) {
+  const centerMapOnCoordinates = useCallback((latitude: number, longitude: number, zoom: number) => {
     if (!mapRef.current) {
       return;
     }
@@ -889,13 +1255,13 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
       lng: longitude,
     });
     mapRef.current.setZoom(zoom);
-  }
+  }, []);
 
-  function setMobileSheetSnap(nextStage: MobileSheetStage) {
+  const setMobileSheetSnap = useCallback((nextStage: MobileSheetStage) => {
     setMobileSheetStage(nextStage);
     setMobileSheetDragOffset(0);
     setIsMobileSheetDragging(false);
-  }
+  }, []);
 
   function getClosestMobileSheetStage(translatePercent: number, sheetHeight: number) {
     return (Object.entries(MOBILE_SHEET_STAGE_TRANSLATE) as Array<[MobileSheetStage, number]>).reduce(
@@ -999,12 +1365,12 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
     return requestId === areaFocusRequestIdRef.current;
   }
 
-  function focusShop(
+  const focusShop = useCallback((
     shop: MarketplaceShop,
     options?: {
       openPreview?: boolean;
     },
-  ) {
+  ) => {
     setSelectedShopId(shop.id);
     setMapPreviewShopId((currentPreviewShopId) => {
       if (!options?.openPreview) {
@@ -1023,7 +1389,7 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
     }
 
     centerMapOnCoordinates(Number(shop.latitude), Number(shop.longitude), 15);
-  }
+  }, [centerMapOnCoordinates, isMobileViewport, setMobileSheetSnap]);
 
   async function fetchSearchResults(params: Record<string, string>) {
     const response = await fetch(`/api/shops/search?${new URLSearchParams(params).toString()}`, {
@@ -1154,17 +1520,30 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
       },
       zoom,
     );
+    const requestParams = {
+      north: String(viewportNorth),
+      south: String(viewportSouth),
+      east: String(viewportEast),
+      west: String(viewportWest),
+      limit: String(getViewportFetchLimit(zoom)),
+    };
     const cachedItems = viewportCacheRef.current.get(cacheKey) || null;
 
     if (cachedItems) {
       if (cachedItems.length > 0 || !options?.preserveExistingOnEmpty) {
-        setViewportShops(cachedItems);
-        setSelectedShopId((currentSelectedShopId) => {
-          if (currentSelectedShopId && cachedItems.some((shop) => shop.id === currentSelectedShopId)) {
-            return currentSelectedShopId;
-          }
+        startTransition(() => {
+          setViewportShops((currentViewportShops) =>
+            areShopCollectionsEqualById(currentViewportShops, cachedItems)
+              ? currentViewportShops
+              : cachedItems,
+          );
+          setSelectedShopId((currentSelectedShopId) => {
+            if (currentSelectedShopId && cachedItems.some((shop) => shop.id === currentSelectedShopId)) {
+              return currentSelectedShopId;
+            }
 
-          return cachedItems[0]?.id || null;
+            return cachedItems[0]?.id || null;
+          });
         });
       }
 
@@ -1181,13 +1560,13 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
     setIsViewportLoading(true);
 
     try {
-      const response = await fetchViewportShops({
-        north: String(viewportNorth),
-        south: String(viewportSouth),
-        east: String(viewportEast),
-        west: String(viewportWest),
-        limit: String(getViewportFetchLimit(zoom)),
-      });
+      let viewportRequest = viewportInFlightRef.current.get(cacheKey) || null;
+      if (!viewportRequest) {
+        viewportRequest = fetchViewportShops(requestParams);
+        viewportInFlightRef.current.set(cacheKey, viewportRequest);
+      }
+
+      const response = await viewportRequest;
 
       if (requestId !== viewportLoadRequestIdRef.current) {
         return false;
@@ -1196,13 +1575,19 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
       viewportCacheRef.current.set(cacheKey, response.items);
 
       if (response.items.length > 0 || !options?.preserveExistingOnEmpty) {
-        setViewportShops(response.items);
-        setSelectedShopId((currentSelectedShopId) => {
-          if (currentSelectedShopId && response.items.some((shop) => shop.id === currentSelectedShopId)) {
-            return currentSelectedShopId;
-          }
+        startTransition(() => {
+          setViewportShops((currentViewportShops) =>
+            areShopCollectionsEqualById(currentViewportShops, response.items)
+              ? currentViewportShops
+              : response.items,
+          );
+          setSelectedShopId((currentSelectedShopId) => {
+            if (currentSelectedShopId && response.items.some((shop) => shop.id === currentSelectedShopId)) {
+              return currentSelectedShopId;
+            }
 
-          return response.items[0]?.id || null;
+            return response.items[0]?.id || null;
+          });
         });
       }
 
@@ -1213,11 +1598,14 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
       return response.items.length > 0;
     } catch {
       if (!options?.preserveExistingOnEmpty) {
-        setViewportShops([]);
+        startTransition(() => {
+          setViewportShops([]);
+        });
       }
 
       return false;
     } finally {
+      viewportInFlightRef.current.delete(cacheKey);
       if (requestId === viewportLoadRequestIdRef.current) {
         setIsViewportLoading(false);
       }
@@ -1347,7 +1735,15 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
         intent: 'name',
       });
 
-      setSearchResults(response.items);
+      setSearchResults((currentSearchResults) => {
+        if (!currentSearchResults) {
+          return response.items;
+        }
+
+        return areShopCollectionsEqualById(currentSearchResults, response.items)
+          ? currentSearchResults
+          : response.items;
+      });
       setActiveSearchMode(response.mode);
       setActiveSearchLabel(label || query.trim());
       setSelectedShopId(response.items[0]?.id || null);
@@ -1470,6 +1866,28 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
 
     await applyNamedSearch(trimmedQuery, trimmedQuery);
   }
+
+  const handleSearchInputChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      const nextValue = event.target.value;
+      const hasValue = nextValue.trim().length > 0;
+
+      suggestionsRequestIdRef.current += 1;
+      setIsSearchFocused(true);
+      setSearchQuery(nextValue);
+      setSuggestions([]);
+      setIsSearching(hasValue);
+    },
+    [],
+  );
+
+  const handleSearchInputFocus = useCallback(() => {
+    setIsSearchFocused(true);
+  }, []);
+
+  const handleSearchInputBlur = useCallback(() => {
+    window.setTimeout(() => setIsSearchFocused(false), 120);
+  }, []);
 
   const resultHeadline =
     activeSearchMode === 'nearby'
@@ -1603,20 +2021,9 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
                   <input
                     type="search"
                     value={searchQuery}
-                    onChange={(event) => {
-                      const nextValue = event.target.value;
-                      const hasValue = nextValue.trim().length > 0;
-
-                      suggestionsRequestIdRef.current += 1;
-                      setIsSearchFocused(true);
-                      setSearchQuery(nextValue);
-                      setSuggestions([]);
-                      setIsSearching(hasValue);
-                    }}
-                    onFocus={() => setIsSearchFocused(true)}
-                    onBlur={() => {
-                      window.setTimeout(() => setIsSearchFocused(false), 120);
-                    }}
+                    onChange={handleSearchInputChange}
+                    onFocus={handleSearchInputFocus}
+                    onBlur={handleSearchInputBlur}
                     placeholder="Busca una zona o el nombre de una barberia"
                     className="min-w-0 text-[16px] font-medium outline-none placeholder:text-slate/55 md:text-sm dark:placeholder:text-slate-400"
                   />
@@ -1726,156 +2133,13 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
               isMobileViewport && mobileSheetStage === 'collapsed' && 'pointer-events-none opacity-0',
             )}
           >
-        {showCardSkeletons ? (
-          <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
-            {Array.from({ length: MARKETPLACE_CARD_SKELETON_COUNT }).map((_, index) => (
-              <Card
-                key={`shop-skeleton-${index}`}
-                className="data-card overflow-hidden rounded-[1.9rem] border-0 p-0 shadow-none ring-1 ring-white/10"
-              >
-                <Skeleton className="aspect-[4/3] w-full rounded-none" />
-                <CardBody className="space-y-4 p-4">
-                  <div className="space-y-2">
-                    <Skeleton className="h-4 w-2/3 rounded-xl" />
-                    <Skeleton className="h-3 w-full rounded-xl" />
-                    <Skeleton className="h-3 w-5/6 rounded-xl" />
-                  </div>
-                  <div className="space-y-2">
-                    <Skeleton className="h-3 w-full rounded-xl" />
-                    <Skeleton className="h-3 w-4/5 rounded-xl" />
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Skeleton className="h-7 w-24 rounded-full" />
-                    <Skeleton className="h-7 w-24 rounded-full" />
-                    <Skeleton className="h-7 w-28 rounded-full" />
-                  </div>
-                  <div className="flex flex-wrap gap-3">
-                    <Skeleton className="h-10 w-24 rounded-2xl" />
-                    <Skeleton className="h-10 w-28 rounded-2xl" />
-                  </div>
-                </CardBody>
-              </Card>
-            ))}
-          </div>
-        ) : filteredShops.length > 0 ? (
-          <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
-            {filteredShops.map(({ shop, distanceKm }) => {
-              const isActive = shop.id === selectedShop?.id;
-
-              return (
-                <Card
-                  key={shop.id}
-                  as="article"
-                  isFooterBlurred
-                  className={cn(
-                    'data-card group h-[22rem] cursor-pointer overflow-hidden rounded-[1.9rem] border-0 p-0 shadow-none transition-transform duration-200 md:hover:-translate-y-1',
-                    isActive
-                      ? 'ring-2 ring-sky-400/35 dark:ring-sky-300/25'
-                      : 'ring-1 ring-transparent',
-                  )}
-                  data-active={String(isActive)}
-                  onClick={() => focusShop(shop)}
-                >
-                  <CardHeader className="absolute inset-x-0 top-0 z-10 items-start justify-between gap-3 p-4">
-                    <div className="min-w-0">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/72">
-                        {getShopHighlight(shop, distanceKm)}
-                      </p>
-                      <h3 className="mt-2 line-clamp-2 font-[family-name:var(--font-heading)] text-xl font-semibold text-white">
-                        {shop.name}
-                      </h3>
-                    </div>
-                    <div className="shrink-0 rounded-full bg-white/92 px-3 py-1 text-[11px] font-semibold text-ink shadow-[0_12px_24px_-18px_rgba(15,23,42,0.35)] dark:bg-slate-950/90 dark:text-slate-100">
-                      <Star className="mr-1 inline h-3.5 w-3.5 fill-current text-amber-500" />
-                      {formatRating(shop.averageRating)}
-                    </div>
-                  </CardHeader>
-
-                  <MediaShowcase
-                    alt={`Vista de ${shop.name}`}
-                    images={shop.imageUrls}
-                    className="h-full w-full"
-                    imageClassName="transition-transform duration-300 md:group-hover:scale-[1.03]"
-                    dotsClassName="bottom-[7.1rem]"
-                    fallback={<div className="h-full w-full" style={getFallbackCoverStyle(shop)} />}
-                  />
-
-                  <div className="absolute inset-0 z-[1] bg-gradient-to-t from-slate-950/88 via-slate-950/28 to-slate-950/10" />
-
-                  <CardFooter className="absolute inset-x-0 bottom-0 z-10 border-t border-white/10 bg-black/40 px-4 py-4 backdrop-blur-md">
-                    <div className="flex w-full flex-col gap-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="line-clamp-1 text-sm font-semibold text-white">
-                            {shop.locationLabel || shop.city || 'Ubicacion por confirmar'}
-                          </p>
-                          <p className="mt-1 line-clamp-2 text-xs text-white/68">
-                            {shop.description || 'Agenda online, perfil publico y reservas en pocos pasos.'}
-                          </p>
-                        </div>
-
-                        {distanceKm !== null ? (
-                          <span className="shrink-0 rounded-full bg-white/14 px-2.5 py-1 text-[11px] font-semibold text-white">
-                            {distanceKm.toFixed(1)} km
-                          </span>
-                        ) : null}
-                      </div>
-
-                      <div className="flex flex-wrap gap-2 text-[11px] font-semibold text-white/72">
-                        <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1">
-                          <MessageSquareText className="h-3.5 w-3.5" />
-                          {shop.reviewCount || 0} resenas
-                        </span>
-                        <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1">
-                          {shop.activeServiceCount} servicios
-                        </span>
-                        {shop.minServicePriceCents !== null ? (
-                          <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1">
-                            Desde {formatCurrency(shop.minServicePriceCents)}
-                          </span>
-                        ) : null}
-                        {shop.isVerified ? (
-                          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-400/14 px-2.5 py-1 text-emerald-100">
-                            <BadgeCheck className="h-3.5 w-3.5" />
-                            Verificada
-                          </span>
-                        ) : null}
-                      </div>
-
-                      <div className="flex flex-wrap gap-2">
-                        <Link
-                          href={buildShopHref(shop.slug)}
-                          className="action-secondary rounded-full px-4 py-2 text-sm font-semibold"
-                          onClick={(event) => event.stopPropagation()}
-                        >
-                          Ver perfil
-                        </Link>
-                        <Link
-                          href={buildShopHref(shop.slug, 'book')}
-                          className="action-primary inline-flex items-center gap-1 rounded-full px-4 py-2 text-sm font-semibold"
-                          onClick={(event) => event.stopPropagation()}
-                        >
-                          Reservar
-                          <ArrowUpRight className="h-4 w-4" />
-                        </Link>
-                      </div>
-                    </div>
-                  </CardFooter>
-                </Card>
-              );
-            })}
-          </div>
-        ) : (
-          <Card className="soft-panel rounded-[1.8rem] border-0 shadow-none">
-            <CardBody className="p-5">
-              <p className="text-sm text-slate/80 dark:text-slate-300">
-                {activeSearchMode === 'all'
-                  ? 'Aun no hay barberias visibles en esta vista.'
-                  : 'No encontramos barberias para esa busqueda. Prueba con otra zona o limpia la busqueda.'}
-              </p>
-            </CardBody>
-          </Card>
-        )}
+            <MarketplaceCardsSection
+              showCardSkeletons={showCardSkeletons}
+              filteredShops={filteredShops}
+              selectedShopId={selectedShopCardId}
+              activeSearchMode={activeSearchMode}
+              onFocus={focusShop}
+            />
       </div>
       </div>
       </div>
@@ -1894,20 +2158,9 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
                     <input
                       type="search"
                       value={searchQuery}
-                      onChange={(event) => {
-                        const nextValue = event.target.value;
-                        const hasValue = nextValue.trim().length > 0;
-
-                        suggestionsRequestIdRef.current += 1;
-                        setIsSearchFocused(true);
-                        setSearchQuery(nextValue);
-                        setSuggestions([]);
-                        setIsSearching(hasValue);
-                      }}
-                      onFocus={() => setIsSearchFocused(true)}
-                      onBlur={() => {
-                        window.setTimeout(() => setIsSearchFocused(false), 120);
-                      }}
+                      onChange={handleSearchInputChange}
+                      onFocus={handleSearchInputFocus}
+                      onBlur={handleSearchInputBlur}
                       placeholder="Buscar zona o barberia"
                       className="min-w-0 text-[16px] font-medium outline-none placeholder:text-slate/55 md:text-sm dark:placeholder:text-slate-400"
                     />

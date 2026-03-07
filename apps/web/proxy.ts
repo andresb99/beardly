@@ -7,7 +7,10 @@ type CookiePatch = { name: string; value: string; options?: CookieOptions };
 export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   const needsSession =
-    pathname.startsWith('/admin') || pathname.startsWith('/staff') || pathname.startsWith('/cuenta');
+    pathname.startsWith('/admin') ||
+    pathname.startsWith('/staff') ||
+    pathname.startsWith('/cuenta') ||
+    pathname.startsWith('/app-admin');
 
   if (!needsSession) {
     return NextResponse.next();
@@ -53,5 +56,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/admin/:path*', '/staff/:path*', '/cuenta/:path*'],
+  matcher: ['/admin/:path*', '/staff/:path*', '/cuenta/:path*', '/app-admin/:path*'],
 };

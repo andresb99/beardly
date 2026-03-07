@@ -20,6 +20,52 @@ export default async function ShopBookPage({ params }: ShopBookPageProps) {
   const {
     data: { user },
   } = await sessionSupabase.auth.getUser();
+  const metadata = (user?.user_metadata as Record<string, unknown> | undefined) ?? undefined;
+  const metadataFullName =
+    (typeof metadata?.full_name === 'string' && metadata.full_name.trim()) ||
+    (typeof metadata?.name === 'string' && metadata.name.trim()) ||
+    '';
+
+  const { data: profile } = user?.id
+    ? await sessionSupabase
+        .from('user_profiles')
+        .select(
+          'full_name, phone, preferred_payment_method, preferred_card_brand, preferred_card_last4',
+        )
+        .eq('auth_user_id', user.id)
+        .maybeSingle()
+    : {
+        data: null as {
+          full_name?: string | null;
+          phone?: string | null;
+          preferred_payment_method?: string | null;
+          preferred_card_brand?: string | null;
+          preferred_card_last4?: string | null;
+        } | null,
+      };
+
+  const initialCustomerName =
+    (typeof profile?.full_name === 'string' && profile.full_name.trim()) || metadataFullName || '';
+  const initialCustomerPhone = (typeof profile?.phone === 'string' && profile.phone.trim()) || '';
+  const preferredMethodRaw =
+    (typeof profile?.preferred_payment_method === 'string' &&
+      profile.preferred_payment_method.trim()) ||
+    null;
+  const preferredCardBrand =
+    (typeof profile?.preferred_card_brand === 'string' && profile.preferred_card_brand.trim()) ||
+    null;
+  const preferredCardLast4 =
+    (typeof profile?.preferred_card_last4 === 'string' && profile.preferred_card_last4.trim()) ||
+    null;
+  const preferredPaymentMethod =
+    preferredMethodRaw === 'card'
+      ? `Tarjeta${preferredCardBrand ? ` ${preferredCardBrand}` : ''}${preferredCardLast4 ? ` ****${preferredCardLast4}` : ''}`
+      : preferredMethodRaw === 'mercado_pago'
+        ? 'Mercado Pago'
+        : preferredMethodRaw === 'cash'
+          ? 'Efectivo en local'
+          : null;
+
   const supabase = createSupabaseAdminClient();
 
   const [{ data: services }, { data: staff }] = await Promise.all([
@@ -84,6 +130,9 @@ export default async function ShopBookPage({ params }: ShopBookPageProps) {
       <BookingFlow
         shopId={shop.id}
         initialCustomerEmail={user?.email || ''}
+        initialCustomerName={initialCustomerName}
+        initialCustomerPhone={initialCustomerPhone}
+        preferredPaymentMethod={preferredPaymentMethod}
         services={(services || []).map((item) => ({
           id: item.id as string,
           name: item.name as string,

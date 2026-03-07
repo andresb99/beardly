@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useTransition } from 'react';
+import { useCallback, useMemo, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Card, CardBody } from '@heroui/card';
@@ -87,14 +87,17 @@ export function AccountNotificationsPanel({
   const [activeSystemNotificationId, setActiveSystemNotificationId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const pendingInvitationsCount = invitationItems.length;
-  const unreadSystemCount = systemItems.filter((item) => !item.isRead).length;
+  const unreadSystemCount = useMemo(
+    () => systemItems.reduce((total, item) => total + (item.isRead ? 0 : 1), 0),
+    [systemItems],
+  );
   const pendingCount = pendingInvitationsCount + unreadSystemCount;
 
   const pendingLabel = useMemo(() => {
     return `${pendingCount} pendiente${pendingCount === 1 ? '' : 's'}`;
   }, [pendingCount]);
 
-  function handleDecision(membershipId: string, decision: 'accept' | 'decline') {
+  const handleDecision = useCallback((membershipId: string, decision: 'accept' | 'decline') => {
     startTransition(async () => {
       setActiveInvitationId(membershipId);
       setActiveSystemNotificationId(null);
@@ -125,9 +128,9 @@ export function AccountNotificationsPanel({
         setActiveInvitationId(null);
       }
     });
-  }
+  }, [router, startTransition]);
 
-  function handleMarkNotificationRead(notificationId: string) {
+  const handleMarkNotificationRead = useCallback((notificationId: string) => {
     startTransition(async () => {
       setActiveSystemNotificationId(notificationId);
       setActiveInvitationId(null);
@@ -159,9 +162,9 @@ export function AccountNotificationsPanel({
         setActiveSystemNotificationId(null);
       }
     });
-  }
+  }, [router, startTransition]);
 
-  function handleMarkAllNotificationsRead() {
+  const handleMarkAllNotificationsRead = useCallback(() => {
     startTransition(async () => {
       setActiveSystemNotificationId('all');
       setActiveInvitationId(null);
@@ -185,7 +188,7 @@ export function AccountNotificationsPanel({
         setActiveSystemNotificationId(null);
       }
     });
-  }
+  }, [router, startTransition]);
 
   return (
     <Card

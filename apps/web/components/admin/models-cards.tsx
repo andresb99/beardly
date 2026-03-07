@@ -1,5 +1,6 @@
 'use client';
 
+import { memo } from 'react';
 import { Avatar, Button, Chip, Divider } from '@heroui/react';
 
 interface ModelCardRow {
@@ -21,7 +22,7 @@ interface AdminModelsCardsProps {
   className?: string;
 }
 
-export function AdminModelsCards({ rows, className }: AdminModelsCardsProps) {
+export const AdminModelsCards = memo(function AdminModelsCards({ rows, className }: AdminModelsCardsProps) {
   if (!rows.length) {
     return (
       <div
@@ -114,5 +115,7 @@ export function AdminModelsCards({ rows, className }: AdminModelsCardsProps) {
       ))}
     </div>
   );
-}
-
+}, (prevProps, nextProps) =>
+  prevProps.className === nextProps.className &&
+  prevProps.rows === nextProps.rows,
+);

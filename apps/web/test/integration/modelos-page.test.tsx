@@ -87,8 +87,8 @@ describe('ModelosLandingPage', () => {
     expect(screen.getByText('Cupos: 2')).toBeInTheDocument();
     expect(screen.getByText('Cupos: Sin definir')).toBeInTheDocument();
     expect(screen.getByText('Trae referencia visual.')).toBeInTheDocument();
-    expect(screen.getByText('Cabello largo')).toBeInTheDocument();
-    expect(screen.getByText('Coloracion')).toBeInTheDocument();
+    expect(screen.getAllByText('Cabello largo').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Coloracion').length).toBeGreaterThan(0);
     expect(screen.getByText('Sin notas publicas.')).toBeInTheDocument();
     expect(screen.getAllByRole('link', { name: 'Postularme' })[0]).toHaveAttribute(
       'href',

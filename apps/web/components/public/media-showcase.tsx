@@ -1,6 +1,8 @@
 'use client';
 
 import {
+  memo,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -17,6 +19,8 @@ interface MediaShowcaseProps {
   images: Array<string | null | undefined>;
   className?: string;
   imageClassName?: string;
+  activeImageClassName?: string;
+  blockParentInteractions?: boolean;
   dotsClassName?: string;
   fallback?: ReactNode;
 }
@@ -29,17 +33,34 @@ function clampIndex(index: number, length: number) {
   return Math.min(Math.max(index, 0), length - 1);
 }
 
-export function MediaShowcase({
+function arraysEqualByStringValue(left: Array<string | null | undefined>, right: Array<string | null | undefined>) {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  for (let index = 0; index < left.length; index += 1) {
+    if (String(left[index] || '') !== String(right[index] || '')) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function MediaShowcaseComponent({
   alt,
   images,
   className,
   imageClassName,
+  activeImageClassName,
+  blockParentInteractions = true,
   dotsClassName,
   fallback = null,
 }: MediaShowcaseProps) {
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
-  const [isInteracting, setIsInteracting] = useState(false);
+  const isInteractingRef = useRef(false);
+  const scrollFrameRef = useRef<number | null>(null);
 
   const normalizedImages = useMemo(
     () =>
@@ -55,7 +76,7 @@ export function MediaShowcase({
   const imagesFingerprint = useMemo(() => normalizedImages.join('||'), [normalizedImages]);
   const hasMultipleImages = normalizedImages.length > 1;
 
-  function scrollToIndex(nextIndex: number, behavior: ScrollBehavior = 'smooth') {
+  const scrollToIndex = useCallback((nextIndex: number, behavior: ScrollBehavior = 'smooth') => {
     const viewport = viewportRef.current;
     if (!viewport || normalizedImages.length === 0) {
       return;
@@ -67,35 +88,51 @@ export function MediaShowcase({
       left: targetLeft,
       behavior,
     });
-    setActiveIndex(safeIndex);
-  }
+    setActiveIndex((currentIndex) => (currentIndex === safeIndex ? currentIndex : safeIndex));
+  }, [normalizedImages.length]);
 
-  function handleScroll(event: UIEvent<HTMLDivElement>) {
+  const handleScroll = useCallback((event: UIEvent<HTMLDivElement>) => {
     if (normalizedImages.length <= 1) {
       return;
     }
 
     const viewport = event.currentTarget;
-    const width = viewport.clientWidth || 1;
-    const nextIndex = clampIndex(Math.round(viewport.scrollLeft / width), normalizedImages.length);
-    setActiveIndex(nextIndex);
-  }
-
-  useEffect(() => {
-    const safeIndex = clampIndex(activeIndex, normalizedImages.length);
-    setActiveIndex(safeIndex);
-
-    if (!viewportRef.current) {
+    if (scrollFrameRef.current !== null) {
       return;
     }
 
-    const viewport = viewportRef.current;
-    const targetLeft = safeIndex * viewport.clientWidth;
-    viewport.scrollTo({
-      left: targetLeft,
-      behavior: 'auto',
+    scrollFrameRef.current = window.requestAnimationFrame(() => {
+      scrollFrameRef.current = null;
+      const width = viewport.clientWidth || 1;
+      const nextIndex = clampIndex(Math.round(viewport.scrollLeft / width), normalizedImages.length);
+      setActiveIndex((currentIndex) => (currentIndex === nextIndex ? currentIndex : nextIndex));
     });
-  }, [imagesFingerprint]);
+  }, [normalizedImages.length]);
+
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) {
+      return;
+    }
+
+    setActiveIndex((currentIndex) => {
+      const safeIndex = clampIndex(currentIndex, normalizedImages.length);
+      const targetLeft = safeIndex * viewport.clientWidth;
+      viewport.scrollTo({
+        left: targetLeft,
+        behavior: 'auto',
+      });
+      return safeIndex === currentIndex ? currentIndex : safeIndex;
+    });
+  }, [imagesFingerprint, normalizedImages.length]);
+
+  useEffect(() => {
+    return () => {
+      if (scrollFrameRef.current !== null) {
+        window.cancelAnimationFrame(scrollFrameRef.current);
+      }
+    };
+  }, []);
 
   return (
     <div className={cn('relative h-full w-full overflow-hidden', className)}>
@@ -108,20 +145,28 @@ export function MediaShowcase({
           )}
           onScroll={handleScroll}
           onPointerDown={(event) => {
-            event.stopPropagation();
-            setIsInteracting(true);
+            if (blockParentInteractions) {
+              event.stopPropagation();
+            }
+            isInteractingRef.current = true;
           }}
           onPointerUp={(event) => {
-            event.stopPropagation();
-            setIsInteracting(false);
+            if (blockParentInteractions) {
+              event.stopPropagation();
+            }
+            isInteractingRef.current = false;
           }}
           onPointerCancel={(event) => {
-            event.stopPropagation();
-            setIsInteracting(false);
+            if (blockParentInteractions) {
+              event.stopPropagation();
+            }
+            isInteractingRef.current = false;
           }}
-          onPointerLeave={() => setIsInteracting(false)}
+          onPointerLeave={() => {
+            isInteractingRef.current = false;
+          }}
           onClick={(event) => {
-            if (isInteracting) {
+            if (blockParentInteractions && isInteractingRef.current) {
               event.stopPropagation();
             }
           }}
@@ -133,7 +178,13 @@ export function MediaShowcase({
                   removeWrapper
                   alt={normalizedImages.length > 1 ? `${alt} ${index + 1}` : alt}
                   src={imageUrl}
-                  className={cn('h-full w-full object-cover', imageClassName)}
+                  className={cn(
+                    'h-full w-full object-cover',
+                    imageClassName,
+                    index === activeIndex ? activeImageClassName : null,
+                  )}
+                  loading={index === 0 ? 'eager' : 'lazy'}
+                  decoding="async"
                   draggable={false}
                 />
               </div>
@@ -196,3 +247,16 @@ export function MediaShowcase({
     </div>
   );
 }
+
+export const MediaShowcase = memo(MediaShowcaseComponent, (prevProps, nextProps) => {
+  return (
+    prevProps.alt === nextProps.alt &&
+    prevProps.className === nextProps.className &&
+    prevProps.imageClassName === nextProps.imageClassName &&
+    prevProps.activeImageClassName === nextProps.activeImageClassName &&
+    prevProps.blockParentInteractions === nextProps.blockParentInteractions &&
+    prevProps.dotsClassName === nextProps.dotsClassName &&
+    prevProps.fallback === nextProps.fallback &&
+    arraysEqualByStringValue(prevProps.images, nextProps.images)
+  );
+});

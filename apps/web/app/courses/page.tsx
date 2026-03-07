@@ -1,5 +1,4 @@
-import { formatCurrency } from '@navaja/shared';
-import { CourseMediaCard } from '@/components/public/course-media-card';
+import { CoursesMarketplaceCatalog } from '@/components/public/courses-marketplace-catalog';
 import { PublicSectionEmptyState } from '@/components/public/public-section-empty-state';
 import { listMarketplaceShops } from '@/lib/shops';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
@@ -97,22 +96,7 @@ export default async function CoursesPage() {
         </div>
       ) : null}
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {items.map(({ course, shop }) => (
-          <CourseMediaCard
-            key={course.id}
-            title={course.title}
-            description={course.description}
-            topLabel={shop.name}
-            imageUrls={[course.image_url, ...shop.imageUrls]}
-            chips={[course.level, `${course.duration_hours}h`, formatCurrency(course.price_cents)]}
-            primaryHref={`/shops/${shop.slug}/courses/${course.id}`}
-            primaryLabel="Ver curso"
-            secondaryHref={`/shops/${shop.slug}/courses`}
-            secondaryLabel="Ver academia"
-          />
-        ))}
-      </div>
+      {items.length > 0 ? <CoursesMarketplaceCatalog items={items} /> : null}
     </section>
   );
 }

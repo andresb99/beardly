@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useTransition } from 'react';
+import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { X } from 'lucide-react';
 import { Button } from '@heroui/button';
@@ -73,14 +73,22 @@ export function AdminStaffForms({ shopId, shopSlug, staff, weekdays }: AdminStaf
   const [inviteMessage, setInviteMessage] = useState<string | null>(null);
   const [isSearching, startSearchTransition] = useTransition();
   const [isSaving, startSaveTransition] = useTransition();
+  const selectedInviteeIds = useMemo(
+    () => new Set(selectedInvitees.map((item) => item.userId)),
+    [selectedInvitees],
+  );
+  const visibleSearchResults = useMemo(
+    () => searchResults.filter((item) => !selectedInviteeIds.has(item.userId)),
+    [searchResults, selectedInviteeIds],
+  );
 
-  function handleInviteQueryChange(value: string) {
+  const handleInviteQueryChange = useCallback((value: string) => {
     setInviteQuery(value);
     setInviteError(null);
     setInviteMessage(null);
-  }
+  }, []);
 
-  function handleInviteSubmit(event: React.FormEvent<HTMLFormElement>) {
+  const handleInviteSubmit = useCallback((event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     if (!selectedInvitees.length) {
@@ -115,9 +123,9 @@ export function AdminStaffForms({ shopId, shopSlug, staff, weekdays }: AdminStaf
       setInviteRole('staff');
       router.refresh();
     });
-  }
+  }, [inviteRole, router, selectedInvitees, shopId, startSaveTransition]);
 
-  function handleAddInvitee(invitee: InviteePreview) {
+  const handleAddInvitee = useCallback((invitee: InviteePreview) => {
     setSelectedInvitees((current) => {
       if (current.some((item) => item.userId === invitee.userId)) {
         return current;
@@ -130,13 +138,13 @@ export function AdminStaffForms({ shopId, shopSlug, staff, weekdays }: AdminStaf
     setLastResolvedQuery('');
     setInviteError(null);
     setInviteMessage(`${invitee.fullName} agregado a la lista de invitaciones.`);
-  }
+  }, []);
 
-  function handleRemoveInvitee(userId: string) {
+  const handleRemoveInvitee = useCallback((userId: string) => {
     setSelectedInvitees((current) => current.filter((item) => item.userId !== userId));
     setInviteError(null);
     setInviteMessage('Usuario removido de la lista.');
-  }
+  }, []);
 
   useEffect(() => {
     const normalizedQuery = inviteQuery.trim();
@@ -159,8 +167,7 @@ export function AdminStaffForms({ shopId, shopSlug, staff, weekdays }: AdminStaf
           return;
         }
 
-        const selectedIds = new Set(selectedInvitees.map((item) => item.userId));
-        setSearchResults(results.filter((item) => !selectedIds.has(item.userId)));
+        setSearchResults(results);
         setLastResolvedQuery(normalizedQuery);
       });
     }, 320);
@@ -169,7 +176,7 @@ export function AdminStaffForms({ shopId, shopSlug, staff, weekdays }: AdminStaf
       cancelled = true;
       window.clearTimeout(timeoutId);
     };
-  }, [inviteQuery, selectedInvitees, shopId, startSearchTransition]);
+  }, [inviteQuery, shopId, startSearchTransition]);
 
   return (
     <>
@@ -205,14 +212,14 @@ export function AdminStaffForms({ shopId, shopSlug, staff, weekdays }: AdminStaf
 
                       {!isSearching &&
                       inviteQuery.trim() === lastResolvedQuery &&
-                      searchResults.length === 0 ? (
+                      visibleSearchResults.length === 0 ? (
                         <p className="px-3 py-2 text-sm text-slate/70 dark:text-slate-400">
                           No encontramos usuarios para esa busqueda.
                         </p>
                       ) : null}
 
                       {!isSearching
-                        ? searchResults.map((invitee) => (
+                        ? visibleSearchResults.map((invitee) => (
                             <button
                               key={invitee.userId}
                               type="button"

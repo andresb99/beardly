@@ -1047,6 +1047,10 @@ html.dark .admin-stage::before {
     box-shadow 180ms ease;
 }
 
+.data-card.no-hover-motion {
+  transition: none;
+}
+
 .data-card::before {
   content: '';
   position: absolute;
@@ -1070,14 +1074,14 @@ html.dark .data-card {
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .data-card:hover {
+  .data-card:not(.no-hover-motion):hover {
     border-color: rgb(255 255 255 / 0.86);
     box-shadow:
       0 24px 42px -30px rgb(15 23 42 / 0.18),
       0 10px 16px -14px rgb(56 189 248 / 0.16);
   }
 
-  html.dark .data-card:hover {
+  html.dark .data-card:not(.no-hover-motion):hover {
     border-color: transparent;
     box-shadow: 0 28px 44px -34px rgb(2 6 23 / 0.7);
   }

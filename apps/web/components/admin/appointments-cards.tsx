@@ -1,5 +1,6 @@
 'use client';
 
+import { memo } from 'react';
 import {
   Avatar,
   Button,
@@ -54,7 +55,11 @@ function getPhoneHref(phone: string) {
   return normalized ? `tel:${normalized}` : null;
 }
 
-export function AdminAppointmentsCards({ shopId, appointments, className }: AdminAppointmentsCardsProps) {
+export const AdminAppointmentsCards = memo(function AdminAppointmentsCards({
+  shopId,
+  appointments,
+  className,
+}: AdminAppointmentsCardsProps) {
   if (!appointments.length) {
     return (
       <div
@@ -175,5 +180,9 @@ export function AdminAppointmentsCards({ shopId, appointments, className }: Admi
       })}
     </div>
   );
-}
+}, (prevProps, nextProps) =>
+  prevProps.shopId === nextProps.shopId &&
+  prevProps.className === nextProps.className &&
+  prevProps.appointments === nextProps.appointments,
+);
 

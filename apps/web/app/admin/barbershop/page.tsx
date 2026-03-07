@@ -1,12 +1,17 @@
 import Link from 'next/link';
 import { Card, CardBody } from '@heroui/card';
 import { AdminBarbershopSettingsForm } from '@/components/admin/barbershop-settings-form';
+import { SubscriptionBillingPanel } from '@/components/admin/subscription-billing-panel';
 import { requireAdmin } from '@/lib/auth';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
+import type { SubscriptionStatus, SubscriptionTier } from '@/lib/subscription-plans';
 import { buildAdminHref } from '@/lib/workspace-routes';
 
 interface AdminBarbershopSettingsPageProps {
-  searchParams: Promise<{ shop?: string }>;
+  searchParams: Promise<{
+    shop?: string;
+    billing?: string;
+  }>;
 }
 
 interface ShopRow {
@@ -33,6 +38,49 @@ interface GalleryRow {
   public_url: string | null;
 }
 
+interface SubscriptionRow {
+  shop_id: string;
+  plan: SubscriptionTier;
+  status: SubscriptionStatus;
+}
+
+function resolveCurrentPlan(value: string | null | undefined): SubscriptionTier {
+  const normalized = String(value || '').trim();
+  if (
+    normalized === 'free' ||
+    normalized === 'pro' ||
+    normalized === 'business' ||
+    normalized === 'app_admin'
+  ) {
+    return normalized;
+  }
+
+  return 'free';
+}
+
+function resolveCurrentStatus(value: string | null | undefined): SubscriptionStatus {
+  const normalized = String(value || '').trim();
+  if (
+    normalized === 'active' ||
+    normalized === 'trialing' ||
+    normalized === 'past_due' ||
+    normalized === 'cancelled'
+  ) {
+    return normalized;
+  }
+
+  return 'active';
+}
+
+function resolveBillingMessage(value: string | null | undefined) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'success' || normalized === 'pending' || normalized === 'failure') {
+    return normalized;
+  }
+
+  return null;
+}
+
 export default async function AdminBarbershopSettingsPage({
   searchParams,
 }: AdminBarbershopSettingsPageProps) {
@@ -40,30 +88,40 @@ export default async function AdminBarbershopSettingsPage({
   const ctx = await requireAdmin({ shopSlug: params.shop });
   const supabase = await createSupabaseServerClient();
 
-  const [{ data: shop }, { data: location }, { data: gallery }] = await Promise.all([
-    supabase
-      .from('shops')
-      .select('id, name, slug, timezone, phone, description, cover_image_url')
-      .eq('id', ctx.shopId)
-      .maybeSingle(),
-    supabase
-      .from('shop_locations')
-      .select('label, city, region, country_code, latitude, longitude')
-      .eq('shop_id', ctx.shopId)
-      .maybeSingle(),
-    supabase
-      .from('shop_gallery_images')
-      .select('id, public_url, sort_order, created_at')
-      .eq('shop_id', ctx.shopId)
-      .order('sort_order')
-      .order('created_at'),
-  ]);
+  const [{ data: shop }, { data: location }, { data: gallery }, { data: subscription }] =
+    await Promise.all([
+      supabase
+        .from('shops')
+        .select('id, name, slug, timezone, phone, description, cover_image_url')
+        .eq('id', ctx.shopId)
+        .maybeSingle(),
+      supabase
+        .from('shop_locations')
+        .select('label, city, region, country_code, latitude, longitude')
+        .eq('shop_id', ctx.shopId)
+        .maybeSingle(),
+      supabase
+        .from('shop_gallery_images')
+        .select('id, public_url, sort_order, created_at')
+        .eq('shop_id', ctx.shopId)
+        .order('sort_order')
+        .order('created_at'),
+      supabase
+        .from('subscriptions')
+        .select('shop_id, plan, status')
+        .eq('shop_id', ctx.shopId)
+        .maybeSingle(),
+    ]);
 
   const shopData = (shop as ShopRow | null) || null;
   const locationData = (location as LocationRow | null) || null;
   const galleryRows = ((gallery || []) as GalleryRow[]).filter(
     (item) => typeof item.public_url === 'string' && item.public_url.trim().length > 0,
   );
+  const subscriptionData = (subscription as SubscriptionRow | null) || null;
+  const currentPlan = resolveCurrentPlan(subscriptionData?.plan);
+  const currentStatus = resolveCurrentStatus(subscriptionData?.status);
+  const billingMessage = resolveBillingMessage(params.billing);
 
   return (
     <section className="space-y-6">
@@ -108,6 +166,28 @@ export default async function AdminBarbershopSettingsPage({
               id: item.id,
               publicUrl: String(item.public_url),
             }))}
+          />
+        </CardBody>
+      </Card>
+
+      <Card className="soft-panel rounded-[1.9rem] border-0 shadow-none">
+        <CardBody className="space-y-5 p-5 md:p-6">
+          <div>
+            <p className="hero-eyebrow">Facturacion</p>
+            <h2 className="mt-2 font-[family-name:var(--font-heading)] text-2xl font-semibold text-ink dark:text-slate-100">
+              Plan y cobros
+            </h2>
+            <p className="mt-2 text-sm text-slate/80 dark:text-slate-300">
+              Las reservas de planes pagos requieren checkout en Mercado Pago. Cambia o renueva
+              tu plan desde aqui.
+            </p>
+          </div>
+
+          <SubscriptionBillingPanel
+            shopId={ctx.shopId}
+            currentPlan={currentPlan}
+            currentStatus={currentStatus}
+            billingMessage={billingMessage}
           />
         </CardBody>
       </Card>

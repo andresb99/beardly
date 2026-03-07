@@ -1,5 +1,6 @@
 'use client';
 
+import { memo } from 'react';
 import {
   Avatar,
   Button,
@@ -52,7 +53,11 @@ const statusLabel: Record<string, string> = {
   hired: 'Contratado',
 };
 
-export function AdminApplicantsCards({ rows, shopId, className }: AdminApplicantsCardsProps) {
+export const AdminApplicantsCards = memo(function AdminApplicantsCards({
+  rows,
+  shopId,
+  className,
+}: AdminApplicantsCardsProps) {
   if (!rows.length) {
     return (
       <div
@@ -167,5 +172,8 @@ export function AdminApplicantsCards({ rows, shopId, className }: AdminApplicant
       ))}
     </div>
   );
-}
-
+}, (prevProps, nextProps) =>
+  prevProps.shopId === nextProps.shopId &&
+  prevProps.className === nextProps.className &&
+  prevProps.rows === nextProps.rows,
+);

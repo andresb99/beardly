@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation';
+import { createSupabaseAdminClient } from './supabase/admin';
 import { createSupabaseServerClient } from './supabase/server';
 import {
   getAccessibleWorkspacesForCurrentUser,
@@ -33,6 +34,11 @@ export interface AuthStaffContext {
   shopSlug: string;
   shopName: string;
   shopTimezone: string;
+}
+
+export interface PlatformAdminContext {
+  userId: string;
+  email: string | null;
 }
 
 interface AuthScopeOptions {
@@ -275,5 +281,32 @@ export async function requireStaff(options?: AuthScopeOptions) {
     shopSlug: ctx.shopSlug,
     shopName: ctx.shopName,
     shopTimezone: ctx.shopTimezone,
+  };
+}
+
+export async function requirePlatformAdmin(nextPath = '/app-admin'): Promise<PlatformAdminContext> {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect(`/login?next=${encodeURIComponent(nextPath)}`);
+  }
+
+  const admin = createSupabaseAdminClient();
+  const { data: platformAdmin } = await admin
+    .from('platform_admins')
+    .select('user_id')
+    .eq('user_id', user.id)
+    .maybeSingle();
+
+  if (!platformAdmin?.user_id) {
+    redirect('/cuenta');
+  }
+
+  return {
+    userId: user.id,
+    email: user.email ?? null,
   };
 }

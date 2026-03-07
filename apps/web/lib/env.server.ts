@@ -10,6 +10,12 @@ const reviewServerEnvSchema = z.object({
   REVIEW_LINK_SIGNING_SECRET: z.string().min(32),
 });
 
+const mercadoPagoServerEnvSchema = z.object({
+  MERCADO_PAGO_ACCESS_TOKEN: z.string().min(20),
+  MERCADO_PAGO_WEBHOOK_TOKEN: z.string().min(16).optional(),
+  MERCADO_PAGO_API_BASE_URL: z.string().url().optional(),
+});
+
 function getInvalidKeys(error: z.ZodError) {
   return Object.entries(error.flatten().fieldErrors)
     .filter(([, messages]) => (messages?.length || 0) > 0)
@@ -51,4 +57,12 @@ export function getReviewLinkSigningSecret() {
     REVIEW_LINK_SIGNING_SECRET: process.env.REVIEW_LINK_SIGNING_SECRET,
   });
   return reviewServerEnv.REVIEW_LINK_SIGNING_SECRET;
+}
+
+export function getMercadoPagoServerEnv() {
+  return parseServerSection(mercadoPagoServerEnvSchema, {
+    MERCADO_PAGO_ACCESS_TOKEN: process.env.MERCADO_PAGO_ACCESS_TOKEN,
+    MERCADO_PAGO_WEBHOOK_TOKEN: process.env.MERCADO_PAGO_WEBHOOK_TOKEN,
+    MERCADO_PAGO_API_BASE_URL: process.env.MERCADO_PAGO_API_BASE_URL,
+  });
 }

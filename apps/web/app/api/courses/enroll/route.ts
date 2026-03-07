@@ -1,6 +1,19 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { courseEnrollmentCreateSchema } from '@navaja/shared';
+import { resolveShopTierForUser } from '@/lib/billing.server';
+import { createCourseEnrollmentFromIntent } from '@/lib/course-payments.server';
+import { env } from '@/lib/env';
+import { getMercadoPagoServerEnv } from '@/lib/env.server';
+import { createMercadoPagoCheckoutPreference } from '@/lib/mercado-pago.server';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
+
+function normalizeEmail(value: string | null | undefined) {
+  const normalized = String(value || '')
+    .trim()
+    .toLowerCase();
+  return normalized || null;
+}
 
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
@@ -12,9 +25,23 @@ export async function POST(request: NextRequest) {
     });
   }
 
+  const sessionSupabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await sessionSupabase.auth.getUser();
+
   const supabase = createSupabaseAdminClient();
-  const normalizedEmail = parsed.data.email.trim().toLowerCase();
+
+  const normalizedEmail =
+    normalizeEmail(parsed.data.email) ?? normalizeEmail(user?.email) ?? null;
   const normalizedPhone = parsed.data.phone.trim();
+  const normalizedName = parsed.data.name.trim();
+
+  if (!normalizedEmail) {
+    return new NextResponse('Ingresa un email valido para completar la inscripcion.', {
+      status: 400,
+    });
+  }
 
   const { data: session, error: sessionError } = await supabase
     .from('course_sessions')
@@ -33,7 +60,7 @@ export async function POST(request: NextRequest) {
 
   const { data: course, error: courseError } = await supabase
     .from('courses')
-    .select('id, shop_id, is_active')
+    .select('id, shop_id, title, price_cents, is_active')
     .eq('id', String(session.course_id))
     .eq('is_active', true)
     .maybeSingle();
@@ -48,7 +75,7 @@ export async function POST(request: NextRequest) {
 
   const { data: shop, error: shopError } = await supabase
     .from('shops')
-    .select('id, status')
+    .select('id, name, slug, status')
     .eq('id', String(course.shop_id))
     .eq('status', 'active')
     .maybeSingle();
@@ -91,33 +118,149 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  const capacity = Number(session.capacity || 0);
-  if (capacity > 0 && (activeEnrollmentCount || 0) >= capacity) {
-    return new NextResponse('Esta sesion ya no tiene cupos disponibles.', { status: 400 });
-  }
-
   if (duplicateEnrollment?.id) {
     return new NextResponse('Ya existe una inscripcion activa para este email en la sesion.', {
       status: 400,
     });
   }
 
-  const { data, error } = await supabase
-    .from('course_enrollments')
-    .insert({
-      session_id: parsed.data.session_id,
-      name: parsed.data.name,
-      phone: normalizedPhone,
-      email: normalizedEmail,
-      status: 'pending',
-    })
-    .select('id')
-    .single();
-
-  if (error || !data) {
-    return new NextResponse(error?.message || 'No se pudo registrar la inscripcion.', { status: 400 });
+  const capacity = Number(session.capacity || 0);
+  if (capacity > 0 && (activeEnrollmentCount || 0) >= capacity) {
+    return new NextResponse('Esta sesion ya no tiene cupos disponibles.', { status: 400 });
   }
 
-  return NextResponse.json({ enrollment_id: data.id });
-}
+  const amountCents = Number(course.price_cents || 0);
+  const tierResolution = await resolveShopTierForUser(String(course.shop_id), user?.id ?? null);
+  const requiresPayment = amountCents > 0 && tierResolution.requiresReservationPayment;
 
+  if (requiresPayment) {
+    const externalReference = [
+      'course',
+      parsed.data.session_id.slice(0, 8),
+      Date.now().toString(36),
+      Math.random().toString(36).slice(2, 10),
+    ].join('-');
+
+    const { data: paymentIntent, error: paymentIntentError } = await supabase
+      .from('payment_intents')
+      .insert({
+        shop_id: String(course.shop_id),
+        intent_type: 'course_enrollment',
+        status: 'pending',
+        provider: 'mercado_pago',
+        external_reference: externalReference,
+        amount_cents: amountCents,
+        currency_code: 'UYU',
+        payer_email: normalizedEmail,
+        payload: {
+          shop_id: String(course.shop_id),
+          shop_slug: String(shop.slug || ''),
+          course_id: String(course.id),
+          course_title: String(course.title || 'Curso'),
+          session_id: String(session.id),
+          customer_name: normalizedName,
+          customer_phone: normalizedPhone,
+          customer_email: normalizedEmail,
+        },
+        created_by_user_id: user?.id || null,
+      })
+      .select('id')
+      .single();
+
+    if (paymentIntentError || !paymentIntent) {
+      return new NextResponse(paymentIntentError?.message || 'No se pudo iniciar el pago.', {
+        status: 400,
+      });
+    }
+
+    const paymentStateParams = new URLSearchParams({
+      payment_intent: String(paymentIntent.id),
+      course: String(course.id),
+      session: String(session.id),
+      shop: String(shop.slug || ''),
+      title: String(course.title || 'Curso'),
+    });
+
+    try {
+      const webhookToken = getMercadoPagoServerEnv().MERCADO_PAGO_WEBHOOK_TOKEN?.trim() || null;
+      const webhookUrl = webhookToken
+        ? `${env.NEXT_PUBLIC_APP_URL}/api/payments/mercadopago/webhook?token=${encodeURIComponent(webhookToken)}`
+        : `${env.NEXT_PUBLIC_APP_URL}/api/payments/mercadopago/webhook`;
+
+      const checkout = await createMercadoPagoCheckoutPreference({
+        item: {
+          id: String(session.id),
+          title: `Inscripcion curso - ${String(course.title || 'Curso')}`,
+          description: `Cupo para ${String(course.title || 'Curso')} en ${String(shop.name || 'barberia')}`,
+          amountCents,
+        },
+        payerEmail: normalizedEmail,
+        externalReference,
+        successUrl: `${env.NEXT_PUBLIC_APP_URL}/courses/enrollment/success?${paymentStateParams.toString()}&payment_status=approved`,
+        pendingUrl: `${env.NEXT_PUBLIC_APP_URL}/courses/enrollment/success?${paymentStateParams.toString()}&payment_status=pending`,
+        failureUrl: `${env.NEXT_PUBLIC_APP_URL}/courses/enrollment/success?${paymentStateParams.toString()}&payment_status=failure`,
+        notificationUrl: webhookUrl,
+        metadata: {
+          intent_id: String(paymentIntent.id),
+          intent_type: 'course_enrollment',
+          course_id: String(course.id),
+          session_id: String(session.id),
+          shop_id: String(course.shop_id),
+        },
+      });
+
+      await supabase
+        .from('payment_intents')
+        .update({
+          provider_preference_id: checkout.preferenceId,
+          checkout_url: checkout.checkoutUrl,
+        })
+        .eq('id', paymentIntent.id);
+
+      return NextResponse.json({
+        requires_payment: true,
+        payment_intent_id: paymentIntent.id,
+        checkout_url: checkout.checkoutUrl,
+      });
+    } catch (checkoutError) {
+      await supabase
+        .from('payment_intents')
+        .update({
+          status: 'rejected',
+          failure_reason:
+            checkoutError instanceof Error ? checkoutError.message : 'No se pudo crear el checkout.',
+        })
+        .eq('id', paymentIntent.id);
+
+      return new NextResponse(
+        checkoutError instanceof Error ? checkoutError.message : 'No se pudo iniciar el pago.',
+        { status: 400 },
+      );
+    }
+  }
+
+  try {
+    const enrollment = await createCourseEnrollmentFromIntent(
+      {
+        shop_id: String(course.shop_id),
+        course_id: String(course.id),
+        course_title: String(course.title || 'Curso'),
+        session_id: parsed.data.session_id,
+        name: normalizedName,
+        phone: normalizedPhone,
+        email: normalizedEmail,
+      },
+      { paymentIntentId: null },
+    );
+
+    return NextResponse.json({
+      enrollment_id: enrollment.enrollmentId,
+      requires_payment: false,
+    });
+  } catch (createError) {
+    return new NextResponse(
+      createError instanceof Error ? createError.message : 'No se pudo registrar la inscripcion.',
+      { status: 400 },
+    );
+  }
+}

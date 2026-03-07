@@ -108,7 +108,7 @@ describe('CoursesPage', () => {
     ).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Fade Pro' })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Orphan' })).not.toBeInTheDocument();
-    expect(screen.getByText('Intermedio')).toBeInTheDocument();
+    expect(screen.getAllByText('Intermedio').length).toBeGreaterThan(0);
     expect(screen.getByText('6h')).toBeInTheDocument();
     expect(screen.getByText(/\$\s?50\b/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Ver curso' })).toHaveAttribute(

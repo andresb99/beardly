@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { bookingInputSchema, formatCurrency } from '@navaja/shared';
 import { Button, Card, CardBody, Input, Select, SelectItem, Textarea } from '@heroui/react';
@@ -29,6 +29,9 @@ interface BookingFlowProps {
   services: ServiceOption[];
   staff: StaffOption[];
   initialCustomerEmail?: string;
+  initialCustomerName?: string;
+  initialCustomerPhone?: string;
+  preferredPaymentMethod?: string | null;
 }
 
 const stepLabels = [
@@ -67,7 +70,40 @@ function getInitialBookingDate() {
   return utcDate.toISOString().slice(0, 10);
 }
 
-export function BookingFlow({ shopId, services, staff, initialCustomerEmail }: BookingFlowProps) {
+function areAvailabilitySlotsEqual(left: AvailabilitySlot[], right: AvailabilitySlot[]) {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  for (let index = 0; index < left.length; index += 1) {
+    const leftItem = left[index];
+    const rightItem = right[index];
+    if (!leftItem || !rightItem) {
+      return false;
+    }
+
+    if (
+      leftItem.staff_id !== rightItem.staff_id ||
+      leftItem.staff_name !== rightItem.staff_name ||
+      leftItem.start_at !== rightItem.start_at ||
+      leftItem.end_at !== rightItem.end_at
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+export function BookingFlow({
+  shopId,
+  services,
+  staff,
+  initialCustomerEmail,
+  initialCustomerName = '',
+  initialCustomerPhone = '',
+  preferredPaymentMethod = null,
+}: BookingFlowProps) {
   const router = useRouter();
 
   const [step, setStep] = useState(1);
@@ -76,8 +112,8 @@ export function BookingFlow({ shopId, services, staff, initialCustomerEmail }: B
   const [date, setDate] = useState<string>(getInitialBookingDate);
   const [slots, setSlots] = useState<AvailabilitySlot[]>([]);
   const [selectedSlot, setSelectedSlot] = useState<AvailabilitySlot | null>(null);
-  const [customerName, setCustomerName] = useState('');
-  const [customerPhone, setCustomerPhone] = useState('');
+  const [customerName, setCustomerName] = useState(initialCustomerName);
+  const [customerPhone, setCustomerPhone] = useState(initialCustomerPhone);
   const [customerEmail, setCustomerEmail] = useState(initialCustomerEmail || '');
   const [notes, setNotes] = useState('');
   const [loadingSlots, setLoadingSlots] = useState(false);
@@ -92,6 +128,40 @@ export function BookingFlow({ shopId, services, staff, initialCustomerEmail }: B
     () => staff.find((item) => item.id === staffId) || null,
     [staff, staffId],
   );
+  const renderedSlots = useMemo(
+    () =>
+      slots.map((slot) => {
+        const isSelected =
+          selectedSlot?.staff_id === slot.staff_id && selectedSlot.start_at === slot.start_at;
+        return {
+          key: `${slot.staff_id}-${slot.start_at}`,
+          slot,
+          isSelected,
+          startTimeLabel: new Date(slot.start_at).toLocaleTimeString('es-UY', {
+            hour: '2-digit',
+            minute: '2-digit',
+          }),
+        };
+      }),
+    [selectedSlot, slots],
+  );
+  const handleServiceSelectionChange = useCallback((keys: 'all' | Iterable<unknown>) => {
+    const nextServiceId = getSingleSelectionValue(keys);
+    setServiceId(nextServiceId);
+    setStaffId('');
+    setSelectedSlot(null);
+    setStep((currentStep) => (nextServiceId ? Math.max(currentStep, 2) : 1));
+  }, []);
+  const handleStaffSelectionChange = useCallback((keys: 'all' | Iterable<unknown>) => {
+    const nextStaffId = getSingleSelectionValue(keys);
+    setStaffId(nextStaffId);
+    setSelectedSlot(null);
+    setStep((currentStep) => Math.max(currentStep, 3));
+  }, []);
+  const handleSelectSlot = useCallback((slot: AvailabilitySlot) => {
+    setSelectedSlot(slot);
+    setStep((currentStep) => Math.max(currentStep, 4));
+  }, []);
 
   useEffect(() => {
     if (!serviceId || !date) {
@@ -100,6 +170,7 @@ export function BookingFlow({ shopId, services, staff, initialCustomerEmail }: B
       return;
     }
 
+    const controller = new AbortController();
     let ignore = false;
     setLoadingSlots(true);
     setError(null);
@@ -114,7 +185,9 @@ export function BookingFlow({ shopId, services, staff, initialCustomerEmail }: B
       query.set('staff_id', staffId);
     }
 
-    fetch(`/api/availability?${query.toString()}`)
+    fetch(`/api/availability?${query.toString()}`, {
+      signal: controller.signal,
+    })
       .then(async (response) => {
         if (!response.ok) {
           throw new Error(await response.text());
@@ -125,11 +198,17 @@ export function BookingFlow({ shopId, services, staff, initialCustomerEmail }: B
         if (ignore) {
           return;
         }
-        setSlots(payload.slots || []);
+        const nextSlots = payload.slots || [];
+        setSlots((currentSlots) =>
+          areAvailabilitySlotsEqual(currentSlots, nextSlots) ? currentSlots : nextSlots,
+        );
         setSelectedSlot(null);
       })
       .catch((fetchError: unknown) => {
         if (!ignore) {
+          if (fetchError instanceof DOMException && fetchError.name === 'AbortError') {
+            return;
+          }
           setError(
             fetchError instanceof Error
               ? fetchError.message
@@ -145,6 +224,7 @@ export function BookingFlow({ shopId, services, staff, initialCustomerEmail }: B
 
     return () => {
       ignore = true;
+      controller.abort();
     };
   }, [date, serviceId, shopId, staffId]);
 
@@ -187,7 +267,23 @@ export function BookingFlow({ shopId, services, staff, initialCustomerEmail }: B
         return;
       }
 
-      const payload = (await response.json()) as { appointment_id: string };
+      const payload = (await response.json()) as {
+        appointment_id?: string;
+        requires_payment?: boolean;
+        payment_intent_id?: string;
+        checkout_url?: string;
+      };
+
+      if (payload.requires_payment && payload.checkout_url) {
+        window.location.assign(payload.checkout_url);
+        return;
+      }
+
+      if (!payload.appointment_id) {
+        setError('No se pudo iniciar la reserva.');
+        return;
+      }
+
       router.push(
         `/book/success?appointment=${payload.appointment_id}&start=${encodeURIComponent(selectedSlot.start_at)}&service=${encodeURIComponent(selectedService.name)}&staff=${encodeURIComponent(selectedSlot.staff_name)}`,
       );
@@ -245,13 +341,7 @@ export function BookingFlow({ shopId, services, staff, initialCustomerEmail }: B
                   ? `${selectedService.name} - ${formatCurrency(selectedService.price_cents)} (${selectedService.duration_minutes}m)`
                   : null
               }
-              onSelectionChange={(keys) => {
-                const nextServiceId = getSingleSelectionValue(keys);
-                setServiceId(nextServiceId);
-                setStaffId('');
-                setSelectedSlot(null);
-                setStep(nextServiceId ? Math.max(step, 2) : 1);
-              }}
+              onSelectionChange={handleServiceSelectionChange}
             >
               {services.map((item) => (
                 <SelectItem
@@ -282,12 +372,7 @@ export function BookingFlow({ shopId, services, staff, initialCustomerEmail }: B
                 value: 'text-ink dark:text-slate-100',
               }}
               renderValue={() => (selectedStaff ? selectedStaff.name : null)}
-              onSelectionChange={(keys) => {
-                const nextStaffId = getSingleSelectionValue(keys);
-                setStaffId(nextStaffId);
-                setSelectedSlot(null);
-                setStep(Math.max(step, 3));
-              }}
+              onSelectionChange={handleStaffSelectionChange}
               isDisabled={!serviceId}
             >
               {staff.map((item) => (
@@ -330,29 +415,20 @@ export function BookingFlow({ shopId, services, staff, initialCustomerEmail }: B
             {!loadingSlots && slots.length === 0 ? (
               <p className="text-sm text-slate/70">No hay horarios disponibles para esta fecha.</p>
             ) : null}
-            {slots.map((slot) => {
-              const isSelected =
-                selectedSlot?.staff_id === slot.staff_id && selectedSlot.start_at === slot.start_at;
+            {renderedSlots.map((item) => {
+              const { slot, isSelected } = item;
               return (
                 <button
                   type="button"
-                  key={`${slot.staff_id}-${slot.start_at}`}
+                  key={item.key}
                   className={`rounded-2xl border border-transparent px-3 py-3 text-left text-xs transition ${
                     isSelected
                       ? 'border-sky-400/38 bg-sky-500/[0.1] dark:border-sky-300/22 dark:bg-sky-400/[0.08]'
                       : 'bg-white/58 md:hover:bg-white/78 dark:bg-white/[0.03] dark:md:hover:bg-white/[0.05]'
                   }`}
-                  onClick={() => {
-                    setSelectedSlot(slot);
-                    setStep(Math.max(step, 4));
-                  }}
+                  onClick={() => handleSelectSlot(slot)}
                 >
-                  <p className="font-semibold text-ink dark:text-slate-100">
-                    {new Date(slot.start_at).toLocaleTimeString('es-UY', {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
-                  </p>
+                  <p className="font-semibold text-ink dark:text-slate-100">{item.startTimeLabel}</p>
                   <p className="mt-1 text-slate/70 dark:text-slate-400">{slot.staff_name}</p>
                 </button>
               );
@@ -384,10 +460,11 @@ export function BookingFlow({ shopId, services, staff, initialCustomerEmail }: B
             <Input
               id="customerEmail"
               type="email"
-              label="Email (opcional)"
+              label="Email"
               labelPlacement="inside"
               value={customerEmail}
               onChange={(event) => setCustomerEmail(event.target.value)}
+              required
             />
             <Textarea
               id="notes"
@@ -399,6 +476,11 @@ export function BookingFlow({ shopId, services, staff, initialCustomerEmail }: B
               onChange={(event) => setNotes(event.target.value)}
             />
           </div>
+          {preferredPaymentMethod ? (
+            <p className="mt-2 text-[11px] text-slate/70 dark:text-slate-400">
+              Metodo guardado: {preferredPaymentMethod}
+            </p>
+          ) : null}
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/55 pt-4 dark:border-white/8">
@@ -409,7 +491,7 @@ export function BookingFlow({ shopId, services, staff, initialCustomerEmail }: B
           </p>
           <Button
             onClick={submitBooking}
-            isDisabled={!selectedSlot || !customerName || !customerPhone || submitting}
+            isDisabled={!selectedSlot || !customerName || !customerPhone || !customerEmail || submitting}
             isLoading={submitting}
             className="action-primary px-5 text-sm font-semibold data-[disabled=true]:opacity-50"
           >

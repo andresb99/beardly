@@ -61,6 +61,33 @@ function getPhotoFingerprint(file: File) {
   return `${file.name}:${file.size}:${file.lastModified}`;
 }
 
+function arePredictionsEqual(left: GooglePrediction[], right: GooglePrediction[]) {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  for (let index = 0; index < left.length; index += 1) {
+    const leftItem = left[index];
+    const rightItem = right[index];
+    if (!leftItem || !rightItem) {
+      return false;
+    }
+
+    if (
+      String(leftItem.place_id || '') !== String(rightItem.place_id || '') ||
+      String(leftItem.description || '') !== String(rightItem.description || '') ||
+      String(leftItem.structured_formatting?.main_text || '') !==
+        String(rightItem.structured_formatting?.main_text || '') ||
+      String(leftItem.structured_formatting?.secondary_text || '') !==
+        String(rightItem.structured_formatting?.secondary_text || '')
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 export function BarbershopOnboardingForm() {
   const router = useRouter();
   const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY?.trim() ?? '';
@@ -73,6 +100,7 @@ export function BarbershopOnboardingForm() {
   const autocompleteServiceRef = useRef<GoogleAutocompleteService | null>(null);
   const geocoderRef = useRef<GoogleGeocoder | null>(null);
   const sessionTokenRef = useRef<GoogleAutocompleteSessionToken | null>(null);
+  const predictionRequestIdRef = useRef(0);
 
   const [shopName, setShopName] = useState('');
   const [shopSlug, setShopSlug] = useState('');
@@ -104,13 +132,13 @@ export function BarbershopOnboardingForm() {
   const [error, setError] = useState<string | null>(null);
 
   const resetSelectedLocation = useEffectEvent((nextStatus: string) => {
-    setLatitude(null);
-    setLongitude(null);
-    setCity('');
-    setRegion('');
-    setCountryCode('UY');
-    setLocationLabel('');
-    setLocationStatus(nextStatus);
+    setLatitude((current) => (current === null ? current : null));
+    setLongitude((current) => (current === null ? current : null));
+    setCity((current) => (current === '' ? current : ''));
+    setRegion((current) => (current === '' ? current : ''));
+    setCountryCode((current) => (current === 'UY' ? current : 'UY'));
+    setLocationLabel((current) => (current === '' ? current : ''));
+    setLocationStatus((current) => (current === nextStatus ? current : nextStatus));
   });
 
   const applyGeocodedPlace = useEffectEvent((prediction: GooglePrediction, place: GoogleGeocoderResult) => {
@@ -381,13 +409,16 @@ export function BarbershopOnboardingForm() {
 
     const query = locationQuery.trim();
     if (query.length < 3 || !autocompleteServiceRef.current) {
-      setPredictions([]);
-      setIsSearchingPlaces(false);
+      predictionRequestIdRef.current += 1;
+      setPredictions((current) => (current.length === 0 ? current : []));
+      setIsSearchingPlaces((current) => (current ? false : current));
       return;
     }
 
     const autocompleteService = autocompleteServiceRef.current;
     setIsSearchingPlaces(true);
+    const requestId = predictionRequestIdRef.current + 1;
+    predictionRequestIdRef.current = requestId;
 
     const timeoutId = window.setTimeout(() => {
       autocompleteService.getPlacePredictions(
@@ -397,18 +428,26 @@ export function BarbershopOnboardingForm() {
           sessionToken: sessionTokenRef.current,
         },
         (results: Array<Record<string, unknown>> | null, status: string) => {
-          setIsSearchingPlaces(false);
-          if (status !== 'OK' || !Array.isArray(results)) {
-            setPredictions([]);
+          if (requestId !== predictionRequestIdRef.current) {
             return;
           }
 
-          setPredictions(results.slice(0, 6) as GooglePrediction[]);
+          setIsSearchingPlaces((current) => (current ? false : current));
+          if (status !== 'OK' || !Array.isArray(results)) {
+            setPredictions((current) => (current.length === 0 ? current : []));
+            return;
+          }
+
+          const nextPredictions = results.slice(0, 6) as GooglePrediction[];
+          setPredictions((current) =>
+            arePredictionsEqual(current, nextPredictions) ? current : nextPredictions,
+          );
         },
       );
     }, 180);
 
     return () => {
+      predictionRequestIdRef.current += 1;
       window.clearTimeout(timeoutId);
     };
   }, [locationQuery, placesMode]);

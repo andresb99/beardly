@@ -4,10 +4,24 @@ import { useState } from 'react';
 import { courseEnrollmentCreateSchema } from '@navaja/shared';
 import { Button, Input } from '@heroui/react';
 
-export function CourseEnrollmentForm({ sessionId }: { sessionId: string }) {
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [email, setEmail] = useState('');
+interface CourseEnrollmentFormProps {
+  sessionId: string;
+  initialName?: string;
+  initialPhone?: string;
+  initialEmail?: string;
+  preferredPaymentMethod?: string | null;
+}
+
+export function CourseEnrollmentForm({
+  sessionId,
+  initialName = '',
+  initialPhone = '',
+  initialEmail = '',
+  preferredPaymentMethod = null,
+}: CourseEnrollmentFormProps) {
+  const [name, setName] = useState(initialName);
+  const [phone, setPhone] = useState(initialPhone);
+  const [email, setEmail] = useState(initialEmail);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -42,11 +56,23 @@ export function CourseEnrollmentForm({ sessionId }: { sessionId: string }) {
       return;
     }
 
+    const payload = (await response.json()) as {
+      enrollment_id?: string;
+      requires_payment?: boolean;
+      payment_intent_id?: string;
+      checkout_url?: string;
+    };
+
+    if (payload.requires_payment && payload.checkout_url) {
+      window.location.assign(payload.checkout_url);
+      return;
+    }
+
     setLoading(false);
     setMessage('Inscripcion enviada. Te contactamos para confirmar el cupo.');
-    setName('');
-    setPhone('');
-    setEmail('');
+    setName(initialName);
+    setPhone(initialPhone);
+    setEmail(initialEmail);
   }
 
   return (
@@ -62,12 +88,14 @@ export function CourseEnrollmentForm({ sessionId }: { sessionId: string }) {
         labelPlacement="inside"
         value={name}
         onChange={(event) => setName(event.target.value)}
+        required
       />
       <Input
         label="Telefono"
         labelPlacement="inside"
         value={phone}
         onChange={(event) => setPhone(event.target.value)}
+        required
       />
       <Input
         type="email"
@@ -75,7 +103,13 @@ export function CourseEnrollmentForm({ sessionId }: { sessionId: string }) {
         labelPlacement="inside"
         value={email}
         onChange={(event) => setEmail(event.target.value)}
+        required
       />
+      {preferredPaymentMethod ? (
+        <p className="text-[11px] text-slate/70 dark:text-slate-400">
+          Metodo guardado: {preferredPaymentMethod}
+        </p>
+      ) : null}
       {error ? <p className="status-banner error text-xs">{error}</p> : null}
       {message ? <p className="status-banner success text-xs">{message}</p> : null}
       <Button
@@ -83,7 +117,7 @@ export function CourseEnrollmentForm({ sessionId }: { sessionId: string }) {
         disabled={loading}
         className="action-primary w-full text-sm font-semibold"
       >
-        {loading ? 'Enviando...' : 'Anotarme'}
+        {loading ? 'Procesando...' : 'Anotarme'}
       </Button>
     </form>
   );

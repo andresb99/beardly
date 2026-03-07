@@ -129,11 +129,11 @@ values
   ),
   (
     '11111111-1111-1111-1111-111111111112',
-    'starter',
-    'trialing',
+    'free',
+    'active',
     3,
-    now() + interval '14 days',
-    now() + interval '14 days'
+    null,
+    null
   )
 on conflict (shop_id) do update
 set plan = excluded.plan,

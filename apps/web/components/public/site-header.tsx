@@ -2,7 +2,7 @@
 
 import NextLink from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState, type Key } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type Key } from 'react';
 import { ChevronRight, Moon, Store, Sun } from 'lucide-react';
 import {
   Avatar,
@@ -160,6 +160,33 @@ function getHomeHref(role: NavRole, shopSlug: string | null) {
   return buildPublicHeaderHref('', shopSlug);
 }
 
+function areWorkspaceDirectoriesEqual(
+  left: AccessibleWorkspaceMeta[],
+  right: AccessibleWorkspaceMeta[],
+) {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  for (let index = 0; index < left.length; index += 1) {
+    const leftItem = left[index];
+    const rightItem = right[index];
+    if (!leftItem || !rightItem) {
+      return false;
+    }
+
+    if (
+      leftItem.id !== rightItem.id ||
+      leftItem.slug !== rightItem.slug ||
+      leftItem.name !== rightItem.name
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 export function SiteHeader() {
   const pathname = usePathname();
   const router = useRouter();
@@ -176,9 +203,12 @@ export function SiteHeader() {
   const [pendingNotificationCount, setPendingNotificationCount] = useState(0);
   const [hasWorkspaceAccess, setHasWorkspaceAccess] = useState(false);
   const [workspaceDirectory, setWorkspaceDirectory] = useState<AccessibleWorkspaceMeta[]>([]);
+  const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
   const [theme, setTheme] = useState<ThemeMode>('light');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const authRequestIdRef = useRef(0);
+  const authStateSnapshotRef = useRef('');
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
   const avatarInitials = useMemo(
     () => getAvatarInitials(profileName, userEmail),
@@ -272,6 +302,13 @@ export function SiteHeader() {
     );
   }, [activeWorkspaceSlug, workspaceDirectory]);
   const activeWorkspaceLabel = activeWorkspaceName || activeWorkspaceSlug;
+  const subscriptionHref = useMemo(() => {
+    if (!activeWorkspaceSlug) {
+      return '/suscripcion';
+    }
+
+    return `/suscripcion?shop=${encodeURIComponent(activeWorkspaceSlug)}`;
+  }, [activeWorkspaceSlug]);
 
   const applyTheme = useCallback((nextTheme: ThemeMode) => {
     document.documentElement.classList.toggle('dark', nextTheme === 'dark');
@@ -284,26 +321,38 @@ export function SiteHeader() {
   }, []);
 
   const loadAuthState = useCallback(async () => {
+    const requestId = authRequestIdRef.current + 1;
+    authRequestIdRef.current = requestId;
+
     const {
       data: { user },
     } = await supabase.auth.getUser();
 
-    if (!user) {
-      setRole('guest');
-      setProfileName(null);
-      setProfileAvatarUrl(null);
-      setUserEmail(null);
-      setPendingNotificationCount(0);
-      setHasWorkspaceAccess(false);
-      setWorkspaceDirectory([]);
-      setLoading(false);
+    if (requestId !== authRequestIdRef.current) {
       return;
     }
 
-    setUserEmail(user.email ?? null);
+    if (!user) {
+      authStateSnapshotRef.current = 'guest';
+      setRole((current) => (current === 'guest' ? current : 'guest'));
+      setProfileName((current) => (current === null ? current : null));
+      setProfileAvatarUrl((current) => (current === null ? current : null));
+      setUserEmail((current) => (current === null ? current : null));
+      setPendingNotificationCount((current) => (current === 0 ? current : 0));
+      setHasWorkspaceAccess((current) => (current ? false : current));
+      setWorkspaceDirectory((current) => (current.length === 0 ? current : []));
+      setIsPlatformAdmin((current) => (current ? false : current));
+      setLoading((current) => (current ? false : current));
+      return;
+    }
 
-    const [{ data: membershipRows }, { data: pendingInviteRows }, { data: staffRows }, { data: profileRow }] =
-      await Promise.all([
+    const [
+      { data: membershipRows },
+      { data: pendingInviteRows },
+      { data: staffRows },
+      { data: profileRow },
+      { data: platformAdminRow },
+    ] = await Promise.all([
         supabase
           .from('shop_memberships')
           .select('role, shop_id')
@@ -326,7 +375,16 @@ export function SiteHeader() {
           .select('full_name, avatar_url')
           .eq('auth_user_id', user.id)
           .maybeSingle(),
+        supabase
+          .from('platform_admins')
+          .select('user_id')
+          .eq('user_id', user.id)
+          .maybeSingle(),
       ]);
+
+    if (requestId !== authRequestIdRef.current) {
+      return;
+    }
 
     const membershipRoles = (membershipRows || []).map((item) => String(item.role));
     const staffRoles = (staffRows || []).map((item) => String(item.role));
@@ -340,6 +398,10 @@ export function SiteHeader() {
     const { data: shopRows } = accessibleShopIds.length
       ? await supabase.from('shops').select('id, slug, name').in('id', accessibleShopIds)
       : { data: [] as { id: string; slug: string; name: string }[] };
+
+    if (requestId !== authRequestIdRef.current) {
+      return;
+    }
     const hasAdminRole =
       membershipRoles.includes('owner') ||
       membershipRoles.includes('admin') ||
@@ -350,6 +412,10 @@ export function SiteHeader() {
       .select('id', { count: 'exact', head: true })
       .eq('user_id', user.id)
       .eq('is_read', false);
+
+    if (requestId !== authRequestIdRef.current) {
+      return;
+    }
 
     const safeUnreadAccountNotificationsCount =
       unreadAccountNotificationsError && !isMissingAccountNotificationsTableError(unreadAccountNotificationsError)
@@ -379,23 +445,19 @@ export function SiteHeader() {
         safeUnreadAccountNotificationsCount;
     }
 
-    setHasWorkspaceAccess(accessibleShopIds.length > 0);
-    setPendingNotificationCount(nextPendingNotificationCount);
-    setWorkspaceDirectory(
-      (shopRows || []).map((row) => ({
-        id: String(row.id),
-        slug: String(row.slug),
-        name: String(row.name),
-      })),
-    );
-
-    if (hasAdminRole) {
-      setRole('admin');
-    } else if (hasStaffRole) {
-      setRole('staff');
-    } else {
-      setRole('user');
+    if (requestId !== authRequestIdRef.current) {
+      return;
     }
+
+    const nextRole: NavRole = hasAdminRole ? 'admin' : hasStaffRole ? 'staff' : 'user';
+    const nextWorkspaceDirectory = (shopRows || []).map((row) => ({
+      id: String(row.id),
+      slug: String(row.slug),
+      name: String(row.name),
+    }));
+    const nextUserEmail = user.email ?? null;
+    const nextHasWorkspaceAccess = accessibleShopIds.length > 0;
+    const nextIsPlatformAdmin = Boolean(platformAdminRow?.user_id);
 
     const metadata = (user.user_metadata as Record<string, unknown> | undefined) ?? undefined;
     const metadataName =
@@ -407,9 +469,46 @@ export function SiteHeader() {
       (typeof metadata?.picture === 'string' && metadata.picture.trim()) ||
       null;
 
-    setProfileName((profileRow?.full_name as string | null) || metadataName || null);
-    setProfileAvatarUrl((profileRow?.avatar_url as string | null) || metadataAvatarUrl || null);
-    setLoading(false);
+    const nextProfileName = (profileRow?.full_name as string | null) || metadataName || null;
+    const nextProfileAvatarUrl = (profileRow?.avatar_url as string | null) || metadataAvatarUrl || null;
+    const nextSnapshot = JSON.stringify({
+      role: nextRole,
+      profileName: nextProfileName,
+      profileAvatarUrl: nextProfileAvatarUrl,
+      userEmail: nextUserEmail,
+      pendingNotificationCount: nextPendingNotificationCount,
+      hasWorkspaceAccess: nextHasWorkspaceAccess,
+      isPlatformAdmin: nextIsPlatformAdmin,
+      workspaceDirectory: nextWorkspaceDirectory,
+    });
+
+    if (authStateSnapshotRef.current === nextSnapshot) {
+      setLoading((current) => (current ? false : current));
+      return;
+    }
+
+    authStateSnapshotRef.current = nextSnapshot;
+    setRole((current) => (current === nextRole ? current : nextRole));
+    setUserEmail((current) => (current === nextUserEmail ? current : nextUserEmail));
+    setPendingNotificationCount((current) =>
+      current === nextPendingNotificationCount ? current : nextPendingNotificationCount,
+    );
+    setHasWorkspaceAccess((current) =>
+      current === nextHasWorkspaceAccess ? current : nextHasWorkspaceAccess,
+    );
+    setIsPlatformAdmin((current) =>
+      current === nextIsPlatformAdmin ? current : nextIsPlatformAdmin,
+    );
+    setWorkspaceDirectory((current) =>
+      areWorkspaceDirectoriesEqual(current, nextWorkspaceDirectory)
+        ? current
+        : nextWorkspaceDirectory,
+    );
+    setProfileName((current) => (current === nextProfileName ? current : nextProfileName));
+    setProfileAvatarUrl((current) =>
+      current === nextProfileAvatarUrl ? current : nextProfileAvatarUrl,
+    );
+    setLoading((current) => (current ? false : current));
   }, [supabase]);
 
   useEffect(() => {
@@ -472,6 +571,7 @@ export function SiteHeader() {
 
   const handleSignOut = useCallback(async () => {
     await supabase.auth.signOut();
+    authStateSnapshotRef.current = 'guest';
     setRole('guest');
     setProfileName(null);
     setProfileAvatarUrl(null);
@@ -479,6 +579,7 @@ export function SiteHeader() {
     setPendingNotificationCount(0);
     setHasWorkspaceAccess(false);
     setWorkspaceDirectory([]);
+    setIsPlatformAdmin(false);
     setIsMenuOpen(false);
     router.replace('/shops');
     router.refresh();
@@ -510,6 +611,18 @@ export function SiteHeader() {
         return;
       }
 
+      if (action === 'app-admin') {
+        setIsMenuOpen(false);
+        router.push('/app-admin/subscriptions');
+        return;
+      }
+
+      if (action === 'subscription') {
+        setIsMenuOpen(false);
+        router.push(subscriptionHref);
+        return;
+      }
+
       if (action === 'create-shop') {
         setIsMenuOpen(false);
         router.push('/onboarding/barbershop');
@@ -525,7 +638,7 @@ export function SiteHeader() {
         void handleSignOut();
       }
     },
-    [activeWorkspaceSlug, applyTheme, handleSignOut, role, router, theme],
+    [activeWorkspaceSlug, applyTheme, handleSignOut, role, router, subscriptionHref, theme],
   );
 
   return (
@@ -593,6 +706,20 @@ export function SiteHeader() {
             >
               <Store className="h-4 w-4" />
               <span>Mis barberias</span>
+            </Button>
+          </NavbarItem>
+        ) : null}
+
+        {!loading && role !== 'guest' && navigationContext === 'public' ? (
+          <NavbarItem className="hidden md:flex">
+            <Button
+              as={NextLink}
+              href={subscriptionHref}
+              variant="ghost"
+              size="sm"
+              className={actionButtonClassName}
+            >
+              Suscripcion
             </Button>
           </NavbarItem>
         ) : null}
@@ -672,6 +799,10 @@ export function SiteHeader() {
                   {pendingNotificationCount > 0 ? ` (${pendingNotificationCount})` : ''}
                 </DropdownItem>
                 <DropdownItem key="account">Mi cuenta</DropdownItem>
+                <DropdownItem key="subscription">Suscripcion</DropdownItem>
+                {isPlatformAdmin ? (
+                  <DropdownItem key="app-admin">Switch de suscripciones</DropdownItem>
+                ) : null}
                 <DropdownItem
                   key="theme-toggle"
                   startContent={theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
@@ -752,6 +883,18 @@ export function SiteHeader() {
               className="nav-link-pill flex w-full justify-start no-underline"
             >
               Cambiar barberia
+            </NextLink>
+          </NavbarMenuItem>
+        ) : null}
+
+        {!loading && role !== 'guest' ? (
+          <NavbarMenuItem>
+            <NextLink
+              href={subscriptionHref}
+              onClick={() => setIsMenuOpen(false)}
+              className="nav-link-pill flex w-full justify-start no-underline"
+            >
+              Suscripcion
             </NextLink>
           </NavbarMenuItem>
         ) : null}

@@ -1,4 +1,15 @@
-const allowedNextRoots = ['/admin', '/staff', '/cuenta', '/book', '/courses', '/modelos', '/jobs', '/login'] as const;
+const allowedNextRoots = [
+  '/admin',
+  '/staff',
+  '/cuenta',
+  '/book',
+  '/courses',
+  '/modelos',
+  '/jobs',
+  '/suscripcion',
+  '/login',
+  '/onboarding',
+] as const;
 
 function isAllowedPath(pathname: string) {
   if (pathname === '/') {
