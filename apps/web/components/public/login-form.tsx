@@ -82,10 +82,10 @@ export function mapAuthError(message: string) {
 
 export function LoginForm({
   initialMode = 'login',
-  nextPath = '/cuenta',
+  nextPath = '/',
   initialMessage = null,
 }: LoginFormProps) {
-  const safeNextPath = useMemo(() => resolveSafeNextPath(nextPath, '/cuenta'), [nextPath]);
+  const safeNextPath = useMemo(() => resolveSafeNextPath(nextPath, '/'), [nextPath]);
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
 
   const [mode, setMode] = useState<AuthMode>(initialMode);

@@ -2,7 +2,7 @@
 
 import NextLink from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useRef, useState, type Key } from 'react';
+import { useCallback, useEffect, useMemo, useState, type Key } from 'react';
 import { ChevronRight, Moon, Store, Sun } from 'lucide-react';
 import {
   Avatar,
@@ -21,22 +21,21 @@ import {
 } from '@heroui/react';
 import { HeaderBrand } from '@/components/public/header-brand';
 import { cn } from '@/lib/cn';
-import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
-import { isPendingTimeOffReason } from '@/lib/time-off-requests';
+import {
+  DEFAULT_SITE_HEADER_STATE,
+  type AccessibleWorkspaceMeta,
+  type HeaderRole,
+  type SiteHeaderInitialState,
+} from '@/lib/site-header-state';
 import { buildAdminHref, buildStaffHref } from '@/lib/workspace-routes';
 
-type NavRole = 'guest' | 'user' | 'staff' | 'admin';
+type NavRole = HeaderRole;
 type ThemeMode = 'light' | 'dark';
 type NavigationContext = 'public' | 'staff' | 'admin';
 type HeaderLink = {
   href: string;
   label: string;
   key: string;
-};
-type AccessibleWorkspaceMeta = {
-  id: string;
-  slug: string;
-  name: string;
 };
 
 const roleLabel: Record<Exclude<NavRole, 'guest'>, string> = {
@@ -92,23 +91,6 @@ function getAvatarInitials(name: string | null, email: string | null) {
   const first = parts[0] || '';
   const second = parts[1] || '';
   return `${first.charAt(0)}${second.charAt(0)}`.toUpperCase();
-}
-
-function isMissingAccountNotificationsTableError(error: unknown) {
-  if (!error) {
-    return false;
-  }
-
-  const maybeError = error as { code?: string; message?: string };
-  const code = String(maybeError.code || '').toUpperCase();
-  const message = String(maybeError.message || error || '').toLowerCase();
-
-  return (
-    code === 'PGRST205' ||
-    code === '42P01' ||
-    (message.includes('account_notifications') &&
-      (message.includes('does not exist') || message.includes('schema cache') || message.includes('not found')))
-  );
 }
 
 function isActivePath(pathname: string, href: string): boolean {
@@ -187,7 +169,11 @@ function areWorkspaceDirectoriesEqual(
   return true;
 }
 
-export function SiteHeader() {
+interface SiteHeaderProps {
+  initialState?: SiteHeaderInitialState;
+}
+
+export function SiteHeader({ initialState = DEFAULT_SITE_HEADER_STATE }: SiteHeaderProps) {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -196,20 +182,57 @@ export function SiteHeader() {
     () => searchParams.get('shop')?.trim() || null,
     [searchParams],
   );
-  const [role, setRole] = useState<NavRole>('guest');
-  const [profileName, setProfileName] = useState<string | null>(null);
-  const [profileAvatarUrl, setProfileAvatarUrl] = useState<string | null>(null);
-  const [userEmail, setUserEmail] = useState<string | null>(null);
-  const [pendingNotificationCount, setPendingNotificationCount] = useState(0);
-  const [hasWorkspaceAccess, setHasWorkspaceAccess] = useState(false);
-  const [workspaceDirectory, setWorkspaceDirectory] = useState<AccessibleWorkspaceMeta[]>([]);
-  const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
+  const [role, setRole] = useState<NavRole>(initialState.role);
+  const [profileName, setProfileName] = useState<string | null>(initialState.profileName);
+  const [profileAvatarUrl, setProfileAvatarUrl] = useState<string | null>(
+    initialState.profileAvatarUrl,
+  );
+  const [userEmail, setUserEmail] = useState<string | null>(initialState.userEmail);
+  const [pendingNotificationCount, setPendingNotificationCount] = useState(
+    initialState.pendingNotificationCount,
+  );
+  const [hasWorkspaceAccess, setHasWorkspaceAccess] = useState(
+    initialState.hasWorkspaceAccess,
+  );
+  const [workspaceDirectory, setWorkspaceDirectory] = useState<AccessibleWorkspaceMeta[]>(
+    initialState.workspaceDirectory,
+  );
+  const [isPlatformAdmin, setIsPlatformAdmin] = useState(initialState.isPlatformAdmin);
   const [theme, setTheme] = useState<ThemeMode>('light');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const authRequestIdRef = useRef(0);
-  const authStateSnapshotRef = useRef('');
-  const supabase = useMemo(() => createSupabaseBrowserClient(), []);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    setRole((current) => (current === initialState.role ? current : initialState.role));
+    setProfileName((current) =>
+      current === initialState.profileName ? current : initialState.profileName,
+    );
+    setProfileAvatarUrl((current) =>
+      current === initialState.profileAvatarUrl ? current : initialState.profileAvatarUrl,
+    );
+    setUserEmail((current) =>
+      current === initialState.userEmail ? current : initialState.userEmail,
+    );
+    setPendingNotificationCount((current) =>
+      current === initialState.pendingNotificationCount
+        ? current
+        : initialState.pendingNotificationCount,
+    );
+    setHasWorkspaceAccess((current) =>
+      current === initialState.hasWorkspaceAccess
+        ? current
+        : initialState.hasWorkspaceAccess,
+    );
+    setWorkspaceDirectory((current) =>
+      areWorkspaceDirectoriesEqual(current, initialState.workspaceDirectory)
+        ? current
+        : initialState.workspaceDirectory,
+    );
+    setIsPlatformAdmin((current) =>
+      current === initialState.isPlatformAdmin ? current : initialState.isPlatformAdmin,
+    );
+    setLoading(false);
+  }, [initialState]);
   const avatarInitials = useMemo(
     () => getAvatarInitials(profileName, userEmail),
     [profileName, userEmail],
@@ -302,6 +325,18 @@ export function SiteHeader() {
     );
   }, [activeWorkspaceSlug, workspaceDirectory]);
   const activeWorkspaceLabel = activeWorkspaceName || activeWorkspaceSlug;
+  const hasMultipleWorkspaces = workspaceDirectory.length > 1;
+  const workspaceHubHref = useMemo(() => {
+    if (workspaceDirectory.length === 1) {
+      const singleWorkspace = workspaceDirectory[0];
+      if (singleWorkspace) {
+        return `/mis-barberias/select?shop=${encodeURIComponent(singleWorkspace.id)}`;
+      }
+    }
+
+    return '/mis-barberias';
+  }, [workspaceDirectory]);
+  const workspaceHubLabel = hasMultipleWorkspaces ? 'Mis barberias' : 'Mi barberia';
   const subscriptionHref = useMemo(() => {
     if (!activeWorkspaceSlug) {
       return '/suscripcion';
@@ -320,227 +355,16 @@ export function SiteHeader() {
     setTheme(nextTheme);
   }, []);
 
-  const loadAuthState = useCallback(async () => {
-    const requestId = authRequestIdRef.current + 1;
-    authRequestIdRef.current = requestId;
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (requestId !== authRequestIdRef.current) {
-      return;
-    }
-
-    if (!user) {
-      authStateSnapshotRef.current = 'guest';
-      setRole((current) => (current === 'guest' ? current : 'guest'));
-      setProfileName((current) => (current === null ? current : null));
-      setProfileAvatarUrl((current) => (current === null ? current : null));
-      setUserEmail((current) => (current === null ? current : null));
-      setPendingNotificationCount((current) => (current === 0 ? current : 0));
-      setHasWorkspaceAccess((current) => (current ? false : current));
-      setWorkspaceDirectory((current) => (current.length === 0 ? current : []));
-      setIsPlatformAdmin((current) => (current ? false : current));
-      setLoading((current) => (current ? false : current));
-      return;
-    }
-
-    const [
-      { data: membershipRows },
-      { data: pendingInviteRows },
-      { data: staffRows },
-      { data: profileRow },
-      { data: platformAdminRow },
-    ] = await Promise.all([
-        supabase
-          .from('shop_memberships')
-          .select('role, shop_id')
-          .eq('user_id', user.id)
-          .eq('membership_status', 'active')
-          .limit(5),
-        supabase
-          .from('shop_memberships')
-          .select('id')
-          .eq('user_id', user.id)
-          .eq('membership_status', 'invited'),
-        supabase
-          .from('staff')
-          .select('role, shop_id')
-          .eq('auth_user_id', user.id)
-          .eq('is_active', true)
-          .limit(5),
-        supabase
-          .from('user_profiles')
-          .select('full_name, avatar_url')
-          .eq('auth_user_id', user.id)
-          .maybeSingle(),
-        supabase
-          .from('platform_admins')
-          .select('user_id')
-          .eq('user_id', user.id)
-          .maybeSingle(),
-      ]);
-
-    if (requestId !== authRequestIdRef.current) {
-      return;
-    }
-
-    const membershipRoles = (membershipRows || []).map((item) => String(item.role));
-    const staffRoles = (staffRows || []).map((item) => String(item.role));
-    const accessibleShopIds = Array.from(
-      new Set(
-        [...(membershipRows || []), ...(staffRows || [])]
-          .map((item) => (item?.shop_id ? String(item.shop_id) : ''))
-          .filter(Boolean),
-      ),
-    );
-    const { data: shopRows } = accessibleShopIds.length
-      ? await supabase.from('shops').select('id, slug, name').in('id', accessibleShopIds)
-      : { data: [] as { id: string; slug: string; name: string }[] };
-
-    if (requestId !== authRequestIdRef.current) {
-      return;
-    }
-    const hasAdminRole =
-      membershipRoles.includes('owner') ||
-      membershipRoles.includes('admin') ||
-      staffRoles.includes('admin');
-    const hasStaffRole = membershipRoles.includes('staff') || staffRoles.includes('staff');
-    const { count: unreadAccountNotificationsCount, error: unreadAccountNotificationsError } = await supabase
-      .from('account_notifications')
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', user.id)
-      .eq('is_read', false);
-
-    if (requestId !== authRequestIdRef.current) {
-      return;
-    }
-
-    const safeUnreadAccountNotificationsCount =
-      unreadAccountNotificationsError && !isMissingAccountNotificationsTableError(unreadAccountNotificationsError)
-        ? 0
-        : (unreadAccountNotificationsCount || 0);
-    let nextPendingNotificationCount =
-      (pendingInviteRows || []).length + safeUnreadAccountNotificationsCount;
-
-    if (hasAdminRole && accessibleShopIds.length > 0) {
-      const { data: timeOffRows } = await supabase
-        .from('time_off')
-        .select('id, reason')
-        .in('shop_id', accessibleShopIds)
-        .order('created_at', { ascending: false })
-        .limit(40);
-
-      const pendingAbsenceApprovals = (timeOffRows || []).filter((item) =>
-        isPendingTimeOffReason(item.reason as string | null),
-      ).length;
-
-      // The avatar badge only tracks actionable work:
-      // user invitations that still need a decision, plus admin absence approvals.
-      // Personal account notifications remain part of this total when unread.
-      nextPendingNotificationCount =
-        (pendingInviteRows || []).length +
-        pendingAbsenceApprovals +
-        safeUnreadAccountNotificationsCount;
-    }
-
-    if (requestId !== authRequestIdRef.current) {
-      return;
-    }
-
-    const nextRole: NavRole = hasAdminRole ? 'admin' : hasStaffRole ? 'staff' : 'user';
-    const nextWorkspaceDirectory = (shopRows || []).map((row) => ({
-      id: String(row.id),
-      slug: String(row.slug),
-      name: String(row.name),
-    }));
-    const nextUserEmail = user.email ?? null;
-    const nextHasWorkspaceAccess = accessibleShopIds.length > 0;
-    const nextIsPlatformAdmin = Boolean(platformAdminRow?.user_id);
-
-    const metadata = (user.user_metadata as Record<string, unknown> | undefined) ?? undefined;
-    const metadataName =
-      (typeof metadata?.full_name === 'string' && metadata.full_name.trim()) ||
-      (typeof metadata?.name === 'string' && metadata.name.trim()) ||
-      null;
-    const metadataAvatarUrl =
-      (typeof metadata?.avatar_url === 'string' && metadata.avatar_url.trim()) ||
-      (typeof metadata?.picture === 'string' && metadata.picture.trim()) ||
-      null;
-
-    const nextProfileName = (profileRow?.full_name as string | null) || metadataName || null;
-    const nextProfileAvatarUrl = (profileRow?.avatar_url as string | null) || metadataAvatarUrl || null;
-    const nextSnapshot = JSON.stringify({
-      role: nextRole,
-      profileName: nextProfileName,
-      profileAvatarUrl: nextProfileAvatarUrl,
-      userEmail: nextUserEmail,
-      pendingNotificationCount: nextPendingNotificationCount,
-      hasWorkspaceAccess: nextHasWorkspaceAccess,
-      isPlatformAdmin: nextIsPlatformAdmin,
-      workspaceDirectory: nextWorkspaceDirectory,
-    });
-
-    if (authStateSnapshotRef.current === nextSnapshot) {
-      setLoading((current) => (current ? false : current));
-      return;
-    }
-
-    authStateSnapshotRef.current = nextSnapshot;
-    setRole((current) => (current === nextRole ? current : nextRole));
-    setUserEmail((current) => (current === nextUserEmail ? current : nextUserEmail));
-    setPendingNotificationCount((current) =>
-      current === nextPendingNotificationCount ? current : nextPendingNotificationCount,
-    );
-    setHasWorkspaceAccess((current) =>
-      current === nextHasWorkspaceAccess ? current : nextHasWorkspaceAccess,
-    );
-    setIsPlatformAdmin((current) =>
-      current === nextIsPlatformAdmin ? current : nextIsPlatformAdmin,
-    );
-    setWorkspaceDirectory((current) =>
-      areWorkspaceDirectoriesEqual(current, nextWorkspaceDirectory)
-        ? current
-        : nextWorkspaceDirectory,
-    );
-    setProfileName((current) => (current === nextProfileName ? current : nextProfileName));
-    setProfileAvatarUrl((current) =>
-      current === nextProfileAvatarUrl ? current : nextProfileAvatarUrl,
-    );
-    setLoading((current) => (current ? false : current));
-  }, [supabase]);
-
-  useEffect(() => {
-    let active = true;
-
-    void (async () => {
-      if (!active) {
-        return;
-      }
-      await loadAuthState();
-    })();
-
-    const { data } = supabase.auth.onAuthStateChange(() => {
-      void loadAuthState();
-    });
-
-    return () => {
-      active = false;
-      data.subscription.unsubscribe();
-    };
-  }, [loadAuthState, supabase]);
-
   useEffect(() => {
     const handleProfileUpdated = () => {
-      void loadAuthState();
+      router.refresh();
     };
 
     window.addEventListener('profile-updated', handleProfileUpdated);
     return () => {
       window.removeEventListener('profile-updated', handleProfileUpdated);
     };
-  }, [loadAuthState]);
+  }, [router]);
 
   useEffect(() => {
     try {
@@ -569,21 +393,10 @@ export function SiteHeader() {
     applyTheme(theme === 'dark' ? 'light' : 'dark');
   }, [applyTheme, theme]);
 
-  const handleSignOut = useCallback(async () => {
-    await supabase.auth.signOut();
-    authStateSnapshotRef.current = 'guest';
-    setRole('guest');
-    setProfileName(null);
-    setProfileAvatarUrl(null);
-    setUserEmail(null);
-    setPendingNotificationCount(0);
-    setHasWorkspaceAccess(false);
-    setWorkspaceDirectory([]);
-    setIsPlatformAdmin(false);
+  const handleSignOut = useCallback(() => {
     setIsMenuOpen(false);
-    router.replace('/shops');
-    router.refresh();
-  }, [router, supabase]);
+    router.push('/auth/logout?next=/shops');
+  }, [router]);
 
   const handleAvatarAction = useCallback(
     (key: Key) => {
@@ -607,7 +420,7 @@ export function SiteHeader() {
 
       if (action === 'workspaces') {
         setIsMenuOpen(false);
-        router.push('/mis-barberias');
+        router.push(workspaceHubHref);
         return;
       }
 
@@ -638,7 +451,16 @@ export function SiteHeader() {
         void handleSignOut();
       }
     },
-    [activeWorkspaceSlug, applyTheme, handleSignOut, role, router, subscriptionHref, theme],
+    [
+      activeWorkspaceSlug,
+      applyTheme,
+      handleSignOut,
+      role,
+      router,
+      subscriptionHref,
+      theme,
+      workspaceHubHref,
+    ],
   );
 
   return (
@@ -699,13 +521,13 @@ export function SiteHeader() {
           <NavbarItem className="hidden md:flex">
             <Button
               as={NextLink}
-              href="/mis-barberias"
+              href={workspaceHubHref}
               variant="ghost"
               size="sm"
               className={actionButtonClassName}
             >
               <Store className="h-4 w-4" />
-              <span>Mis barberias</span>
+              <span>{workspaceHubLabel}</span>
             </Button>
           </NavbarItem>
         ) : null}
@@ -739,9 +561,9 @@ export function SiteHeader() {
           </NavbarItem>
         ) : null}
 
-        {activeWorkspaceLabel && navigationContext !== 'public' ? (
+        {activeWorkspaceLabel && hasMultipleWorkspaces && navigationContext !== 'public' ? (
           <NavbarItem className="hidden lg:flex">
-            <NextLink href="/mis-barberias" className={workspaceSwitcherClassName}>
+            <NextLink href={workspaceHubHref} className={workspaceSwitcherClassName}>
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-white/65 bg-white/60 text-ink shadow-[inset_0_1px_0_rgba(255,255,255,0.45)] dark:border-white/10 dark:bg-white/[0.06] dark:text-slate-100">
                 <Store className="h-4 w-4" />
               </span>
@@ -810,7 +632,9 @@ export function SiteHeader() {
                   {theme === 'dark' ? 'Modo claro' : 'Modo oscuro'}
                 </DropdownItem>
                 <DropdownItem key="create-shop">Crear barberia</DropdownItem>
-                {hasWorkspaceAccess ? <DropdownItem key="workspaces">Mis barberias</DropdownItem> : null}
+                {hasWorkspaceAccess ? (
+                  <DropdownItem key="workspaces">{workspaceHubLabel}</DropdownItem>
+                ) : null}
                 <DropdownItem key="logout" className="text-danger" color="danger">
                   Salir
                 </DropdownItem>
@@ -865,20 +689,20 @@ export function SiteHeader() {
         {!loading && hasWorkspaceAccess && navigationContext === 'public' ? (
           <NavbarMenuItem>
             <NextLink
-              href="/mis-barberias"
+              href={workspaceHubHref}
               onClick={() => setIsMenuOpen(false)}
               className="nav-link-pill flex w-full items-center justify-start gap-2 no-underline"
             >
               <Store className="h-4 w-4" />
-              Mis barberias
+              {workspaceHubLabel}
             </NextLink>
           </NavbarMenuItem>
         ) : null}
 
-        {navigationContext !== 'public' ? (
+        {navigationContext !== 'public' && hasMultipleWorkspaces ? (
           <NavbarMenuItem>
             <NextLink
-              href="/mis-barberias"
+              href={workspaceHubHref}
               onClick={() => setIsMenuOpen(false)}
               className="nav-link-pill flex w-full justify-start no-underline"
             >

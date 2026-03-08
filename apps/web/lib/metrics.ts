@@ -5,15 +5,65 @@ import { isPendingTimeOffReason } from '@/lib/time-off-requests';
 import { buildAdminHref } from '@/lib/workspace-routes';
 
 type RawSearchParam = string | string[] | undefined;
+export type BookingMetricsChannelView = 'ALL' | 'ONLINE_ONLY' | 'WALK_INS_ONLY';
 
 export interface DashboardMetrics {
   rangeLabel: string;
   countsByStatus: Record<string, number>;
   estimatedRevenueCents: number;
+  revenuePerAvailableHourCents: number;
   averageTicketCents: number;
   topServices: Array<{ service: string; count: number }>;
   revenueByStaff: Array<{ staff: string; revenue_cents: number }>;
+  availableMinutes: number;
+  bookedMinutes: number;
   occupancyRatio: number;
+  statusSummary: {
+    pendingAppointments: number;
+    confirmedAppointments: number;
+    doneAppointments: number;
+    cancelledAppointments: number;
+    noShowAppointments: number;
+    activeQueueAppointments: number;
+    completionRate: number;
+    cancellationRate: number;
+    noShowRate: number;
+  };
+  capacitySummary: {
+    idleMinutes: number;
+    utilizationGapRatio: number;
+  };
+  dailySeries: Array<{
+    date: string;
+    label: string;
+    appointments: number;
+    doneAppointments: number;
+    revenueCents: number;
+    onlineAppointments: number;
+    walkInAppointments: number;
+  }>;
+  peakHours: Array<{
+    hour: number;
+    label: string;
+    appointments: number;
+  }>;
+  channelMix: Array<{
+    channel: string;
+    label: string;
+    appointments: number;
+    doneAppointments: number;
+    revenueCents: number;
+    share: number;
+  }>;
+  channelBreakdown: {
+    view: BookingMetricsChannelView;
+    totalAppointments: number;
+    onlineAppointments: number;
+    walkInAppointments: number;
+    filteredAppointments: number;
+    onlineShare: number;
+    walkInShare: number;
+  };
 }
 
 export type StaffHealthStatus = 'top' | 'healthy' | 'attention';
@@ -131,6 +181,11 @@ interface StaffRatingTrendRow {
 }
 
 const VALID_RANGE_KEYS = new Set<MetricRangeKey>(Object.values(METRIC_RANGES));
+const VALID_CHANNEL_VIEWS = new Set<BookingMetricsChannelView>([
+  'ALL',
+  'ONLINE_ONLY',
+  'WALK_INS_ONLY',
+]);
 
 function parseNumeric(value: number | string | null | undefined): number {
   if (typeof value === 'number') {
@@ -281,6 +336,75 @@ function resolveMetricsRange(input?: {
 
 function coerceSearchParam(value: RawSearchParam) {
   return Array.isArray(value) ? value[0] : value;
+}
+
+function normalizeSourceChannel(value: unknown) {
+  const normalized = String(value || '')
+    .trim()
+    .toUpperCase();
+  return normalized || 'WEB';
+}
+
+function isWalkInChannel(value: unknown) {
+  const channel = normalizeSourceChannel(value);
+  return channel === 'WALK_IN' || channel === 'ADMIN_CREATED';
+}
+
+function isOnlineChannel(value: unknown) {
+  return normalizeSourceChannel(value) === 'WEB';
+}
+
+function filterAppointmentsByChannel<T extends { source_channel?: unknown }>(
+  rows: T[],
+  channelView: BookingMetricsChannelView,
+) {
+  if (channelView === 'ONLINE_ONLY') {
+    return rows.filter((item) => isOnlineChannel(item.source_channel));
+  }
+
+  if (channelView === 'WALK_INS_ONLY') {
+    return rows.filter((item) => isWalkInChannel(item.source_channel));
+  }
+
+  return rows;
+}
+
+function getSourceChannelLabel(value: unknown) {
+  const channel = normalizeSourceChannel(value);
+
+  if (channel === 'WEB') {
+    return 'Web';
+  }
+
+  if (channel === 'WALK_IN') {
+    return 'Walk-in';
+  }
+
+  if (channel === 'ADMIN_CREATED') {
+    return 'Admin';
+  }
+
+  if (channel === 'WHATSAPP') {
+    return 'WhatsApp';
+  }
+
+  if (channel === 'INSTAGRAM') {
+    return 'Instagram';
+  }
+
+  if (channel === 'PHONE') {
+    return 'Telefono';
+  }
+
+  return channel;
+}
+
+export function resolveBookingChannelView(
+  value: RawSearchParam | BookingMetricsChannelView | string | undefined,
+): BookingMetricsChannelView {
+  const parsed = Array.isArray(value) ? value[0] : value;
+  const normalized = String(parsed || '').trim().toUpperCase() as BookingMetricsChannelView;
+  return VALID_CHANNEL_VIEWS.has(normalized) ? normalized : 'ALL';
 }
 
 export function parseComparisonSelection(value: RawSearchParam): string[] {
@@ -695,17 +819,17 @@ export async function getStaffPerformanceDetail(
   };
 }
 
-export async function getDashboardMetrics(
-  range: MetricRangeKey,
+async function loadDashboardMetricsForRange(
+  dateRange: ResolvedMetricsRange,
   shopId: string,
+  channelView: BookingMetricsChannelView,
 ): Promise<DashboardMetrics> {
-  const dateRange = resolveMetricsRange({ range });
   const supabase = await createSupabaseServerClient();
 
   const [{ data: appointments }, { data: workingHours }, { data: timeOff }] = await Promise.all([
     supabase
       .from('appointments')
-      .select('status, price_cents, start_at, end_at, services(name), staff(name)')
+      .select('status, price_cents, start_at, end_at, source_channel, services(name), staff(name)')
       .eq('shop_id', shopId)
       .gte('start_at', dateRange.startAtIso)
       .lt('start_at', dateRange.endAtIso),
@@ -721,19 +845,28 @@ export async function getDashboardMetrics(
       .gt('end_at', dateRange.startAtIso),
   ]);
 
-  const list = appointments || [];
-  const countsByStatus = list.reduce<Record<string, number>>((acc, item) => {
+  const allAppointments = (appointments || []) as Array<{
+    status: string | null;
+    price_cents: number | null;
+    start_at: string | null;
+    end_at: string | null;
+    source_channel: string | null;
+    services?: { name?: string | null } | null;
+    staff?: { name?: string | null } | null;
+  }>;
+  const filteredAppointments = filterAppointmentsByChannel(allAppointments, channelView);
+  const countsByStatus = filteredAppointments.reduce<Record<string, number>>((acc, item) => {
     const status = String(item.status || 'desconocido');
     acc[status] = (acc[status] || 0) + 1;
     return acc;
   }, {});
 
-  const doneAppointments = list.filter((item) => item.status === 'done');
+  const doneAppointments = filteredAppointments.filter((item) => item.status === 'done');
   const estimatedRevenueCents = doneAppointments.reduce((acc, item) => acc + parseInteger(item.price_cents), 0);
   const averageTicketCents = doneAppointments.length ? Math.round(estimatedRevenueCents / doneAppointments.length) : 0;
 
   const serviceCounter = new Map<string, number>();
-  for (const row of list) {
+  for (const row of filteredAppointments) {
     const serviceName = String((row.services as { name?: string } | null)?.name || 'Sin servicio');
     serviceCounter.set(serviceName, (serviceCounter.get(serviceName) || 0) + 1);
   }
@@ -790,7 +923,7 @@ export async function getDashboardMetrics(
   }, 0);
 
   const availableMinutes = Math.max(0, workedMinutes - timeOffMinutes);
-  const bookedMinutes = list
+  const bookedMinutes = filteredAppointments
     .filter((item) => item.status === 'done' || item.status === 'confirmed' || item.status === 'pending')
     .reduce((acc, item) => {
       const start = Math.max(rangeStart.getTime(), new Date(String(item.start_at)).getTime());
@@ -805,13 +938,185 @@ export async function getDashboardMetrics(
       return acc + Math.round((end - start) / 60000);
     }, 0);
 
+  const totalAppointments = allAppointments.length;
+  const onlineAppointments = allAppointments.filter((item) => isOnlineChannel(item.source_channel)).length;
+  const walkInAppointments = allAppointments.filter((item) => isWalkInChannel(item.source_channel)).length;
+  const revenuePerAvailableHourCents =
+    availableMinutes > 0 ? Math.round((estimatedRevenueCents * 60) / availableMinutes) : 0;
+
+  const pendingAppointments = countsByStatus.pending || 0;
+  const confirmedAppointments = countsByStatus.confirmed || 0;
+  const doneAppointmentsCount = countsByStatus.done || 0;
+  const cancelledAppointments = countsByStatus.cancelled || 0;
+  const noShowAppointments = countsByStatus.no_show || 0;
+  const totalFilteredAppointments = filteredAppointments.length;
+  const activeQueueAppointments = pendingAppointments + confirmedAppointments;
+
+  const channelMixMap = new Map<
+    string,
+    {
+      channel: string;
+      label: string;
+      appointments: number;
+      doneAppointments: number;
+      revenueCents: number;
+    }
+  >();
+
+  for (const row of allAppointments) {
+    const channel = normalizeSourceChannel(row.source_channel);
+    const existing = channelMixMap.get(channel) || {
+      channel,
+      label: getSourceChannelLabel(channel),
+      appointments: 0,
+      doneAppointments: 0,
+      revenueCents: 0,
+    };
+
+    existing.appointments += 1;
+    if (row.status === 'done') {
+      existing.doneAppointments += 1;
+      existing.revenueCents += parseInteger(row.price_cents);
+    }
+
+    channelMixMap.set(channel, existing);
+  }
+
+  const channelMix = [...channelMixMap.values()]
+    .sort((left, right) => right.appointments - left.appointments)
+    .map((item) => ({
+      ...item,
+      share: totalAppointments > 0 ? item.appointments / totalAppointments : 0,
+    }));
+
+  const dailySeriesMap = new Map<
+    string,
+    {
+      date: string;
+      label: string;
+      appointments: number;
+      doneAppointments: number;
+      revenueCents: number;
+      onlineAppointments: number;
+      walkInAppointments: number;
+    }
+  >();
+
+  for (const date of rangeDates) {
+    const dateKey = date.toISOString().slice(0, 10);
+    dailySeriesMap.set(dateKey, {
+      date: dateKey,
+      label: date.toLocaleDateString('es-UY', {
+        day: '2-digit',
+        month: 'short',
+        timeZone: 'UTC',
+      }),
+      appointments: 0,
+      doneAppointments: 0,
+      revenueCents: 0,
+      onlineAppointments: 0,
+      walkInAppointments: 0,
+    });
+  }
+
+  const peakHoursMap = new Map<number, number>();
+  for (const row of filteredAppointments) {
+    const startAt = new Date(String(row.start_at || ''));
+    if (Number.isNaN(startAt.getTime())) {
+      continue;
+    }
+
+    const dateKey = startAt.toISOString().slice(0, 10);
+    const day = dailySeriesMap.get(dateKey);
+    if (day) {
+      day.appointments += 1;
+      if (row.status === 'done') {
+        day.doneAppointments += 1;
+        day.revenueCents += parseInteger(row.price_cents);
+      }
+      if (isOnlineChannel(row.source_channel)) {
+        day.onlineAppointments += 1;
+      }
+      if (isWalkInChannel(row.source_channel)) {
+        day.walkInAppointments += 1;
+      }
+    }
+
+    const hour = startAt.getUTCHours();
+    peakHoursMap.set(hour, (peakHoursMap.get(hour) || 0) + 1);
+  }
+
+  const dailySeries = [...dailySeriesMap.values()];
+  const peakHours = [...peakHoursMap.entries()]
+    .map(([hour, appointments]) => ({
+      hour,
+      label: `${String(hour).padStart(2, '0')}:00`,
+      appointments,
+    }))
+    .sort((left, right) => {
+      if (right.appointments !== left.appointments) {
+        return right.appointments - left.appointments;
+      }
+
+      return left.hour - right.hour;
+    })
+    .slice(0, 5);
+
+  const idleMinutes = Math.max(0, availableMinutes - bookedMinutes);
+
   return {
     rangeLabel: dateRange.label,
     countsByStatus,
     estimatedRevenueCents,
+    revenuePerAvailableHourCents,
     averageTicketCents,
     topServices,
     revenueByStaff,
+    availableMinutes,
+    bookedMinutes,
     occupancyRatio: availableMinutes > 0 ? bookedMinutes / availableMinutes : 0,
+    statusSummary: {
+      pendingAppointments,
+      confirmedAppointments,
+      doneAppointments: doneAppointmentsCount,
+      cancelledAppointments,
+      noShowAppointments,
+      activeQueueAppointments,
+      completionRate: totalFilteredAppointments > 0 ? doneAppointmentsCount / totalFilteredAppointments : 0,
+      cancellationRate: totalFilteredAppointments > 0 ? cancelledAppointments / totalFilteredAppointments : 0,
+      noShowRate: totalFilteredAppointments > 0 ? noShowAppointments / totalFilteredAppointments : 0,
+    },
+    capacitySummary: {
+      idleMinutes,
+      utilizationGapRatio: availableMinutes > 0 ? idleMinutes / availableMinutes : 0,
+    },
+    dailySeries,
+    peakHours,
+    channelMix,
+    channelBreakdown: {
+      view: channelView,
+      totalAppointments,
+      onlineAppointments,
+      walkInAppointments,
+      filteredAppointments: filteredAppointments.length,
+      onlineShare: totalAppointments > 0 ? onlineAppointments / totalAppointments : 0,
+      walkInShare: totalAppointments > 0 ? walkInAppointments / totalAppointments : 0,
+    },
   };
+}
+
+export async function getDashboardMetrics(
+  range: MetricRangeKey,
+  shopId: string,
+  channelView: BookingMetricsChannelView = 'ALL',
+): Promise<DashboardMetrics> {
+  return loadDashboardMetricsForRange(resolveMetricsRange({ range }), shopId, channelView);
+}
+
+export async function getDashboardMetricsForDateRange(
+  input: { range?: string | undefined; from?: string | undefined; to?: string | undefined },
+  shopId: string,
+  channelView: BookingMetricsChannelView = 'ALL',
+): Promise<DashboardMetrics> {
+  return loadDashboardMetricsForRange(resolveMetricsRange(input), shopId, channelView);
 }

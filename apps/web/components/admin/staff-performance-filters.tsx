@@ -1,20 +1,51 @@
 import Link from 'next/link';
 import { Button } from '@heroui/button';
 import { Input } from '@heroui/input';
-import type { ResolvedMetricsRange, StaffPerformanceMetric } from '@/lib/metrics';
+import type {
+  BookingMetricsChannelView,
+  ResolvedMetricsRange,
+  StaffPerformanceMetric,
+} from '@/lib/metrics';
 import { buildAdminHref } from '@/lib/workspace-routes';
 
 interface StaffPerformanceFiltersProps {
   shopSlug: string;
   dateRange: ResolvedMetricsRange;
+  selectedChannel: BookingMetricsChannelView;
   compareSelection: string[];
   staff: Pick<StaffPerformanceMetric, 'staffId' | 'staffName'>[];
 }
 
-function buildRangeHref(shopSlug: string, range: 'today' | 'last7' | 'month', compareSelection: string[]) {
+function buildRangeHref(
+  shopSlug: string,
+  range: 'today' | 'last7' | 'month',
+  compareSelection: string[],
+  selectedChannel: BookingMetricsChannelView,
+) {
   return buildAdminHref('/admin/metrics', shopSlug, {
     range,
     compare: compareSelection,
+    channel: selectedChannel,
+  });
+}
+
+function buildChannelHref(
+  shopSlug: string,
+  channel: BookingMetricsChannelView,
+  dateRange: ResolvedMetricsRange,
+  compareSelection: string[],
+) {
+  return buildAdminHref('/admin/metrics', shopSlug, {
+    ...(dateRange.rangeKey === 'custom'
+      ? {
+          from: dateRange.fromDate,
+          to: dateRange.toDate,
+        }
+      : {
+          range: dateRange.rangeKey,
+        }),
+    compare: compareSelection,
+    channel,
   });
 }
 
@@ -29,6 +60,7 @@ function getRangePillClassName(isActive: boolean) {
 export function StaffPerformanceFilters({
   shopSlug,
   dateRange,
+  selectedChannel,
   compareSelection,
   staff,
 }: StaffPerformanceFiltersProps) {
@@ -38,7 +70,7 @@ export function StaffPerformanceFilters({
         <div className="space-y-3">
           <div className="flex flex-wrap gap-2 text-sm">
             <Link
-              href={buildRangeHref(shopSlug, 'today', compareSelection)}
+              href={buildRangeHref(shopSlug, 'today', compareSelection, selectedChannel)}
               className={`rounded-2xl border px-4 py-2 text-xs font-semibold no-underline transition ${getRangePillClassName(
                 dateRange.rangeKey === 'today',
               )}`}
@@ -46,7 +78,7 @@ export function StaffPerformanceFilters({
               Hoy
             </Link>
             <Link
-              href={buildRangeHref(shopSlug, 'last7', compareSelection)}
+              href={buildRangeHref(shopSlug, 'last7', compareSelection, selectedChannel)}
               className={`rounded-2xl border px-4 py-2 text-xs font-semibold no-underline transition ${getRangePillClassName(
                 dateRange.rangeKey === 'last7',
               )}`}
@@ -54,12 +86,39 @@ export function StaffPerformanceFilters({
               Ultimos 7 dias
             </Link>
             <Link
-              href={buildRangeHref(shopSlug, 'month', compareSelection)}
+              href={buildRangeHref(shopSlug, 'month', compareSelection, selectedChannel)}
               className={`rounded-2xl border px-4 py-2 text-xs font-semibold no-underline transition ${getRangePillClassName(
                 dateRange.rangeKey === 'month',
               )}`}
             >
               Este mes
+            </Link>
+          </div>
+
+          <div className="flex flex-wrap gap-2 text-sm">
+            <Link
+              href={buildChannelHref(shopSlug, 'ALL', dateRange, compareSelection)}
+              className={`rounded-2xl border px-4 py-2 text-xs font-semibold no-underline transition ${getRangePillClassName(
+                selectedChannel === 'ALL',
+              )}`}
+            >
+              Todos
+            </Link>
+            <Link
+              href={buildChannelHref(shopSlug, 'ONLINE_ONLY', dateRange, compareSelection)}
+              className={`rounded-2xl border px-4 py-2 text-xs font-semibold no-underline transition ${getRangePillClassName(
+                selectedChannel === 'ONLINE_ONLY',
+              )}`}
+            >
+              Solo online
+            </Link>
+            <Link
+              href={buildChannelHref(shopSlug, 'WALK_INS_ONLY', dateRange, compareSelection)}
+              className={`rounded-2xl border px-4 py-2 text-xs font-semibold no-underline transition ${getRangePillClassName(
+                selectedChannel === 'WALK_INS_ONLY',
+              )}`}
+            >
+              Solo presenciales
             </Link>
           </div>
 
@@ -75,6 +134,7 @@ export function StaffPerformanceFilters({
 
         <form method="get" className="grid gap-4">
           <input type="hidden" name="shop" value={shopSlug} />
+          <input type="hidden" name="channel" value={selectedChannel} />
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_1fr]">
             <div className="data-card rounded-[1.4rem] p-3">
               <Input

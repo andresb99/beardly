@@ -4,6 +4,7 @@ import {
   type WorkspaceSummary,
 } from '@/lib/workspaces';
 import {
+  WORKSPACE_FAVORITE_COOKIE_NAME,
   WORKSPACE_COOKIE_MAX_AGE_SECONDS,
   WORKSPACE_COOKIE_NAME,
 } from '@/lib/workspace-cookie';
@@ -51,6 +52,11 @@ export async function GET(request: NextRequest) {
   const url = new URL(request.url);
   const shopId = url.searchParams.get('shop')?.trim() || '';
   const target = url.searchParams.get('target');
+  const markAsFavorite = ['1', 'true', 'yes'].includes(
+    String(url.searchParams.get('favorite') || '')
+      .trim()
+      .toLowerCase(),
+  );
   const catalog = await getAccessibleWorkspacesForCurrentUser();
 
   if (!catalog) {
@@ -69,6 +75,13 @@ export async function GET(request: NextRequest) {
     sameSite: 'lax',
     maxAge: WORKSPACE_COOKIE_MAX_AGE_SECONDS,
   });
+  if (markAsFavorite) {
+    response.cookies.set(WORKSPACE_FAVORITE_COOKIE_NAME, workspace.shopId, {
+      path: '/',
+      sameSite: 'lax',
+      maxAge: WORKSPACE_COOKIE_MAX_AGE_SECONDS,
+    });
+  }
 
   return response;
 }

@@ -5,7 +5,7 @@ import { navajaTheme } from '@navaja/shared';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import './globals.css';
 import { APP_NAME } from '@/lib/constants';
-import { SiteHeader } from '@/components/public/site-header';
+import { SiteHeaderServer } from '@/components/public/site-header-server';
 import { HeroUiProvider } from '@/components/providers/heroui-provider';
 
 const headingFont = Sora({
@@ -75,7 +75,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <HeroUiProvider>
           <div className="relative min-h-screen">
             <Suspense fallback={<SiteHeaderFallback />}>
-              <SiteHeader />
+              <SiteHeaderServer />
             </Suspense>
 
             <main className="main-shell page-enter">{children}</main>

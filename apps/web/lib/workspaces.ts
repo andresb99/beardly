@@ -5,7 +5,7 @@ import { cookies } from 'next/headers';
 import { env } from '@/lib/env';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
-import { WORKSPACE_COOKIE_NAME } from '@/lib/workspace-cookie';
+import { WORKSPACE_COOKIE_NAME, WORKSPACE_FAVORITE_COOKIE_NAME } from '@/lib/workspace-cookie';
 
 type WorkspaceAccessRole = 'owner' | 'admin' | 'staff';
 
@@ -222,6 +222,21 @@ export async function getSelectedWorkspaceForCurrentUser(): Promise<WorkspaceSum
     catalog.workspaces[0] ||
     null
   );
+}
+
+export async function getFavoriteWorkspaceForCurrentUser(): Promise<WorkspaceSummary | null> {
+  const catalog = await getAccessibleWorkspacesForCurrentUser();
+  if (!catalog?.workspaces.length) {
+    return null;
+  }
+
+  const cookieStore = await cookies();
+  const favoriteWorkspaceId = cookieStore.get(WORKSPACE_FAVORITE_COOKIE_NAME)?.value;
+  if (!favoriteWorkspaceId) {
+    return null;
+  }
+
+  return catalog.workspaces.find((workspace) => workspace.shopId === favoriteWorkspaceId) || null;
 }
 
 export function getLegacyWorkspaceFallback() {

@@ -2,6 +2,7 @@
 
 import { randomUUID } from 'node:crypto';
 import {
+  bookingInputSchema,
   parseCurrencyInputToCents,
   courseSessionUpsertSchema,
   courseUpsertSchema,
@@ -22,6 +23,7 @@ import { z } from 'zod';
 import { getCurrentAuthContext, requireAdmin, requireAuthenticated, requireStaff } from '@/lib/auth';
 import { env } from '@/lib/env';
 import { createSignedReviewToken } from '@/lib/review-links';
+import { createAppointmentFromBookingIntent } from '@/lib/booking-payments.server';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import {
@@ -210,6 +212,7 @@ const markAppointmentCompletedInputSchema = z.object({
   shopId: uuidSchema,
   priceCents: z.number().int().nonnegative().optional(),
 });
+const manualAppointmentSourceSchema = z.enum(['WALK_IN', 'ADMIN_CREATED']);
 
 const workingHoursRangeUpsertSchema = z
   .object({
@@ -1298,6 +1301,63 @@ export async function updateAppointmentStatusAction(formData: FormData) {
   revalidateAppointmentMetrics();
 
   return null;
+}
+
+export async function createManualAppointmentAction(formData: FormData) {
+  const shopId = requireFormShopId(formData);
+  const ctx = await getCurrentAuthContext({ shopId });
+
+  if (
+    (ctx.selectedWorkspaceRole !== 'admin' && ctx.selectedWorkspaceRole !== 'staff') ||
+    !ctx.shopId
+  ) {
+    throw new Error('No tienes permisos para crear reservas manuales.');
+  }
+
+  const sourceChannelParsed = manualAppointmentSourceSchema.safeParse(
+    formValue(formData, 'source_channel'),
+  );
+
+  if (!sourceChannelParsed.success) {
+    throw new Error('Selecciona un canal valido para registrar la reserva.');
+  }
+
+  const bookingParsed = bookingInputSchema.safeParse({
+    shop_id: shopId,
+    service_id: formValue(formData, 'service_id'),
+    staff_id: formValue(formData, 'staff_id'),
+    start_at: formDateTimeIso(formData, 'start_at'),
+    customer_name: formValue(formData, 'customer_name'),
+    customer_phone: formValue(formData, 'customer_phone'),
+    customer_email: formValue(formData, 'customer_email') || null,
+    notes: formValue(formData, 'notes') || null,
+  });
+
+  if (!bookingParsed.success) {
+    throw new Error(bookingParsed.error.flatten().formErrors.join(', ') || 'Datos de cita invalidos.');
+  }
+
+  if (!bookingParsed.data.staff_id) {
+    throw new Error('Selecciona un barbero valido para registrar la cita.');
+  }
+
+  await createAppointmentFromBookingIntent(
+    {
+      shop_id: bookingParsed.data.shop_id,
+      service_id: bookingParsed.data.service_id,
+      staff_id: bookingParsed.data.staff_id,
+      start_at: bookingParsed.data.start_at,
+      customer_name: bookingParsed.data.customer_name,
+      customer_phone: bookingParsed.data.customer_phone,
+      customer_email: bookingParsed.data.customer_email || null,
+      notes: bookingParsed.data.notes || null,
+    },
+    {
+      sourceChannel: sourceChannelParsed.data,
+    },
+  );
+
+  revalidateAppointmentMetrics();
 }
 
 export async function upsertCourseAction(formData: FormData) {

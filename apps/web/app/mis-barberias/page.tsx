@@ -1,10 +1,16 @@
-import Link from 'next/link';
+import { Button } from '@heroui/button';
 import { Card, CardBody } from '@heroui/card';
 import { Chip } from '@heroui/chip';
+import { redirect } from 'next/navigation';
+import {
+  WorkspaceFavoriteProvider,
+  WorkspaceFavoriteToggle,
+} from '@/components/workspace-favorite-toggle';
 import { requireAuthenticated } from '@/lib/auth';
 import { buildAdminHref, buildStaffHref } from '@/lib/workspace-routes';
 import {
   getAccessibleWorkspacesForCurrentUser,
+  getFavoriteWorkspaceForCurrentUser,
   getSelectedWorkspaceForCurrentUser,
 } from '@/lib/workspaces';
 
@@ -25,21 +31,30 @@ const shopStatusLabel = {
   suspended: 'Suspendida',
 } as const;
 
-const primaryLinkClassName =
-  'action-primary inline-flex items-center justify-center rounded-full px-5 py-2.5 text-sm font-semibold no-underline';
+function getWorkspacePrimaryHref(shopSlug: string, accessRole: keyof typeof accessRoleLabel) {
+  return accessRole === 'staff'
+    ? buildStaffHref('/staff', shopSlug)
+    : buildAdminHref('/admin', shopSlug);
+}
 
-const secondaryLinkClassName =
-  'action-secondary inline-flex items-center justify-center rounded-full px-5 py-2.5 text-sm font-semibold no-underline';
+function getWorkspacePrimaryLabel(accessRole: keyof typeof accessRoleLabel) {
+  return accessRole === 'staff' ? 'Abrir panel staff' : 'Abrir panel admin';
+}
 
 export default async function MyBarbershopsPage({ searchParams }: MyBarbershopsPageProps) {
   await requireAuthenticated('/mis-barberias');
-  const [{ error }, catalog, selectedWorkspace] = await Promise.all([
+  const [{ error }, catalog, selectedWorkspace, favoriteWorkspace] = await Promise.all([
     searchParams,
     getAccessibleWorkspacesForCurrentUser(),
     getSelectedWorkspaceForCurrentUser(),
+    getFavoriteWorkspaceForCurrentUser(),
   ]);
 
   const workspaces = catalog?.workspaces || [];
+  const singleWorkspace = workspaces.length === 1 ? workspaces[0] : null;
+  if (singleWorkspace) {
+    redirect(getWorkspacePrimaryHref(singleWorkspace.shopSlug, singleWorkspace.accessRole));
+  }
 
   return (
     <section className="space-y-6">
@@ -80,108 +95,147 @@ export default async function MyBarbershopsPage({ searchParams }: MyBarbershopsP
       {error ? <p className="status-banner error">{error}</p> : null}
 
       {workspaces.length === 0 ? (
-        <Card className="soft-panel rounded-[1.9rem] border-0 shadow-none">
+        <Card className="rounded-[1.6rem] border border-slate-900/10 bg-white/80 shadow-[0_20px_40px_-34px_rgba(15,23,42,0.45)] dark:border-white/10 dark:bg-white/[0.03]">
           <CardBody className="space-y-4 p-5">
             <div>
-              <h2 className="text-xl font-semibold text-ink dark:text-slate-100">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate/60 dark:text-slate-400">
+                Inicio rapido
+              </p>
+              <h2 className="mt-2 text-lg font-semibold text-slate-900 dark:text-zinc-100">
                 Aun no tienes barberias vinculadas
               </h2>
-              <p className="mt-2 text-sm text-slate/80 dark:text-slate-300">
-                Crea tu primera barberia o espera una invitacion de un owner para entrar como staff.
-              </p>
             </div>
-
-            <div className="flex flex-wrap gap-3">
-              <Link href="/onboarding/barbershop" className={primaryLinkClassName}>
+            <p className="text-sm text-slate/80 dark:text-slate-300">
+              Crea tu primera barberia o espera una invitacion de un owner para entrar como staff.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button as="a" href="/onboarding/barbershop" color="primary" size="sm" className="px-4 text-sm font-semibold">
                 Crear barberia
-              </Link>
-              <Link href="/shops" className={secondaryLinkClassName}>
+              </Button>
+              <Button
+                as="a"
+                href="/shops"
+                variant="flat"
+                size="sm"
+                className="px-4 text-sm font-semibold text-slate-700 dark:text-slate-200"
+              >
                 Volver al marketplace
-              </Link>
+              </Button>
             </div>
           </CardBody>
         </Card>
       ) : (
-        <div className="grid gap-4 xl:grid-cols-2">
-          {workspaces.map((workspace) => {
-            const isActive = selectedWorkspace?.shopId === workspace.shopId;
-            const statusLabel =
-              shopStatusLabel[workspace.shopStatus as keyof typeof shopStatusLabel] ||
-              workspace.shopStatus;
+        <WorkspaceFavoriteProvider initialFavoriteShopId={favoriteWorkspace?.shopId || null}>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {workspaces.map((workspace) => {
+              const isActive = selectedWorkspace?.shopId === workspace.shopId;
+              const statusLabel =
+                shopStatusLabel[workspace.shopStatus as keyof typeof shopStatusLabel] ||
+                workspace.shopStatus;
 
-            return (
-              <Card
-                key={workspace.shopId}
-                className="soft-panel rounded-[1.9rem] border-0 shadow-none"
-              >
-                <CardBody className="space-y-5 p-5">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate/55 dark:text-slate-400">
-                        {workspace.shopSlug}
-                      </p>
-                      <h2 className="mt-2 text-2xl font-semibold text-ink dark:text-slate-100">
-                        {workspace.shopName}
-                      </h2>
-                      <p className="mt-2 text-sm text-slate/80 dark:text-slate-300">
-                        Zona horaria: {workspace.shopTimezone}
-                      </p>
+              return (
+                <Card
+                  key={workspace.shopId}
+                  className="rounded-[1.6rem] border border-slate-900/10 bg-white/80 shadow-[0_20px_40px_-34px_rgba(15,23,42,0.45)] dark:border-white/10 dark:bg-white/[0.03]"
+                >
+                  <CardBody className="p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-zinc-500">
+                          {workspace.shopSlug}
+                        </p>
+                        <h2 className="mt-1 truncate text-lg font-semibold text-slate-900 dark:text-zinc-100">
+                          {workspace.shopName}
+                        </h2>
+                      </div>
+
+                      <div className="flex shrink-0 items-start gap-2">
+                        <WorkspaceFavoriteToggle
+                          shopId={workspace.shopId}
+                          shopName={workspace.shopName}
+                        />
+                        <div className="flex flex-wrap justify-end gap-1.5">
+                          {isActive ? (
+                            <Chip size="sm" radius="full" variant="flat" color="success">
+                              Activa
+                            </Chip>
+                          ) : null}
+                          <Chip size="sm" radius="full" variant="flat" color="default">
+                            {accessRoleLabel[workspace.accessRole]}
+                          </Chip>
+                          <Chip size="sm" radius="full" variant="flat" color="default">
+                            {statusLabel}
+                          </Chip>
+                        </div>
+                      </div>
                     </div>
 
-                    <div className="flex flex-wrap gap-2">
-                      {isActive ? (
-                        <Chip size="sm" radius="full" variant="flat" color="success">
-                          Activa
-                        </Chip>
-                      ) : null}
-                      <Chip size="sm" radius="full" variant="flat" color="default">
-                        {accessRoleLabel[workspace.accessRole]}
-                      </Chip>
-                      <Chip size="sm" radius="full" variant="flat" color="default">
-                        {statusLabel}
-                      </Chip>
-                    </div>
-                  </div>
+                    <div className="my-3 h-px bg-slate-900/10 dark:bg-white/10" />
 
-                  <div className="rounded-3xl border border-white/45 bg-white/40 px-4 py-3 text-sm text-slate/80 dark:border-white/8 dark:bg-white/[0.03] dark:text-slate-300">
-                    {workspace.accessRole === 'staff'
-                      ? 'Entraras a la agenda del staff para esta barberia.'
-                      : 'Entraras al panel administrativo de esta barberia.'}
-                  </div>
+                    <dl className="grid gap-2 text-sm">
+                      <div>
+                        <dt className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-zinc-500">
+                          Rol
+                        </dt>
+                        <dd className="text-slate-800 dark:text-zinc-200">
+                          {accessRoleLabel[workspace.accessRole]}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-zinc-500">
+                          Estado
+                        </dt>
+                        <dd className="text-slate-800 dark:text-zinc-200">{statusLabel}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-zinc-500">
+                          Zona horaria
+                        </dt>
+                        <dd className="truncate text-slate-700 dark:text-zinc-300">
+                          {workspace.shopTimezone}
+                        </dd>
+                      </div>
+                    </dl>
 
-                  <div className="flex flex-wrap gap-3">
-                    <a
-                      href={
-                        workspace.accessRole === 'staff'
-                          ? buildStaffHref('/staff', workspace.shopSlug)
-                          : buildAdminHref('/admin', workspace.shopSlug)
-                      }
-                      className={primaryLinkClassName}
-                    >
-                      {workspace.accessRole === 'staff' ? 'Abrir panel staff' : 'Abrir panel admin'}
-                    </a>
-
-                    {workspace.staffId && workspace.accessRole !== 'staff' ? (
-                      <a
-                        href={buildStaffHref('/staff', workspace.shopSlug)}
-                        className={secondaryLinkClassName}
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <Button
+                        as="a"
+                        href={getWorkspacePrimaryHref(workspace.shopSlug, workspace.accessRole)}
+                        color="primary"
+                        size="sm"
+                        className="px-4 text-sm font-semibold"
                       >
-                        Ver agenda staff
-                      </a>
-                    ) : null}
+                        {getWorkspacePrimaryLabel(workspace.accessRole)}
+                      </Button>
 
-                    <Link
-                      href={`/shops/${workspace.shopSlug}`}
-                      className={secondaryLinkClassName}
-                    >
-                      Ver perfil publico
-                    </Link>
-                  </div>
-                </CardBody>
-              </Card>
-            );
-          })}
-        </div>
+                      {workspace.staffId && workspace.accessRole !== 'staff' ? (
+                        <Button
+                          as="a"
+                          href={buildStaffHref('/staff', workspace.shopSlug)}
+                          variant="flat"
+                          size="sm"
+                          className="px-4 text-sm font-semibold text-slate-700 dark:text-slate-200"
+                        >
+                          Ver agenda staff
+                        </Button>
+                      ) : null}
+
+                      <Button
+                        as="a"
+                        href={`/shops/${workspace.shopSlug}`}
+                        variant="flat"
+                        size="sm"
+                        className="px-4 text-sm font-semibold text-slate-700 dark:text-slate-200"
+                      >
+                        Ver perfil publico
+                      </Button>
+                    </div>
+                  </CardBody>
+                </Card>
+              );
+            })}
+          </div>
+        </WorkspaceFavoriteProvider>
       )}
     </section>
   );

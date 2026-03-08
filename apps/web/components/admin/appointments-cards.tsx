@@ -24,6 +24,7 @@ interface AppointmentCardRow {
   customerPhone: string;
   serviceName: string;
   staffName: string;
+  sourceChannelLabel: string;
   status: string;
   priceLabel: string;
 }
@@ -126,6 +127,12 @@ export const AdminAppointmentsCards = memo(function AdminAppointmentsCards({
                   Barbero
                 </dt>
                 <dd className="text-slate-700 dark:text-zinc-300">{item.staffName}</dd>
+              </div>
+              <div>
+                <dt className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-zinc-500">
+                  Canal
+                </dt>
+                <dd className="text-slate-700 dark:text-zinc-300">{item.sourceChannelLabel}</dd>
               </div>
               <div>
                 <dt className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-zinc-500">

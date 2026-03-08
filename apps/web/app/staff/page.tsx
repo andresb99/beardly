@@ -1,7 +1,7 @@
 import { formatCurrency } from '@navaja/shared';
 import { Card, CardBody } from '@heroui/card';
 import { Chip } from '@heroui/chip';
-import { createStaffTimeOffRequestAction } from '@/app/admin/actions';
+import { createManualAppointmentAction, createStaffTimeOffRequestAction } from '@/app/admin/actions';
 import { requireStaff } from '@/lib/auth';
 import { getStaffPerformanceDetail } from '@/lib/metrics';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
@@ -57,7 +57,7 @@ export default async function StaffPage({ searchParams }: StaffPageProps) {
   const end = new Date(start);
   end.setUTCDate(end.getUTCDate() + 7);
 
-  const [appointmentsResult, workingHoursResult, timeOffResult, coursesResult, performance] =
+  const [appointmentsResult, workingHoursResult, timeOffResult, coursesResult, staffResult, servicesResult, performance] =
     await Promise.all([
       supabase
         .from('appointments')
@@ -84,6 +84,18 @@ export default async function StaffPage({ searchParams }: StaffPageProps) {
         .eq('is_active', true)
         .order('created_at', { ascending: false })
         .limit(6),
+      supabase
+        .from('staff')
+        .select('id, name')
+        .eq('shop_id', ctx.shopId)
+        .eq('is_active', true)
+        .order('name'),
+      supabase
+        .from('services')
+        .select('id, name')
+        .eq('shop_id', ctx.shopId)
+        .eq('is_active', true)
+        .order('name'),
       getStaffPerformanceDetail(
         ctx.staffId,
         {
@@ -95,6 +107,10 @@ export default async function StaffPage({ searchParams }: StaffPageProps) {
 
   const appointments = appointmentsResult.data || [];
   const timeOffRows = timeOffResult.data || [];
+  const staffOptions = staffResult.data || [];
+  const serviceOptions = servicesResult.data || [];
+  const hasManualBookingOptions = Boolean(staffOptions.length && serviceOptions.length);
+  const defaultManualStartAt = new Date().toISOString().slice(0, 16);
   const groupedWorkingHours = new Map<
     string,
     Array<{
@@ -275,6 +291,118 @@ export default async function StaffPage({ searchParams }: StaffPageProps) {
           </CardBody>
         </Card>
       </div>
+
+      <Card className="soft-panel rounded-[1.9rem] border-0 shadow-none">
+        <CardBody className="p-5">
+          <h3 className="text-xl font-semibold text-ink dark:text-slate-100">
+            Registrar cliente presencial
+          </h3>
+          <p className="text-sm text-slate/80 dark:text-slate-300">
+            Crea reservas manuales y registralas en la misma agenda del sistema.
+          </p>
+
+          {!hasManualBookingOptions ? (
+            <p className="mt-3 rounded-2xl border border-amber-400/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+              Necesitas al menos un barbero activo y un servicio activo para registrar reservas.
+            </p>
+          ) : null}
+
+          <form action={createManualAppointmentAction} className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <input type="hidden" name="shop_id" value={ctx.shopId} />
+
+            <select
+              name="source_channel"
+              required
+              defaultValue="WALK_IN"
+              disabled={!hasManualBookingOptions}
+              className="rounded-2xl border border-white/55 bg-white/55 px-4 py-3 text-sm text-ink outline-none transition focus:border-sky-400 disabled:opacity-60 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-100"
+            >
+              <option value="WALK_IN">Presencial</option>
+              <option value="ADMIN_CREATED">Carga manual</option>
+            </select>
+
+            <select
+              name="service_id"
+              required
+              defaultValue=""
+              disabled={!hasManualBookingOptions}
+              className="rounded-2xl border border-white/55 bg-white/55 px-4 py-3 text-sm text-ink outline-none transition focus:border-sky-400 disabled:opacity-60 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-100"
+            >
+              <option value="" disabled>
+                Servicio
+              </option>
+              {serviceOptions.map((item) => (
+                <option key={String(item.id)} value={String(item.id)}>
+                  {String(item.name)}
+                </option>
+              ))}
+            </select>
+
+            <select
+              name="staff_id"
+              required
+              defaultValue={ctx.staffId}
+              disabled={!hasManualBookingOptions}
+              className="rounded-2xl border border-white/55 bg-white/55 px-4 py-3 text-sm text-ink outline-none transition focus:border-sky-400 disabled:opacity-60 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-100"
+            >
+              {staffOptions.map((item) => (
+                <option key={String(item.id)} value={String(item.id)}>
+                  {String(item.name)}
+                </option>
+              ))}
+            </select>
+
+            <input
+              name="start_at"
+              type="datetime-local"
+              required
+              defaultValue={defaultManualStartAt}
+              disabled={!hasManualBookingOptions}
+              className="rounded-2xl border border-white/55 bg-white/55 px-4 py-3 text-sm text-ink outline-none transition focus:border-sky-400 disabled:opacity-60 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-100"
+            />
+            <input
+              name="customer_name"
+              type="text"
+              required
+              placeholder="Nombre del cliente"
+              disabled={!hasManualBookingOptions}
+              className="rounded-2xl border border-white/55 bg-white/55 px-4 py-3 text-sm text-ink outline-none transition focus:border-sky-400 disabled:opacity-60 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-100"
+            />
+            <input
+              name="customer_phone"
+              type="tel"
+              required
+              placeholder="Telefono"
+              disabled={!hasManualBookingOptions}
+              className="rounded-2xl border border-white/55 bg-white/55 px-4 py-3 text-sm text-ink outline-none transition focus:border-sky-400 disabled:opacity-60 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-100"
+            />
+            <input
+              name="customer_email"
+              type="email"
+              placeholder="Email (opcional)"
+              disabled={!hasManualBookingOptions}
+              className="rounded-2xl border border-white/55 bg-white/55 px-4 py-3 text-sm text-ink outline-none transition focus:border-sky-400 disabled:opacity-60 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-100"
+            />
+            <input
+              name="notes"
+              type="text"
+              placeholder="Notas (opcional)"
+              disabled={!hasManualBookingOptions}
+              className="rounded-2xl border border-white/55 bg-white/55 px-4 py-3 text-sm text-ink outline-none transition focus:border-sky-400 disabled:opacity-60 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-100 xl:col-span-2"
+            />
+
+            <div className="md:col-span-2 xl:col-span-4">
+              <button
+                type="submit"
+                disabled={!hasManualBookingOptions}
+                className="action-primary inline-flex w-fit rounded-full px-5 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Guardar reserva manual
+              </button>
+            </div>
+          </form>
+        </CardBody>
+      </Card>
 
       <Card className="soft-panel rounded-[1.9rem] border-0 shadow-none">
         <CardBody className="p-5">

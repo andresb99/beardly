@@ -9,7 +9,7 @@ function redirectToLogin(request: NextRequest, message: string, next?: string) {
   const loginUrl = new URL('/login', getRequestOrigin(request));
   loginUrl.searchParams.set('message', message);
 
-  if (next && next !== '/cuenta' && !next.startsWith('/login')) {
+  if (next && next !== '/' && !next.startsWith('/login')) {
     loginUrl.searchParams.set('next', next);
   }
 
@@ -19,7 +19,7 @@ function redirectToLogin(request: NextRequest, message: string, next?: string) {
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get('code');
-  const next = resolveSafeNextPath(requestUrl.searchParams.get('next'), '/cuenta');
+  const next = resolveSafeNextPath(requestUrl.searchParams.get('next'), '/');
   const providerError = requestUrl.searchParams.get('error_description');
   const publicOrigin = getRequestOrigin(request);
 

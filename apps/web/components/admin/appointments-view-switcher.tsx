@@ -14,6 +14,7 @@ interface AppointmentRow {
   customerPhone: string;
   serviceName: string;
   staffName: string;
+  sourceChannelLabel: string;
   status: string;
   priceLabel: string;
 }
@@ -108,4 +109,3 @@ export function AdminAppointmentsViewSwitcher({
     </>
   );
 }
-

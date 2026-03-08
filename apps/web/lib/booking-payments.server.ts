@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { bookingInputSchema } from '@navaja/shared';
+import { bookingInputSchema, type AppointmentSourceChannel } from '@navaja/shared';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 
 function normalizeEmail(value: string | null | undefined) {
@@ -8,6 +8,47 @@ function normalizeEmail(value: string | null | undefined) {
     .trim()
     .toLowerCase();
   return normalized || null;
+}
+
+function isMissingPaymentIntentColumnError(error: unknown) {
+  const message = String((error as { message?: string } | null)?.message || '')
+    .trim()
+    .toLowerCase();
+
+  return (
+    message.includes('payment_intent_id') &&
+    message.includes('appointments') &&
+    (message.includes('schema cache') || message.includes('column'))
+  );
+}
+
+function isMissingSourceChannelColumnError(error: unknown) {
+  const message = String((error as { message?: string } | null)?.message || '')
+    .trim()
+    .toLowerCase();
+
+  return (
+    message.includes('source_channel') &&
+    message.includes('appointments') &&
+    (message.includes('schema cache') || message.includes('column'))
+  );
+}
+
+function appendSourceChannelToNotes(
+  currentNotes: string | null | undefined,
+  sourceChannel: AppointmentSourceChannel,
+) {
+  const base = String(currentNotes || '').trim();
+  const sourceLabel = `Canal: ${sourceChannel}`;
+  if (!base) {
+    return sourceLabel;
+  }
+
+  if (base.toLowerCase().includes(sourceLabel.toLowerCase())) {
+    return base;
+  }
+
+  return `${base}\n${sourceLabel}`;
 }
 
 export interface BookingIntentPayload {
@@ -28,7 +69,7 @@ export interface CreatedAppointmentResult {
 
 export async function createAppointmentFromBookingIntent(
   payload: BookingIntentPayload,
-  options?: { paymentIntentId?: string | null },
+  options?: { paymentIntentId?: string | null; sourceChannel?: AppointmentSourceChannel },
 ): Promise<CreatedAppointmentResult> {
   const parsed = bookingInputSchema.safeParse({
     ...payload,
@@ -40,14 +81,25 @@ export async function createAppointmentFromBookingIntent(
   }
 
   const normalizedPaymentIntentId = String(options?.paymentIntentId || '').trim() || null;
+  const sourceChannel = options?.sourceChannel || 'WEB';
   const supabase = createSupabaseAdminClient();
+  let canUsePaymentIntentColumn = true;
+  let canUseSourceChannelColumn = true;
 
   if (normalizedPaymentIntentId) {
-    const { data: existingAppointment } = await supabase
+    const { data: existingAppointment, error: existingAppointmentError } = await supabase
       .from('appointments')
       .select('id, start_at')
       .eq('payment_intent_id', normalizedPaymentIntentId)
       .maybeSingle();
+
+    if (existingAppointmentError) {
+      if (isMissingPaymentIntentColumnError(existingAppointmentError)) {
+        canUsePaymentIntentColumn = false;
+      } else {
+        throw new Error(existingAppointmentError.message || 'No se pudo validar la cita existente.');
+      }
+    }
 
     if (existingAppointment?.id) {
       return {
@@ -147,20 +199,68 @@ export async function createAppointmentFromBookingIntent(
     customerId = customer.id as string;
   }
 
-  const { data: appointment, error: appointmentError } = await supabase
-    .from('appointments')
-    .insert({
-      shop_id: payload.shop_id,
-      staff_id: payload.staff_id,
-      customer_id: customerId,
-      service_id: payload.service_id,
-      start_at: payload.start_at,
-      status: 'pending',
-      notes: payload.notes || null,
-      payment_intent_id: normalizedPaymentIntentId,
-    })
-    .select('id, start_at')
-    .single();
+  const baseInsertPayload = {
+    shop_id: payload.shop_id,
+    staff_id: payload.staff_id,
+    customer_id: customerId,
+    service_id: payload.service_id,
+    start_at: payload.start_at,
+    status: 'pending' as const,
+    notes: payload.notes || null,
+  };
+  let includePaymentIntent = Boolean(normalizedPaymentIntentId && canUsePaymentIntentColumn);
+  let includeSourceChannel = canUseSourceChannelColumn;
+  let mirrorSourceInNotes = false;
+  let appointment: { id?: string | null; start_at?: string | null } | null = null;
+  let appointmentError: { message?: string } | null = null;
+
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const insertPayload = {
+      ...baseInsertPayload,
+      ...(includeSourceChannel
+        ? {
+            source_channel: sourceChannel,
+          }
+        : {}),
+      ...(includePaymentIntent
+        ? {
+            payment_intent_id: normalizedPaymentIntentId,
+          }
+        : {}),
+      ...(mirrorSourceInNotes
+        ? {
+            notes: appendSourceChannelToNotes(baseInsertPayload.notes, sourceChannel),
+          }
+        : {}),
+    };
+
+    const insertResult = await supabase
+      .from('appointments')
+      .insert(insertPayload)
+      .select('id, start_at')
+      .single();
+
+    appointment = insertResult.data;
+    appointmentError = insertResult.error;
+
+    if (!appointmentError) {
+      break;
+    }
+
+    if (includePaymentIntent && isMissingPaymentIntentColumnError(appointmentError)) {
+      includePaymentIntent = false;
+      continue;
+    }
+
+    if (includeSourceChannel && isMissingSourceChannelColumnError(appointmentError)) {
+      includeSourceChannel = false;
+      canUseSourceChannelColumn = false;
+      mirrorSourceInNotes = sourceChannel !== 'WEB';
+      continue;
+    }
+
+    break;
+  }
 
   if (appointmentError || !appointment) {
     throw new Error(appointmentError?.message || 'No se pudo crear la cita.');
@@ -171,4 +271,3 @@ export async function createAppointmentFromBookingIntent(
     startAt: String(appointment.start_at),
   };
 }
-

@@ -36,6 +36,7 @@ interface AppointmentRow {
   customerPhone: string;
   serviceName: string;
   staffName: string;
+  sourceChannelLabel: string;
   status: string;
   priceLabel: string;
 }
@@ -50,6 +51,7 @@ type ColumnKey =
   | 'customer'
   | 'service'
   | 'staff'
+  | 'channel'
   | 'status'
   | 'price'
   | 'actions';
@@ -117,6 +119,15 @@ export function AdminAppointmentsTable({ shopId, appointments }: AdminAppointmen
             <div className="flex flex-col">
               <p className="text-sm font-semibold text-slate-900 dark:text-zinc-100">{item.staffName}</p>
               <p className="text-xs text-slate-600 dark:text-zinc-400">Asignado</p>
+            </div>
+          );
+        case 'channel':
+          return (
+            <div className="flex flex-col">
+              <p className="text-sm font-semibold text-slate-900 dark:text-zinc-100">
+                {item.sourceChannelLabel}
+              </p>
+              <p className="text-xs text-slate-600 dark:text-zinc-400">Canal</p>
             </div>
           );
         case 'status':
@@ -205,6 +216,7 @@ export function AdminAppointmentsTable({ shopId, appointments }: AdminAppointmen
           <TableColumn key="customer">CLIENTE</TableColumn>
           <TableColumn key="service">SERVICIO</TableColumn>
           <TableColumn key="staff">BARBERO</TableColumn>
+          <TableColumn key="channel">CANAL</TableColumn>
           <TableColumn key="status">ESTADO</TableColumn>
           <TableColumn key="price">PRECIO</TableColumn>
           <TableColumn key="actions" align="end">

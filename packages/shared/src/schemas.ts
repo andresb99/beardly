@@ -15,6 +15,14 @@ export const appointmentStatusSchema = z.enum([
   'no_show',
   'done',
 ]);
+export const appointmentSourceChannelSchema = z.enum([
+  'WEB',
+  'WALK_IN',
+  'ADMIN_CREATED',
+  'WHATSAPP',
+  'INSTAGRAM',
+  'PHONE',
+]);
 export const appointmentCancelledBySchema = z.enum(['customer', 'staff', 'admin', 'system']);
 export const reviewStatusSchema = z.enum(['published', 'hidden', 'flagged']);
 export const enrollmentStatusSchema = z.enum(['pending', 'confirmed', 'cancelled']);
@@ -129,6 +137,7 @@ export const appointmentSchema = z.object({
   start_at: isoDateTimeSchema,
   end_at: isoDateTimeSchema.nullable().optional(),
   status: appointmentStatusSchema,
+  source_channel: appointmentSourceChannelSchema,
   price_cents: z.number().int().nonnegative().nullable().optional(),
   notes: z.string().max(2000).nullable().optional(),
   completed_at: isoDateTimeSchema.nullable().optional(),
@@ -569,6 +578,7 @@ export type Waiver = z.infer<typeof waiverSchema>;
 export type BookingInput = z.infer<typeof bookingInputSchema>;
 export type AvailabilityInput = z.infer<typeof availabilityInputSchema>;
 export type AppointmentStatus = z.infer<typeof appointmentStatusSchema>;
+export type AppointmentSourceChannel = z.infer<typeof appointmentSourceChannelSchema>;
 export type AppointmentCancelledBy = z.infer<typeof appointmentCancelledBySchema>;
 export type StaffRole = z.infer<typeof staffRoleSchema>;
 export type ShopMembershipRole = z.infer<typeof shopMembershipRoleSchema>;

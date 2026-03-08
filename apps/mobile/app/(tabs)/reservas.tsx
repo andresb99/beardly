@@ -353,6 +353,7 @@ export default function ReservasScreen() {
           service_id: parsed.data.service_id,
           start_at: parsed.data.start_at,
           status: 'pending',
+          source_channel: 'WEB',
           notes: parsed.data.notes || null,
         })
         .select('id')

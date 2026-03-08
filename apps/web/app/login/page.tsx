@@ -20,7 +20,7 @@ function resolveInitialMode(value: string | undefined): 'login' | 'register' | '
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
   const params = await searchParams;
-  const nextPath = resolveSafeNextPath(params.next, '/cuenta');
+  const nextPath = resolveSafeNextPath(params.next, '/');
   const hasExplicitNext = typeof params.next === 'string' && params.next.trim().length > 0;
   const initialMode = resolveInitialMode(params.mode);
 
@@ -33,7 +33,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
 
     if (user) {
       if (!hasExplicitNext) {
-        redirect('/suscripcion');
+        redirect('/');
       }
       redirect(nextPath);
     }

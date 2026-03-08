@@ -1,6 +1,8 @@
 import { formatCurrency } from '@navaja/shared';
+import { Card, CardBody } from '@heroui/card';
 import { AdminAppointmentsFilters } from '@/components/admin/appointments-filters';
 import { AdminAppointmentsViewSwitcher } from '@/components/admin/appointments-view-switcher';
+import { createManualAppointmentAction } from '@/app/admin/actions';
 import { requireAdmin } from '@/lib/auth';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
@@ -13,6 +15,19 @@ interface AppointmentsPageProps {
     shop?: string;
     view?: string;
   }>;
+}
+
+interface AppointmentListItem {
+  id: string | null;
+  staff_id: string | null;
+  start_at: string | null;
+  status: string | null;
+  source_channel?: string | null;
+  price_cents: number | null;
+  notes: string | null;
+  customers: { name?: string | null; phone?: string | null } | null;
+  services: { name?: string | null } | null;
+  staff: { name?: string | null } | null;
 }
 
 function formatDateInput(date: Date, timeZone: string) {
@@ -28,6 +43,57 @@ function formatDateInput(date: Date, timeZone: string) {
   const day = parts.find((part) => part.type === 'day')?.value || '01';
 
   return `${year}-${month}-${day}`;
+}
+
+function isMissingSourceChannelColumnError(error: unknown) {
+  const message = String((error as { message?: string } | null)?.message || '')
+    .trim()
+    .toLowerCase();
+
+  return (
+    message.includes('source_channel') &&
+    message.includes('appointments') &&
+    (message.includes('schema cache') || message.includes('column'))
+  );
+}
+
+function resolveSourceChannel(value: unknown, notes: unknown) {
+  const normalized = String(value || '')
+    .trim()
+    .toUpperCase();
+  if (normalized) {
+    return normalized;
+  }
+
+  const noteText = String(notes || '');
+  const matched = noteText.match(/\bCanal:\s*(WEB|WALK_IN|ADMIN_CREATED|WHATSAPP|INSTAGRAM|PHONE)\b/i);
+  return matched?.[1]?.toUpperCase() || 'WEB';
+}
+
+function sourceChannelLabel(channel: string) {
+  const normalized = channel.trim().toUpperCase();
+
+  if (normalized === 'WALK_IN') {
+    return 'Presencial';
+  }
+
+  if (normalized === 'ADMIN_CREATED') {
+    return 'Carga manual';
+  }
+
+  if (normalized === 'WHATSAPP') {
+    return 'WhatsApp';
+  }
+
+  if (normalized === 'INSTAGRAM') {
+    return 'Instagram';
+  }
+
+  if (normalized === 'PHONE') {
+    return 'Telefono';
+  }
+
+  return 'Web';
 }
 
 export default async function AppointmentsPage({ searchParams }: AppointmentsPageProps) {
@@ -49,7 +115,12 @@ export default async function AppointmentsPage({ searchParams }: AppointmentsPag
   const from = params.from || defaultFrom;
   const to = params.to || (params.from ? params.from : defaultTo);
 
-  const [{ data: staff }, appointmentsResult] = await Promise.all([
+  const appointmentSelectWithSource =
+    'id, staff_id, start_at, end_at, status, source_channel, price_cents, notes, customers(name, phone), services(name), staff(name)';
+  const appointmentSelectFallback =
+    'id, staff_id, start_at, end_at, status, price_cents, notes, customers(name, phone), services(name), staff(name)';
+
+  const [{ data: staff }, { data: services }, appointmentsResult] = await Promise.all([
     supabase
       .from('staff')
       .select('id, name')
@@ -57,17 +128,38 @@ export default async function AppointmentsPage({ searchParams }: AppointmentsPag
       .eq('is_active', true)
       .order('name'),
     supabase
+      .from('services')
+      .select('id, name')
+      .eq('shop_id', ctx.shopId)
+      .eq('is_active', true)
+      .order('name'),
+    supabase
       .from('appointments')
-      .select(
-        'id, staff_id, start_at, end_at, status, price_cents, notes, customers(name, phone), services(name), staff(name)',
-      )
+      .select(appointmentSelectWithSource)
       .eq('shop_id', ctx.shopId)
       .gte('start_at', `${from}T00:00:00.000Z`)
       .lte('start_at', `${to}T23:59:59.999Z`)
       .order('start_at'),
   ]);
 
-  let appointments = appointmentsResult.data || [];
+  let appointments = (appointmentsResult.data || []) as AppointmentListItem[];
+  if (appointmentsResult.error && isMissingSourceChannelColumnError(appointmentsResult.error)) {
+    const fallbackResult = await supabase
+      .from('appointments')
+      .select(appointmentSelectFallback)
+      .eq('shop_id', ctx.shopId)
+      .gte('start_at', `${from}T00:00:00.000Z`)
+      .lte('start_at', `${to}T23:59:59.999Z`)
+      .order('start_at');
+
+    if (fallbackResult.error) {
+      throw new Error(fallbackResult.error.message || 'No se pudieron cargar las citas.');
+    }
+
+    appointments = (fallbackResult.data || []) as AppointmentListItem[];
+  } else if (appointmentsResult.error) {
+    throw new Error(appointmentsResult.error.message || 'No se pudieron cargar las citas.');
+  }
 
   if (selectedStaffId) {
     appointments = appointments.filter((item) => String(item.staff_id || '') === selectedStaffId);
@@ -79,6 +171,8 @@ export default async function AppointmentsPage({ searchParams }: AppointmentsPag
 
   const pendingCount = appointments.filter((item) => item.status === 'pending').length;
   const doneCount = appointments.filter((item) => item.status === 'done').length;
+  const hasManualBookingOptions = Boolean((staff || []).length && (services || []).length);
+  const defaultManualStartAt = `${from}T09:00`;
   const appointmentRows = appointments.map((item) => ({
     id: String(item.id),
     startAtLabel: new Date(String(item.start_at)).toLocaleString('es-UY', {
@@ -88,6 +182,12 @@ export default async function AppointmentsPage({ searchParams }: AppointmentsPag
     customerPhone: String((item.customers as { phone?: string } | null)?.phone || ''),
     serviceName: String((item.services as { name?: string } | null)?.name || 'Servicio'),
     staffName: String((item.staff as { name?: string } | null)?.name || 'Barbero'),
+    sourceChannelLabel: sourceChannelLabel(
+      resolveSourceChannel(
+        (item as { source_channel?: string | null }).source_channel || null,
+        item.notes,
+      ),
+    ),
     status: String(item.status),
     priceLabel: formatCurrency(Number(item.price_cents || 0)),
   }));
@@ -147,6 +247,119 @@ export default async function AppointmentsPage({ searchParams }: AppointmentsPag
           name: String(item.name),
         }))}
       />
+
+      <Card className="spotlight-card soft-panel rounded-[1.8rem] border-0 shadow-none">
+        <CardBody className="p-5">
+          <h3 className="text-xl font-semibold text-ink dark:text-slate-100">
+            Registrar reserva manual
+          </h3>
+          <p className="text-sm text-slate/80 dark:text-slate-300">
+            Crea turnos de clientes presenciales o cargados desde el panel.
+          </p>
+
+          {!hasManualBookingOptions ? (
+            <p className="mt-3 rounded-2xl border border-amber-400/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+              Necesitas al menos un barbero activo y un servicio activo para registrar reservas.
+            </p>
+          ) : null}
+
+          <form action={createManualAppointmentAction} className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <input type="hidden" name="shop_id" value={ctx.shopId} />
+            <select
+              name="source_channel"
+              required
+              defaultValue="WALK_IN"
+              disabled={!hasManualBookingOptions}
+              className="rounded-2xl border border-white/55 bg-white/55 px-4 py-3 text-sm text-ink outline-none transition focus:border-sky-400 disabled:opacity-60 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-100"
+            >
+              <option value="WALK_IN">Presencial</option>
+              <option value="ADMIN_CREATED">Carga manual</option>
+            </select>
+
+            <select
+              name="service_id"
+              required
+              disabled={!hasManualBookingOptions}
+              defaultValue=""
+              className="rounded-2xl border border-white/55 bg-white/55 px-4 py-3 text-sm text-ink outline-none transition focus:border-sky-400 disabled:opacity-60 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-100"
+            >
+              <option value="" disabled>
+                Servicio
+              </option>
+              {(services || []).map((item) => (
+                <option key={String(item.id)} value={String(item.id)}>
+                  {String(item.name)}
+                </option>
+              ))}
+            </select>
+
+            <select
+              name="staff_id"
+              required
+              disabled={!hasManualBookingOptions}
+              defaultValue=""
+              className="rounded-2xl border border-white/55 bg-white/55 px-4 py-3 text-sm text-ink outline-none transition focus:border-sky-400 disabled:opacity-60 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-100"
+            >
+              <option value="" disabled>
+                Barbero
+              </option>
+              {(staff || []).map((item) => (
+                <option key={String(item.id)} value={String(item.id)}>
+                  {String(item.name)}
+                </option>
+              ))}
+            </select>
+
+            <input
+              name="start_at"
+              type="datetime-local"
+              required
+              defaultValue={defaultManualStartAt}
+              disabled={!hasManualBookingOptions}
+              className="rounded-2xl border border-white/55 bg-white/55 px-4 py-3 text-sm text-ink outline-none transition focus:border-sky-400 disabled:opacity-60 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-100"
+            />
+            <input
+              name="customer_name"
+              type="text"
+              required
+              placeholder="Nombre del cliente"
+              disabled={!hasManualBookingOptions}
+              className="rounded-2xl border border-white/55 bg-white/55 px-4 py-3 text-sm text-ink outline-none transition focus:border-sky-400 disabled:opacity-60 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-100"
+            />
+            <input
+              name="customer_phone"
+              type="tel"
+              required
+              placeholder="Telefono"
+              disabled={!hasManualBookingOptions}
+              className="rounded-2xl border border-white/55 bg-white/55 px-4 py-3 text-sm text-ink outline-none transition focus:border-sky-400 disabled:opacity-60 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-100"
+            />
+            <input
+              name="customer_email"
+              type="email"
+              placeholder="Email (opcional)"
+              disabled={!hasManualBookingOptions}
+              className="rounded-2xl border border-white/55 bg-white/55 px-4 py-3 text-sm text-ink outline-none transition focus:border-sky-400 disabled:opacity-60 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-100"
+            />
+            <input
+              name="notes"
+              type="text"
+              placeholder="Notas (opcional)"
+              disabled={!hasManualBookingOptions}
+              className="rounded-2xl border border-white/55 bg-white/55 px-4 py-3 text-sm text-ink outline-none transition focus:border-sky-400 disabled:opacity-60 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-100 md:col-span-2 xl:col-span-1"
+            />
+            <div className="md:col-span-2 xl:col-span-3">
+              <button
+                type="submit"
+                disabled={!hasManualBookingOptions}
+                className="action-primary inline-flex rounded-full px-5 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Guardar reserva manual
+              </button>
+            </div>
+          </form>
+        </CardBody>
+      </Card>
 
       <AdminAppointmentsViewSwitcher
         shopId={ctx.shopId}

@@ -24,6 +24,7 @@ describe('AdminAppointmentsTable', () => {
             customerPhone: '+598 91-234-567',
             serviceName: 'Corte',
             staffName: 'Luis',
+            sourceChannelLabel: 'Web',
             status: 'pending',
             priceLabel: '$890',
           },
@@ -58,6 +59,7 @@ describe('AdminAppointmentsTable', () => {
             customerPhone: '',
             serviceName: 'Barba',
             staffName: 'Carlos',
+            sourceChannelLabel: 'Presencial',
             status: 'confirmed',
             priceLabel: '$490',
           },
@@ -69,4 +71,3 @@ describe('AdminAppointmentsTable', () => {
     expect(container.querySelector('a[href^="tel:"]')).toBeNull();
   });
 });
-

@@ -11,6 +11,10 @@ exception
 end
 $$;
 
+-- Drop old default first so Postgres can cast existing values safely
+alter table public.subscriptions
+  alter column plan drop default;
+
 alter table public.subscriptions
   alter column plan type public.subscription_plan_next
   using (
