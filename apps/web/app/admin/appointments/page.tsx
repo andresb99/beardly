@@ -1,8 +1,20 @@
 import { formatCurrency } from '@navaja/shared';
 import { Card, CardBody } from '@heroui/card';
 import { AdminAppointmentsFilters } from '@/components/admin/appointments-filters';
+import { AdminAppointmentsPagination } from '@/components/admin/appointments-pagination';
 import { AdminAppointmentsViewSwitcher } from '@/components/admin/appointments-view-switcher';
 import { createManualAppointmentAction } from '@/app/admin/actions';
+import {
+  ADMIN_APPOINTMENTS_DEFAULT_PAGE_SIZE,
+  ADMIN_APPOINTMENTS_DEFAULT_SORT_BY,
+  ADMIN_APPOINTMENTS_DEFAULT_SORT_DIR,
+  ADMIN_APPOINTMENTS_PAGE_SIZE_OPTIONS,
+  isAdminAppointmentsSortDir,
+  isAdminAppointmentsSortField,
+  type AdminAppointmentsQueryState,
+  type AdminAppointmentsSortDir,
+  type AdminAppointmentsSortField,
+} from '@/lib/admin-appointments';
 import { requireAdmin } from '@/lib/auth';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
@@ -14,6 +26,10 @@ interface AppointmentsPageProps {
     status?: string;
     shop?: string;
     view?: string;
+    page?: string;
+    page_size?: string;
+    sort_by?: string;
+    sort_dir?: string;
   }>;
 }
 
@@ -26,6 +42,8 @@ interface AppointmentListItem {
   source_channel?: string | null;
   price_cents: number | null;
   notes: string | null;
+  customer_name_snapshot?: string | null;
+  customer_phone_snapshot?: string | null;
   customers: { name?: string | null; phone?: string | null } | null;
   services: { name?: string | null } | null;
   staff: { name?: string | null } | null;
@@ -34,6 +52,21 @@ interface AppointmentListItem {
 interface PaymentIntentStatusItem {
   id: string | null;
   status: string | null;
+}
+
+interface AppointmentRow {
+  id: string;
+  startAtLabel: string;
+  startAtValue: string;
+  customerName: string;
+  customerPhone: string;
+  serviceName: string;
+  staffName: string;
+  sourceChannelLabel: string;
+  status: string;
+  paymentStatus: string | null;
+  priceLabel: string;
+  priceCents: number;
 }
 
 function formatDateInput(date: Date, timeZone: string) {
@@ -70,6 +103,18 @@ function isMissingPaymentIntentColumnError(error: unknown) {
 
   return (
     message.includes('payment_intent_id') &&
+    message.includes('appointments') &&
+    (message.includes('schema cache') || message.includes('column'))
+  );
+}
+
+function isMissingCustomerSnapshotColumnError(error: unknown) {
+  const message = String((error as { message?: string } | null)?.message || '')
+    .trim()
+    .toLowerCase();
+
+  return (
+    (message.includes('customer_name_snapshot') || message.includes('customer_phone_snapshot')) &&
     message.includes('appointments') &&
     (message.includes('schema cache') || message.includes('column'))
   );
@@ -114,6 +159,83 @@ function sourceChannelLabel(channel: string) {
   return 'Web';
 }
 
+function parsePositiveInt(value: string | undefined, fallback: number) {
+  const parsed = Number.parseInt(String(value || ''), 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+const appointmentStatusSortRank: Record<string, number> = {
+  pending: 0,
+  confirmed: 1,
+  done: 2,
+  no_show: 3,
+  cancelled: 4,
+};
+
+const paymentStatusSortRank: Record<string, number> = {
+  pending: 0,
+  processing: 1,
+  approved: 2,
+  refunded: 3,
+  rejected: 4,
+  cancelled: 5,
+  expired: 6,
+  none: 7,
+};
+
+function compareText(a: string, b: string) {
+  return a.localeCompare(b, 'es-UY', { sensitivity: 'base', numeric: true });
+}
+
+function sortAppointmentRows(
+  rows: AppointmentRow[],
+  sortBy: AdminAppointmentsSortField,
+  sortDir: AdminAppointmentsSortDir,
+) {
+  const direction = sortDir === 'asc' ? 1 : -1;
+
+  return [...rows].sort((left, right) => {
+    let comparison = 0;
+
+    switch (sortBy) {
+      case 'customer':
+        comparison = compareText(left.customerName, right.customerName);
+        break;
+      case 'service':
+        comparison = compareText(left.serviceName, right.serviceName);
+        break;
+      case 'staff':
+        comparison = compareText(left.staffName, right.staffName);
+        break;
+      case 'channel':
+        comparison = compareText(left.sourceChannelLabel, right.sourceChannelLabel);
+        break;
+      case 'status':
+        comparison =
+          (appointmentStatusSortRank[left.status] ?? 99) - (appointmentStatusSortRank[right.status] ?? 99);
+        break;
+      case 'payment':
+        comparison =
+          (paymentStatusSortRank[left.paymentStatus || 'none'] ?? 99) -
+          (paymentStatusSortRank[right.paymentStatus || 'none'] ?? 99);
+        break;
+      case 'price':
+        comparison = left.priceCents - right.priceCents;
+        break;
+      case 'start_at':
+      default:
+        comparison = compareText(left.startAtValue, right.startAtValue);
+        break;
+    }
+
+    if (comparison !== 0) {
+      return comparison * direction;
+    }
+
+    return compareText(left.id, right.id) * direction;
+  });
+}
+
 export default async function AppointmentsPage({ searchParams }: AppointmentsPageProps) {
   const params = await searchParams;
   const ctx = await requireAdmin({ shopSlug: params.shop });
@@ -132,13 +254,25 @@ export default async function AppointmentsPage({ searchParams }: AppointmentsPag
   const selectedStatus = params.status && params.status !== 'all' ? params.status : undefined;
   const from = params.from || defaultFrom;
   const to = params.to || (params.from ? params.from : defaultTo);
+  const requestedSortBy = isAdminAppointmentsSortField(params.sort_by)
+    ? params.sort_by
+    : ADMIN_APPOINTMENTS_DEFAULT_SORT_BY;
+  const requestedSortDir = isAdminAppointmentsSortDir(params.sort_dir)
+    ? params.sort_dir
+    : ADMIN_APPOINTMENTS_DEFAULT_SORT_DIR;
+  const requestedPageSize = parsePositiveInt(params.page_size, ADMIN_APPOINTMENTS_DEFAULT_PAGE_SIZE);
+  const pageSize = ADMIN_APPOINTMENTS_PAGE_SIZE_OPTIONS.includes(
+    requestedPageSize as (typeof ADMIN_APPOINTMENTS_PAGE_SIZE_OPTIONS)[number],
+  )
+    ? requestedPageSize
+    : ADMIN_APPOINTMENTS_DEFAULT_PAGE_SIZE;
 
   const appointmentSelectWithSource =
-    'id, staff_id, start_at, end_at, status, payment_intent_id, source_channel, price_cents, notes, customers(name, phone), services(name), staff(name)';
+    'id, staff_id, start_at, end_at, status, payment_intent_id, source_channel, price_cents, notes, customer_name_snapshot, customer_phone_snapshot, customers(name, phone), services(name), staff(name)';
   const appointmentSelectWithoutSource =
-    'id, staff_id, start_at, end_at, status, payment_intent_id, price_cents, notes, customers(name, phone), services(name), staff(name)';
+    'id, staff_id, start_at, end_at, status, payment_intent_id, price_cents, notes, customer_name_snapshot, customer_phone_snapshot, customers(name, phone), services(name), staff(name)';
   const appointmentSelectWithoutPaymentIntent =
-    'id, staff_id, start_at, end_at, status, source_channel, price_cents, notes, customers(name, phone), services(name), staff(name)';
+    'id, staff_id, start_at, end_at, status, source_channel, price_cents, notes, customer_name_snapshot, customer_phone_snapshot, customers(name, phone), services(name), staff(name)';
   const appointmentSelectFallback =
     'id, staff_id, start_at, end_at, status, price_cents, notes, customers(name, phone), services(name), staff(name)';
 
@@ -169,17 +303,26 @@ export default async function AppointmentsPage({ searchParams }: AppointmentsPag
   if (appointmentsResult.error) {
     const missingSourceColumn = isMissingSourceChannelColumnError(appointmentsResult.error);
     const missingPaymentColumn = isMissingPaymentIntentColumnError(appointmentsResult.error);
+    const missingCustomerSnapshotColumn = isMissingCustomerSnapshotColumnError(appointmentsResult.error);
 
-    if (!missingSourceColumn && !missingPaymentColumn) {
+    if (!missingSourceColumn && !missingPaymentColumn && !missingCustomerSnapshotColumn) {
       throw new Error(appointmentsResult.error.message || 'No se pudieron cargar las citas.');
     }
 
     canReadPaymentIntentColumn = !missingPaymentColumn;
-    const fallbackSelect = missingSourceColumn
-      ? missingPaymentColumn
-        ? appointmentSelectFallback
-        : appointmentSelectWithoutSource
-      : appointmentSelectWithoutPaymentIntent;
+    const fallbackSelect = missingCustomerSnapshotColumn
+      ? missingSourceColumn
+        ? missingPaymentColumn
+          ? appointmentSelectFallback
+          : 'id, staff_id, start_at, end_at, status, payment_intent_id, price_cents, notes, customers(name, phone), services(name), staff(name)'
+        : missingPaymentColumn
+          ? 'id, staff_id, start_at, end_at, status, source_channel, price_cents, notes, customers(name, phone), services(name), staff(name)'
+          : 'id, staff_id, start_at, end_at, status, payment_intent_id, source_channel, price_cents, notes, customers(name, phone), services(name), staff(name)'
+      : missingSourceColumn
+        ? missingPaymentColumn
+          ? appointmentSelectFallback
+          : appointmentSelectWithoutSource
+        : appointmentSelectWithoutPaymentIntent;
 
     const fallbackResult = await supabase
       .from('appointments')
@@ -235,16 +378,25 @@ export default async function AppointmentsPage({ searchParams }: AppointmentsPag
   const doneCount = appointments.filter((item) => item.status === 'done').length;
   const hasManualBookingOptions = Boolean((staff || []).length && (services || []).length);
   const defaultManualStartAt = `${from}T09:00`;
-  const appointmentRows = appointments.map((item) => ({
+  const allAppointmentRows: AppointmentRow[] = appointments.map((item) => ({
     paymentStatus: canReadPaymentIntentColumn
       ? paymentStatusByIntentId.get(String(item.payment_intent_id || '').trim()) || null
       : null,
     id: String(item.id),
+    startAtValue: String(item.start_at || ''),
     startAtLabel: new Date(String(item.start_at)).toLocaleString('es-UY', {
       timeZone: shopTimeZone,
     }),
-    customerName: String((item.customers as { name?: string } | null)?.name || 'Sin nombre'),
-    customerPhone: String((item.customers as { phone?: string } | null)?.phone || ''),
+    customerName: String(
+      (item as { customer_name_snapshot?: string | null }).customer_name_snapshot ||
+        (item.customers as { name?: string } | null)?.name ||
+        'Sin nombre',
+    ),
+    customerPhone: String(
+      (item as { customer_phone_snapshot?: string | null }).customer_phone_snapshot ||
+        (item.customers as { phone?: string } | null)?.phone ||
+        '',
+    ),
     serviceName: String((item.services as { name?: string } | null)?.name || 'Servicio'),
     staffName: String((item.staff as { name?: string } | null)?.name || 'Barbero'),
     sourceChannelLabel: sourceChannelLabel(
@@ -254,8 +406,35 @@ export default async function AppointmentsPage({ searchParams }: AppointmentsPag
       ),
     ),
     status: String(item.status),
+    priceCents: Number(item.price_cents || 0),
     priceLabel: formatCurrency(Number(item.price_cents || 0)),
   }));
+  const sortedAppointmentRows = sortAppointmentRows(
+    allAppointmentRows,
+    requestedSortBy,
+    requestedSortDir,
+  );
+  const totalAppointments = sortedAppointmentRows.length;
+  const totalPages = Math.max(1, Math.ceil(totalAppointments / pageSize));
+  const currentPage = Math.min(parsePositiveInt(params.page, 1), totalPages);
+  const currentQueryState: AdminAppointmentsQueryState = {
+    shopSlug: ctx.shopSlug,
+    from,
+    to,
+    selectedView: viewMode,
+    ...(selectedStaffId ? { selectedStaffId } : {}),
+    ...(selectedStatus ? { selectedStatus } : {}),
+    page: currentPage,
+    pageSize,
+    sortBy: requestedSortBy,
+    sortDir: requestedSortDir,
+  };
+  const paginatedAppointmentRows = sortedAppointmentRows.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize,
+  );
+  const pageStart = totalAppointments === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const pageEnd = totalAppointments === 0 ? 0 : Math.min(currentPage * pageSize, totalAppointments);
 
   return (
     <section className="space-y-5">
@@ -307,6 +486,9 @@ export default async function AppointmentsPage({ searchParams }: AppointmentsPag
         selectedView={viewMode}
         selectedStaffId={selectedStaffId}
         selectedStatus={selectedStatus}
+        selectedPageSize={pageSize}
+        selectedSortBy={requestedSortBy}
+        selectedSortDir={requestedSortDir}
         staff={(staff || []).map((item) => ({
           id: String(item.id),
           name: String(item.name),
@@ -428,8 +610,19 @@ export default async function AppointmentsPage({ searchParams }: AppointmentsPag
 
       <AdminAppointmentsViewSwitcher
         shopId={ctx.shopId}
-        appointments={appointmentRows}
+        appointments={paginatedAppointmentRows}
         initialView={viewMode}
+        queryState={currentQueryState}
+      />
+
+      <AdminAppointmentsPagination
+        totalItems={totalAppointments}
+        page={currentPage}
+        pageSize={pageSize}
+        totalPages={totalPages}
+        pageStart={pageStart}
+        pageEnd={pageEnd}
+        queryState={currentQueryState}
       />
     </section>
   );

@@ -46,7 +46,7 @@ export default function AppointmentDetailsScreen() {
 
     const { data, error: fetchError } = await supabase
       .from('appointments')
-      .select('id, start_at, end_at, status, price_cents, notes, customers(name, phone), services(name), payment_intents(status)')
+      .select('id, start_at, end_at, status, price_cents, notes, customer_name_snapshot, customer_phone_snapshot, customers(name, phone), services(name), payment_intents(status)')
       .eq('id', id)
       .maybeSingle();
 
@@ -67,8 +67,16 @@ export default function AppointmentDetailsScreen() {
         : null,
       price_cents: Number(data.price_cents || 0),
       notes: String(data.notes || ''),
-      customer_name: String((data.customers as { name?: string } | null)?.name || 'Invitado'),
-      customer_phone: String((data.customers as { phone?: string } | null)?.phone || ''),
+      customer_name: String(
+        (data as { customer_name_snapshot?: string | null }).customer_name_snapshot ||
+          (data.customers as { name?: string } | null)?.name ||
+          'Invitado',
+      ),
+      customer_phone: String(
+        (data as { customer_phone_snapshot?: string | null }).customer_phone_snapshot ||
+          (data.customers as { phone?: string } | null)?.phone ||
+          '',
+      ),
       service_name: String((data.services as { name?: string } | null)?.name || 'Servicio'),
     });
 

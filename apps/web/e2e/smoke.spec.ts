@@ -24,7 +24,7 @@ test('filters the marketplace list down to a matching shop', async ({ page }) =>
   await page.getByRole('button', { name: 'Buscar' }).first().click();
 
   await expect(page.getByRole('heading', { name: 'Navaja Pocitos' }).first()).toBeVisible();
-  await expect(page.locator('a[href=\"/shops/navaja-pocitos/book\"]').first()).toBeVisible();
+  await expect(page.locator('a[href="/shops/navaja-pocitos/book"]').first()).toBeVisible();
 });
 
 test('renders the booking marketplace hub with deterministic mock data', async ({ page }) => {

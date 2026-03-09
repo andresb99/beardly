@@ -73,7 +73,7 @@ export default function StaffPanelScreen() {
 
     let query = supabase
       .from('appointments')
-      .select('id, start_at, end_at, status, price_cents, customers(name, phone), services(name), staff(name), payment_intents(status)')
+      .select('id, start_at, end_at, status, price_cents, customer_name_snapshot, customer_phone_snapshot, customers(name, phone), services(name), staff(name), payment_intents(status)')
       .eq('shop_id', staff.shopId)
       .gte('start_at', start.toISOString())
       .lt('start_at', end.toISOString())
@@ -102,8 +102,16 @@ export default function StaffPanelScreen() {
           ? String((item.payment_intents as { status?: string } | null)?.status)
           : null,
         price_cents: Number(item.price_cents || 0),
-        customer_name: String((item.customers as { name?: string } | null)?.name || 'Invitado'),
-        customer_phone: String((item.customers as { phone?: string } | null)?.phone || ''),
+        customer_name: String(
+          (item as { customer_name_snapshot?: string | null }).customer_name_snapshot ||
+            (item.customers as { name?: string } | null)?.name ||
+            'Invitado',
+        ),
+        customer_phone: String(
+          (item as { customer_phone_snapshot?: string | null }).customer_phone_snapshot ||
+            (item.customers as { phone?: string } | null)?.phone ||
+            '',
+        ),
         service_name: String((item.services as { name?: string } | null)?.name || 'Servicio'),
         staff_name: String((item.staff as { name?: string } | null)?.name || ''),
       })),

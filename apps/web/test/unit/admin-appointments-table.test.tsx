@@ -16,6 +16,15 @@ describe('AdminAppointmentsTable', () => {
     const { container } = render(
       <AdminAppointmentsTable
         shopId="shop-1"
+        queryState={{
+          shopSlug: 'test1',
+          from: '2026-03-01',
+          to: '2026-03-31',
+          page: 1,
+          pageSize: 25,
+          sortBy: 'start_at',
+          sortDir: 'asc',
+        }}
         appointments={[
           {
             id: 'apt-1',
@@ -42,10 +51,25 @@ describe('AdminAppointmentsTable', () => {
     expect(screen.getByText('Pendiente')).toBeInTheDocument();
     expect(screen.getByText('Aprobado')).toBeInTheDocument();
     expect(container.querySelector('a[href="tel:+59891234567"]')).not.toBeNull();
+    expect(container.querySelector('a[href*="sort_by=customer"]')).not.toBeNull();
   });
 
   it('renders the empty content when there are no appointments', () => {
-    render(<AdminAppointmentsTable shopId="shop-1" appointments={[]} />);
+    render(
+      <AdminAppointmentsTable
+        shopId="shop-1"
+        queryState={{
+          shopSlug: 'test1',
+          from: '2026-03-01',
+          to: '2026-03-31',
+          page: 1,
+          pageSize: 25,
+          sortBy: 'start_at',
+          sortDir: 'asc',
+        }}
+        appointments={[]}
+      />,
+    );
 
     expect(screen.getByText('No hay citas para los filtros seleccionados.')).toBeInTheDocument();
   });
@@ -54,6 +78,15 @@ describe('AdminAppointmentsTable', () => {
     const { container } = render(
       <AdminAppointmentsTable
         shopId="shop-1"
+        queryState={{
+          shopSlug: 'test1',
+          from: '2026-03-01',
+          to: '2026-03-31',
+          page: 1,
+          pageSize: 25,
+          sortBy: 'start_at',
+          sortDir: 'asc',
+        }}
         appointments={[
           {
             id: 'apt-2',

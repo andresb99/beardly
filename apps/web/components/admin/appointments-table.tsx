@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { type Key, useCallback } from 'react';
 import {
   Button,
@@ -16,8 +17,13 @@ import {
   Tooltip,
   User,
 } from '@heroui/react';
-import { Pencil, Phone } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, Pencil, Phone } from 'lucide-react';
 import { AdminAppointmentStatusForm } from '@/components/admin/appointment-status-form';
+import {
+  buildAdminAppointmentsQueryString,
+  type AdminAppointmentsQueryState,
+  type AdminAppointmentsSortField,
+} from '@/lib/admin-appointments';
 import {
   ADMIN_DARK_TABLE_ACTION_ICON_BUTTON,
   ADMIN_DARK_TABLE_CELL,
@@ -45,6 +51,7 @@ interface AppointmentRow {
 interface AdminAppointmentsTableProps {
   shopId: string;
   appointments: AppointmentRow[];
+  queryState: AdminAppointmentsQueryState;
 }
 
 type ColumnKey =
@@ -99,7 +106,40 @@ function getPhoneHref(phone: string) {
   return normalized ? `tel:${normalized}` : null;
 }
 
-export function AdminAppointmentsTable({ shopId, appointments }: AdminAppointmentsTableProps) {
+export function AdminAppointmentsTable({
+  shopId,
+  appointments,
+  queryState,
+}: AdminAppointmentsTableProps) {
+  const getSortHref = useCallback(
+    (field: AdminAppointmentsSortField) => {
+      const nextSortDir =
+        queryState.sortBy === field && queryState.sortDir === 'asc' ? 'desc' : 'asc';
+
+      return `?${buildAdminAppointmentsQueryString(queryState, {
+        page: 1,
+        sortBy: field,
+        sortDir: nextSortDir,
+      })}`;
+    },
+    [queryState],
+  );
+
+  const renderSortIcon = useCallback(
+    (field: AdminAppointmentsSortField) => {
+      if (queryState.sortBy !== field) {
+        return <ArrowUpDown className="h-3.5 w-3.5 opacity-70" />;
+      }
+
+      if (queryState.sortDir === 'asc') {
+        return <ArrowUp className="h-3.5 w-3.5" />;
+      }
+
+      return <ArrowDown className="h-3.5 w-3.5" />;
+    },
+    [queryState.sortBy, queryState.sortDir],
+  );
+
   const renderCell = useCallback(
     (item: AppointmentRow, columnKey: Key) => {
       const key = String(columnKey) as ColumnKey;
@@ -249,14 +289,54 @@ export function AdminAppointmentsTable({ shopId, appointments }: AdminAppointmen
         }}
       >
         <TableHeader>
-          <TableColumn key="appointment">CITA</TableColumn>
-          <TableColumn key="customer">CLIENTE</TableColumn>
-          <TableColumn key="service">SERVICIO</TableColumn>
-          <TableColumn key="staff">BARBERO</TableColumn>
-          <TableColumn key="channel">CANAL</TableColumn>
-          <TableColumn key="status">ESTADO</TableColumn>
-          <TableColumn key="payment">PAGO</TableColumn>
-          <TableColumn key="price">PRECIO</TableColumn>
+          <TableColumn key="appointment">
+            <Link href={getSortHref('start_at')} className="inline-flex items-center gap-1">
+              CITA
+              {renderSortIcon('start_at')}
+            </Link>
+          </TableColumn>
+          <TableColumn key="customer">
+            <Link href={getSortHref('customer')} className="inline-flex items-center gap-1">
+              CLIENTE
+              {renderSortIcon('customer')}
+            </Link>
+          </TableColumn>
+          <TableColumn key="service">
+            <Link href={getSortHref('service')} className="inline-flex items-center gap-1">
+              SERVICIO
+              {renderSortIcon('service')}
+            </Link>
+          </TableColumn>
+          <TableColumn key="staff">
+            <Link href={getSortHref('staff')} className="inline-flex items-center gap-1">
+              BARBERO
+              {renderSortIcon('staff')}
+            </Link>
+          </TableColumn>
+          <TableColumn key="channel">
+            <Link href={getSortHref('channel')} className="inline-flex items-center gap-1">
+              CANAL
+              {renderSortIcon('channel')}
+            </Link>
+          </TableColumn>
+          <TableColumn key="status">
+            <Link href={getSortHref('status')} className="inline-flex items-center gap-1">
+              ESTADO
+              {renderSortIcon('status')}
+            </Link>
+          </TableColumn>
+          <TableColumn key="payment">
+            <Link href={getSortHref('payment')} className="inline-flex items-center gap-1">
+              PAGO
+              {renderSortIcon('payment')}
+            </Link>
+          </TableColumn>
+          <TableColumn key="price">
+            <Link href={getSortHref('price')} className="inline-flex items-center gap-1">
+              PRECIO
+              {renderSortIcon('price')}
+            </Link>
+          </TableColumn>
           <TableColumn key="actions" align="end">
             ACCIONES
           </TableColumn>

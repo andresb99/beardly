@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@heroui/button';
 import { AdminAppointmentsCards } from '@/components/admin/appointments-cards';
 import { AdminAppointmentsTable } from '@/components/admin/appointments-table';
+import { type AdminAppointmentsQueryState } from '@/lib/admin-appointments';
 
 type ViewMode = 'table' | 'cards';
 
@@ -24,12 +25,14 @@ interface AdminAppointmentsViewSwitcherProps {
   shopId: string;
   appointments: AppointmentRow[];
   initialView?: ViewMode;
+  queryState: AdminAppointmentsQueryState;
 }
 
 export function AdminAppointmentsViewSwitcher({
   shopId,
   appointments,
   initialView = 'table',
+  queryState,
 }: AdminAppointmentsViewSwitcherProps) {
   const [viewMode, setViewMode] = useState<ViewMode>(initialView);
   const [isVisible, setIsVisible] = useState(true);
@@ -103,7 +106,7 @@ export function AdminAppointmentsViewSwitcher({
           {viewMode === 'cards' ? (
             <AdminAppointmentsCards shopId={shopId} appointments={appointments} />
           ) : (
-            <AdminAppointmentsTable shopId={shopId} appointments={appointments} />
+            <AdminAppointmentsTable shopId={shopId} appointments={appointments} queryState={queryState} />
           )}
         </div>
       </div>

@@ -35,6 +35,18 @@ function isMissingSourceChannelColumnError(error: unknown) {
   );
 }
 
+function isMissingCustomerSnapshotColumnError(error: unknown) {
+  const message = String((error as { message?: string } | null)?.message || '')
+    .trim()
+    .toLowerCase();
+
+  return (
+    (message.includes('customer_name_snapshot') || message.includes('customer_phone_snapshot')) &&
+    message.includes('appointments') &&
+    (message.includes('schema cache') || message.includes('column'))
+  );
+}
+
 function appendSourceChannelToNotes(
   currentNotes: string | null | undefined,
   sourceChannel: AppointmentSourceChannel,
@@ -130,6 +142,7 @@ export async function createAppointmentFromBookingIntent(
   const supabase = createSupabaseAdminClient();
   let canUsePaymentIntentColumn = true;
   let canUseSourceChannelColumn = true;
+  let canUseCustomerSnapshotColumns = true;
 
   if (normalizedPaymentIntentId) {
     const { data: existingAppointment, error: existingAppointmentError } = await supabase
@@ -321,6 +334,13 @@ export async function createAppointmentFromBookingIntent(
             payment_intent_id: normalizedPaymentIntentId,
           }
         : {}),
+      ...(canUseCustomerSnapshotColumns
+        ? {
+            customer_name_snapshot: payload.customer_name,
+            customer_phone_snapshot: payload.customer_phone,
+            customer_email_snapshot: resolvedCustomerEmail,
+          }
+        : {}),
       ...(mirrorSourceInNotes
         ? {
             notes: appendSourceChannelToNotes(baseInsertPayload.notes, sourceChannel),
@@ -350,6 +370,11 @@ export async function createAppointmentFromBookingIntent(
       includeSourceChannel = false;
       canUseSourceChannelColumn = false;
       mirrorSourceInNotes = sourceChannel !== 'WEB';
+      continue;
+    }
+
+    if (canUseCustomerSnapshotColumns && isMissingCustomerSnapshotColumnError(appointmentError)) {
+      canUseCustomerSnapshotColumns = false;
       continue;
     }
 

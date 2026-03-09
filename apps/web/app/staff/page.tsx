@@ -86,7 +86,7 @@ export default async function StaffPage({ searchParams }: StaffPageProps) {
     await Promise.all([
       supabase
         .from('appointments')
-        .select('id, start_at, end_at, status, payment_intent_id, services(name), customers(name, phone), notes')
+        .select('id, start_at, end_at, status, payment_intent_id, customer_name_snapshot, customer_phone_snapshot, services(name), customers(name, phone), notes')
         .eq('staff_id', ctx.staffId)
         .gte('start_at', start.toISOString())
         .lt('start_at', end.toISOString())
@@ -501,8 +501,17 @@ export default async function StaffPage({ searchParams }: StaffPageProps) {
                   </div>
                   <p className="mt-1 text-xs text-slate/70">
                     Cliente:{' '}
-                    {String((item.customers as { name?: string } | null)?.name || 'Sin nombre')} -{' '}
-                    {String((item.customers as { phone?: string } | null)?.phone || 'Sin telefono')}
+                    {String(
+                      (item as { customer_name_snapshot?: string | null }).customer_name_snapshot ||
+                        (item.customers as { name?: string } | null)?.name ||
+                        'Sin nombre',
+                    )}{' '}
+                    -{' '}
+                    {String(
+                      (item as { customer_phone_snapshot?: string | null }).customer_phone_snapshot ||
+                        (item.customers as { phone?: string } | null)?.phone ||
+                        'Sin telefono',
+                    )}
                   </p>
                   {item.notes ? (
                     <p className="mt-1 text-xs text-slate/70">Notas: {String(item.notes)}</p>
