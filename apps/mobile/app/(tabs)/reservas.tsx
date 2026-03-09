@@ -273,6 +273,7 @@ export default function ReservasScreen() {
         staff_id: selectedSlot.staff_id,
         start_at: parsed.data.start_at,
         source_channel: 'MOBILE',
+        pay_in_store: parsed.data.pay_in_store,
         customer_name: parsed.data.customer_name,
         customer_phone: parsed.data.customer_phone,
         customer_email: parsed.data.customer_email || null,

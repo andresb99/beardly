@@ -18,6 +18,27 @@ describe('booking contracts', () => {
     expect(parsed.success).toBe(true);
     if (parsed.success) {
       expect(parsed.data.source_channel).toBe('MOBILE');
+      expect(parsed.data.pay_in_store).toBe(false);
+    }
+  });
+
+  it('accepts pay_in_store when booking without online payment', () => {
+    const parsed = bookingInputSchema.safeParse({
+      shop_id: '11111111-1111-4111-8111-111111111111',
+      service_id: '22222222-2222-4222-8222-222222222222',
+      staff_id: '33333333-3333-4333-8333-333333333333',
+      start_at: '2026-03-09T18:00:00.000Z',
+      source_channel: 'WEB',
+      pay_in_store: true,
+      customer_name: 'Cliente Mostrador',
+      customer_phone: '099123456',
+      customer_email: null,
+      notes: null,
+    });
+
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.pay_in_store).toBe(true);
     }
   });
 

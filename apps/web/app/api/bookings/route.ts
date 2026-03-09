@@ -1,7 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { bookingInputSchema } from '@navaja/shared';
 import { createAppointmentFromBookingIntent } from '@/lib/booking-payments.server';
-import { resolveShopTierForUser } from '@/lib/billing.server';
 import { env } from '@/lib/env';
 import { getMercadoPagoServerEnv } from '@/lib/env.server';
 import { createMercadoPagoCheckoutPreference } from '@/lib/mercado-pago.server';
@@ -79,7 +78,8 @@ export async function POST(request: NextRequest) {
     return new NextResponse('El barbero seleccionado no esta disponible.', { status: 400 });
   }
 
-  const tierResolution = await resolveShopTierForUser(parsed.data.shop_id, user?.id ?? null);
+  const amountCents = Number((service as { price_cents?: number } | null)?.price_cents || 0);
+  const requiresOnlinePayment = !parsed.data.pay_in_store && amountCents > 0;
   const eventSource = requestedSourceChannel === 'MOBILE' ? 'mobile' : 'web';
 
   void trackProductEvent({
@@ -90,11 +90,13 @@ export async function POST(request: NextRequest) {
     metadata: {
       service_id: parsed.data.service_id,
       staff_id: parsed.data.staff_id,
-      requires_payment: tierResolution.requiresReservationPayment,
+      pay_in_store: parsed.data.pay_in_store,
+      amount_cents: amountCents,
+      requires_payment: requiresOnlinePayment,
     },
   });
 
-  if (tierResolution.requiresReservationPayment) {
+  if (requiresOnlinePayment) {
     if (!resolvedCustomerEmail) {
       return new NextResponse('Para completar el pago necesitas ingresar un email valido.', {
         status: 400,
@@ -109,7 +111,6 @@ export async function POST(request: NextRequest) {
     ].join('-');
     const serviceName = String((service as { name?: string } | null)?.name || 'Servicio');
     const staffName = String((staffMember as { name?: string } | null)?.name || 'Barbero');
-    const amountCents = Number((service as { price_cents?: number } | null)?.price_cents || 0);
 
     const paymentPayload = {
       shop_id: parsed.data.shop_id,
@@ -117,6 +118,7 @@ export async function POST(request: NextRequest) {
       staff_id: parsed.data.staff_id,
       start_at: parsed.data.start_at,
       source_channel: requestedSourceChannel,
+      pay_in_store: false,
       customer_name: parsed.data.customer_name,
       customer_phone: parsed.data.customer_phone,
       customer_email: resolvedCustomerEmail,

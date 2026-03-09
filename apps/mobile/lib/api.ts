@@ -9,6 +9,7 @@ type BookingPayload = {
   staff_id: string;
   start_at: string;
   source_channel?: 'WEB' | 'MOBILE' | undefined;
+  pay_in_store?: boolean | undefined;
   customer_name: string;
   customer_phone: string;
   customer_email?: string | null | undefined;

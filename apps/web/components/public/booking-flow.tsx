@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { bookingInputSchema, formatCurrency } from '@navaja/shared';
-import { Button, Card, CardBody, Input, Select, SelectItem, Textarea } from '@heroui/react';
+import { Button, Card, CardBody, Checkbox, Input, Select, SelectItem, Textarea } from '@heroui/react';
 
 interface ServiceOption {
   id: string;
@@ -116,6 +116,7 @@ export function BookingFlow({
   const [customerPhone, setCustomerPhone] = useState(initialCustomerPhone);
   const [customerEmail, setCustomerEmail] = useState(initialCustomerEmail || '');
   const [notes, setNotes] = useState('');
+  const [payInStore, setPayInStore] = useState(false);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -242,6 +243,7 @@ export function BookingFlow({
       customer_name: customerName,
       customer_phone: customerPhone,
       customer_email: customerEmail || null,
+      pay_in_store: payInStore,
       notes: notes || null,
     });
 
@@ -460,11 +462,11 @@ export function BookingFlow({
             <Input
               id="customerEmail"
               type="email"
-              label="Email"
+              label={payInStore ? 'Email (opcional)' : 'Email (requerido para pago online)'}
               labelPlacement="inside"
               value={customerEmail}
               onChange={(event) => setCustomerEmail(event.target.value)}
-              required
+              required={!payInStore}
             />
             <Textarea
               id="notes"
@@ -475,6 +477,17 @@ export function BookingFlow({
               value={notes}
               onChange={(event) => setNotes(event.target.value)}
             />
+            <div className="md:col-span-2">
+              <Checkbox
+                isSelected={payInStore}
+                onValueChange={setPayInStore}
+              >
+                Pagar en el local
+              </Checkbox>
+              <p className="mt-1 text-[11px] text-slate/70 dark:text-slate-400">
+                Si no marcas esta opcion, te enviaremos al checkout online para completar la reserva.
+              </p>
+            </div>
           </div>
           {preferredPaymentMethod ? (
             <p className="mt-2 text-[11px] text-slate/70 dark:text-slate-400">
@@ -491,11 +504,23 @@ export function BookingFlow({
           </p>
           <Button
             onClick={submitBooking}
-            isDisabled={!selectedSlot || !customerName || !customerPhone || !customerEmail || submitting}
+            isDisabled={
+              !selectedSlot ||
+              !customerName ||
+              !customerPhone ||
+              (!payInStore && !customerEmail) ||
+              submitting
+            }
             isLoading={submitting}
             className="action-primary px-5 text-sm font-semibold data-[disabled=true]:opacity-50"
           >
-            {submitting ? 'Creando...' : !selectedSlot ? 'Elige horario' : 'Confirmar reserva'}
+            {submitting
+              ? 'Creando...'
+              : !selectedSlot
+                ? 'Elige horario'
+                : payInStore
+                  ? 'Confirmar reserva'
+                  : 'Continuar al pago'}
           </Button>
         </div>
       </CardBody>

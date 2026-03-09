@@ -371,6 +371,7 @@ export const bookingInputSchema = z.object({
   staff_id: uuidSchema.nullable(),
   start_at: isoDateTimeSchema,
   source_channel: z.enum(['WEB', 'MOBILE']).optional(),
+  pay_in_store: z.boolean().default(false),
   customer_name: z.string().min(2).max(120),
   customer_phone: z.string().min(7).max(20),
   customer_email: z.string().email().optional().nullable(),
