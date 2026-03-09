@@ -12,5 +12,6 @@ coverage
 apps/mobile/.expo/
 .vercel
 .DS_Store
+AGENTS.md
 
 
