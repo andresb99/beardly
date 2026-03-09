@@ -40,6 +40,7 @@ export function AdminAppointmentsPagination({
         `${pathname}?${buildAdminAppointmentsQueryString(queryState, {
           page: nextPage,
         })}`,
+        { scroll: false },
       );
     },
     [pathname, queryState, router],

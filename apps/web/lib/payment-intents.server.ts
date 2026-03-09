@@ -8,9 +8,14 @@ import {
 import {
   getMercadoPagoPayment,
   searchLatestMercadoPagoPaymentByExternalReference,
+  type MercadoPagoApiCredentials,
   type MercadoPagoPaymentResponse,
 } from '@/lib/mercado-pago.server';
 import { trackProductEvent } from '@/lib/product-analytics';
+import {
+  getPlatformMercadoPagoCredentials,
+  getShopMercadoPagoCredentials,
+} from '@/lib/shop-payment-accounts.server';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import type { SubscriptionBillingMode, SubscriptionTier } from '@/lib/subscription-plans';
 
@@ -31,6 +36,7 @@ export interface PaymentIntentRow {
   external_reference: string;
   processed_at: string | null;
   provider_payment_id: string | null;
+  shop_payment_account_id: string | null;
   created_by_user_id: string | null;
   payload: Record<string, unknown> | null;
 }
@@ -333,28 +339,143 @@ async function applyMercadoPagoPaymentToIntent(intent: PaymentIntentRow, payment
   } satisfies PaymentIntentSyncResult;
 }
 
-export async function processMercadoPagoPaymentWebhook(paymentId: string): Promise<PaymentIntentSyncResult> {
-  const payment = await getMercadoPagoPayment(paymentId);
-  const externalReference = String(payment.external_reference || '').trim();
+async function getMercadoPagoCredentialsForIntent(intent: PaymentIntentRow) {
+  const paymentAccountId = String(intent.shop_payment_account_id || '').trim();
+  if (paymentAccountId) {
+    const credentials = await getShopMercadoPagoCredentials({
+      shopId: intent.shop_id,
+      paymentAccountId,
+    });
 
-  if (!externalReference) {
+    if (!credentials) {
+      throw new Error('No se encontro la cuenta de cobro asociada al pago.');
+    }
+
+    return {
+      accessToken: credentials.accessToken,
+    } satisfies MercadoPagoApiCredentials;
+  }
+
+  return getPlatformMercadoPagoCredentials();
+}
+
+async function findPaymentIntentByPaymentId(
+  paymentId: string,
+  options?: { paymentAccountId?: string | null; shopId?: string | null },
+) {
+  const admin = createSupabaseAdminClient();
+  const { data: directMatch } = await admin
+    .from('payment_intents')
+    .select(
+      'id, shop_id, intent_type, status, external_reference, processed_at, provider_payment_id, shop_payment_account_id, created_by_user_id, payload',
+    )
+    .eq('provider_payment_id', paymentId)
+    .maybeSingle();
+
+  if (directMatch) {
+    return directMatch as PaymentIntentRow;
+  }
+
+  const paymentAccountId = String(options?.paymentAccountId || '').trim();
+  if (paymentAccountId) {
+    const { data: byAccount } = await admin
+      .from('payment_intents')
+      .select(
+        'id, shop_id, intent_type, status, external_reference, processed_at, provider_payment_id, shop_payment_account_id, created_by_user_id, payload',
+      )
+      .eq('shop_payment_account_id', paymentAccountId)
+      .order('created_at', { ascending: false })
+      .limit(25);
+
+    if ((byAccount || []).length) {
+      return (byAccount || []) as PaymentIntentRow[];
+    }
+  }
+
+  const shopId = String(options?.shopId || '').trim();
+  if (shopId) {
+    const { data: byShop } = await admin
+      .from('payment_intents')
+      .select(
+        'id, shop_id, intent_type, status, external_reference, processed_at, provider_payment_id, shop_payment_account_id, created_by_user_id, payload',
+      )
+      .eq('shop_id', shopId)
+      .eq('provider', 'mercado_pago')
+      .order('created_at', { ascending: false })
+      .limit(25);
+
+    if ((byShop || []).length) {
+      return (byShop || []) as PaymentIntentRow[];
+    }
+  }
+
+  return null;
+}
+
+export async function processMercadoPagoPaymentWebhook(
+  paymentId: string,
+  options?: { paymentAccountId?: string | null; shopId?: string | null },
+): Promise<PaymentIntentSyncResult> {
+  const matchedIntent = await findPaymentIntentByPaymentId(paymentId, options);
+
+  if (Array.isArray(matchedIntent)) {
+    for (const candidate of matchedIntent) {
+      try {
+        const credentials = await getMercadoPagoCredentialsForIntent(candidate);
+        const payment = await getMercadoPagoPayment(paymentId, credentials);
+        const externalReference = String(payment.external_reference || '').trim();
+        if (externalReference && externalReference === candidate.external_reference) {
+          return applyMercadoPagoPaymentToIntent(candidate, payment);
+        }
+      } catch {
+        continue;
+      }
+    }
+
     return { ok: true, ignored: true };
   }
 
+  const paymentIntent = matchedIntent;
+  if (!paymentIntent) {
+    const fallbackPayment = await getMercadoPagoPayment(paymentId, getPlatformMercadoPagoCredentials()).catch(
+      () => null,
+    );
+    const externalReference = String(fallbackPayment?.external_reference || '').trim();
+
+    if (!fallbackPayment || !externalReference) {
+      return { ok: true, ignored: true };
+    }
+
+    const fallbackIntent = await getPaymentIntentByExternalReference(externalReference);
+    if (!fallbackIntent) {
+      return { ok: true, ignored: true };
+    }
+
+    return applyMercadoPagoPaymentToIntent(fallbackIntent, fallbackPayment);
+  }
+
+  const credentials = await getMercadoPagoCredentialsForIntent(paymentIntent);
+  const payment = await getMercadoPagoPayment(paymentId, credentials);
+  const externalReference = String(payment.external_reference || '').trim();
+
+  if (!externalReference || externalReference !== paymentIntent.external_reference) {
+    return { ok: true, ignored: true };
+  }
+
+  return applyMercadoPagoPaymentToIntent(paymentIntent, payment);
+}
+
+async function getPaymentIntentByExternalReference(externalReference: string) {
   const admin = createSupabaseAdminClient();
-  const { data: paymentIntent } = await admin
+  const { data } = await admin
     .from('payment_intents')
     .select(
-      'id, shop_id, intent_type, status, external_reference, processed_at, provider_payment_id, created_by_user_id, payload',
+      'id, shop_id, intent_type, status, external_reference, processed_at, provider_payment_id, shop_payment_account_id, created_by_user_id, payload',
     )
     .eq('external_reference', externalReference)
     .maybeSingle();
 
-  if (!paymentIntent) {
-    return { ok: true, ignored: true };
-  }
-
-  return applyMercadoPagoPaymentToIntent(paymentIntent as PaymentIntentRow, payment);
+  return data as PaymentIntentRow | null;
 }
 
 export async function reconcileMercadoPagoPaymentIntents(options?: {
@@ -366,7 +487,7 @@ export async function reconcileMercadoPagoPaymentIntents(options?: {
   let query = admin
     .from('payment_intents')
     .select(
-      'id, shop_id, intent_type, status, external_reference, processed_at, provider_payment_id, created_by_user_id, payload',
+      'id, shop_id, intent_type, status, external_reference, processed_at, provider_payment_id, shop_payment_account_id, created_by_user_id, payload',
     )
     .eq('provider', 'mercado_pago')
     .in('status', ['pending', 'processing', 'approved'])
@@ -399,9 +520,12 @@ export async function reconcileMercadoPagoPaymentIntents(options?: {
     }
 
     const providerPaymentId = String(intent.provider_payment_id || '').trim();
+    const credentials = await getMercadoPagoCredentialsForIntent(intent);
     const payment = providerPaymentId
-      ? await getMercadoPagoPayment(providerPaymentId).catch(() => null)
-      : await searchLatestMercadoPagoPaymentByExternalReference(intent.external_reference).catch(() => null);
+      ? await getMercadoPagoPayment(providerPaymentId, credentials).catch(() => null)
+      : await searchLatestMercadoPagoPaymentByExternalReference(intent.external_reference, credentials).catch(
+          () => null,
+        );
 
     if (!payment) {
       results.push({

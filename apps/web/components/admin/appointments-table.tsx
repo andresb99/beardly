@@ -1,7 +1,7 @@
 'use client';
 
-import Link from 'next/link';
 import { type Key, useCallback } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   Button,
   Chip,
@@ -111,18 +111,28 @@ export function AdminAppointmentsTable({
   appointments,
   queryState,
 }: AdminAppointmentsTableProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+
   const getSortHref = useCallback(
     (field: AdminAppointmentsSortField) => {
       const nextSortDir =
         queryState.sortBy === field && queryState.sortDir === 'asc' ? 'desc' : 'asc';
 
-      return `?${buildAdminAppointmentsQueryString(queryState, {
+      return `${pathname}?${buildAdminAppointmentsQueryString(queryState, {
         page: 1,
         sortBy: field,
         sortDir: nextSortDir,
       })}`;
     },
-    [queryState],
+    [pathname, queryState],
+  );
+
+  const handleSortChange = useCallback(
+    (field: AdminAppointmentsSortField) => {
+      router.push(getSortHref(field), { scroll: false });
+    },
+    [getSortHref, router],
   );
 
   const renderSortIcon = useCallback(
@@ -290,52 +300,92 @@ export function AdminAppointmentsTable({
       >
         <TableHeader>
           <TableColumn key="appointment">
-            <Link href={getSortHref('start_at')} className="inline-flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => handleSortChange('start_at')}
+              className="inline-flex items-center gap-1"
+              aria-label="Ordenar por cita"
+            >
               CITA
               {renderSortIcon('start_at')}
-            </Link>
+            </button>
           </TableColumn>
           <TableColumn key="customer">
-            <Link href={getSortHref('customer')} className="inline-flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => handleSortChange('customer')}
+              className="inline-flex items-center gap-1"
+              aria-label="Ordenar por cliente"
+            >
               CLIENTE
               {renderSortIcon('customer')}
-            </Link>
+            </button>
           </TableColumn>
           <TableColumn key="service">
-            <Link href={getSortHref('service')} className="inline-flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => handleSortChange('service')}
+              className="inline-flex items-center gap-1"
+              aria-label="Ordenar por servicio"
+            >
               SERVICIO
               {renderSortIcon('service')}
-            </Link>
+            </button>
           </TableColumn>
           <TableColumn key="staff">
-            <Link href={getSortHref('staff')} className="inline-flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => handleSortChange('staff')}
+              className="inline-flex items-center gap-1"
+              aria-label="Ordenar por barbero"
+            >
               BARBERO
               {renderSortIcon('staff')}
-            </Link>
+            </button>
           </TableColumn>
           <TableColumn key="channel">
-            <Link href={getSortHref('channel')} className="inline-flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => handleSortChange('channel')}
+              className="inline-flex items-center gap-1"
+              aria-label="Ordenar por canal"
+            >
               CANAL
               {renderSortIcon('channel')}
-            </Link>
+            </button>
           </TableColumn>
           <TableColumn key="status">
-            <Link href={getSortHref('status')} className="inline-flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => handleSortChange('status')}
+              className="inline-flex items-center gap-1"
+              aria-label="Ordenar por estado"
+            >
               ESTADO
               {renderSortIcon('status')}
-            </Link>
+            </button>
           </TableColumn>
           <TableColumn key="payment">
-            <Link href={getSortHref('payment')} className="inline-flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => handleSortChange('payment')}
+              className="inline-flex items-center gap-1"
+              aria-label="Ordenar por pago"
+            >
               PAGO
               {renderSortIcon('payment')}
-            </Link>
+            </button>
           </TableColumn>
           <TableColumn key="price">
-            <Link href={getSortHref('price')} className="inline-flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => handleSortChange('price')}
+              className="inline-flex items-center gap-1"
+              aria-label="Ordenar por precio"
+            >
               PRECIO
               {renderSortIcon('price')}
-            </Link>
+            </button>
           </TableColumn>
           <TableColumn key="actions" align="end">
             ACCIONES

@@ -87,7 +87,10 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const result = await processMercadoPagoPaymentWebhook(paymentId);
+    const result = await processMercadoPagoPaymentWebhook(paymentId, {
+      shopId: sanitizeText(request.nextUrl.searchParams.get('shop_id')) || null,
+      paymentAccountId: sanitizeText(request.nextUrl.searchParams.get('payment_account_id')) || null,
+    });
     return NextResponse.json(result);
   } catch (error) {
     return new NextResponse(error instanceof Error ? error.message : 'Error procesando webhook.', {

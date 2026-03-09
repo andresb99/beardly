@@ -7,6 +7,8 @@ const {
   searchLatestMercadoPagoPaymentByExternalReferenceMock,
   trackProductEventMock,
   createSupabaseAdminClientMock,
+  getPlatformMercadoPagoCredentialsMock,
+  getShopMercadoPagoCredentialsMock,
 } = vi.hoisted(() => ({
   createAppointmentFromBookingIntentMock: vi.fn(),
   createCourseEnrollmentFromIntentMock: vi.fn(),
@@ -14,6 +16,8 @@ const {
   searchLatestMercadoPagoPaymentByExternalReferenceMock: vi.fn(),
   trackProductEventMock: vi.fn(),
   createSupabaseAdminClientMock: vi.fn(),
+  getPlatformMercadoPagoCredentialsMock: vi.fn(() => ({ accessToken: 'platform-token' })),
+  getShopMercadoPagoCredentialsMock: vi.fn(),
 }));
 
 vi.mock('@/lib/booking-payments.server', () => ({
@@ -31,6 +35,11 @@ vi.mock('@/lib/mercado-pago.server', () => ({
 
 vi.mock('@/lib/product-analytics', () => ({
   trackProductEvent: trackProductEventMock,
+}));
+
+vi.mock('@/lib/shop-payment-accounts.server', () => ({
+  getPlatformMercadoPagoCredentials: getPlatformMercadoPagoCredentialsMock,
+  getShopMercadoPagoCredentials: getShopMercadoPagoCredentialsMock,
 }));
 
 vi.mock('@/lib/supabase/admin', () => ({
@@ -160,6 +169,14 @@ describe('payment-intents.server', () => {
       sessionId: 'session-1',
     });
     trackProductEventMock.mockResolvedValue(undefined);
+    getShopMercadoPagoCredentialsMock.mockResolvedValue({
+      paymentAccountId: 'payment-account-1',
+      shopId: 'shop-1',
+      providerUserId: 123,
+      providerNickname: 'SHOP1',
+      providerEmail: 'shop1@example.com',
+      accessToken: 'shop-token',
+    });
   });
 
   it('maps Mercado Pago statuses into internal statuses', () => {
@@ -252,6 +269,7 @@ describe('payment-intents.server', () => {
 
     expect(searchLatestMercadoPagoPaymentByExternalReferenceMock).toHaveBeenCalledWith(
       'booking-shop-1-reconcile',
+      { accessToken: 'platform-token' },
     );
     expect(result).toHaveLength(1);
     expect(result[0]).toMatchObject({

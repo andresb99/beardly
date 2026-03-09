@@ -51,25 +51,40 @@ interface MercadoPagoRefundResponse {
   status?: string;
 }
 
-function getApiBaseUrl() {
-  const env = getMercadoPagoServerEnv();
-  return env.MERCADO_PAGO_API_BASE_URL || 'https://api.mercadopago.com';
+export interface MercadoPagoApiCredentials {
+  accessToken: string;
+  apiBaseUrl?: string;
 }
 
-function getAccessToken() {
+function getDefaultCredentials(): MercadoPagoApiCredentials {
   const env = getMercadoPagoServerEnv();
-  return env.MERCADO_PAGO_ACCESS_TOKEN;
+  return {
+    accessToken: env.MERCADO_PAGO_ACCESS_TOKEN,
+    ...(env.MERCADO_PAGO_API_BASE_URL ? { apiBaseUrl: env.MERCADO_PAGO_API_BASE_URL } : {}),
+  };
 }
 
-function isTestAccessToken(value: string | null | undefined) {
+function getApiBaseUrl(credentials?: MercadoPagoApiCredentials | null) {
+  return credentials?.apiBaseUrl || getDefaultCredentials().apiBaseUrl || 'https://api.mercadopago.com';
+}
+
+function getAccessToken(credentials?: MercadoPagoApiCredentials | null) {
+  return credentials?.accessToken || getDefaultCredentials().accessToken;
+}
+
+export function isMercadoPagoTestMode(value: string | null | undefined) {
   return String(value || '').trim().toUpperCase().startsWith('TEST-');
 }
 
-async function mercadoPagoRequest<TResponse>(path: string, init?: RequestInit): Promise<TResponse> {
-  const response = await fetch(`${getApiBaseUrl()}${path}`, {
+export async function mercadoPagoRequest<TResponse>(
+  path: string,
+  init?: RequestInit,
+  credentials?: MercadoPagoApiCredentials | null,
+): Promise<TResponse> {
+  const response = await fetch(`${getApiBaseUrl(credentials)}${path}`, {
     ...init,
     headers: {
-      Authorization: `Bearer ${getAccessToken()}`,
+      Authorization: `Bearer ${getAccessToken(credentials)}`,
       'Content-Type': 'application/json',
       ...(init?.headers || {}),
     },
@@ -92,11 +107,12 @@ async function mercadoPagoRequest<TResponse>(path: string, init?: RequestInit): 
 
 export async function createMercadoPagoCheckoutPreference(
   input: CreateMercadoPagoPreferenceInput,
+  credentials?: MercadoPagoApiCredentials | null,
 ) {
   const quantity = input.item.quantity || 1;
   const unitPrice = Number((input.item.amountCents / 100).toFixed(2));
-  const accessToken = getAccessToken();
-  const isTestMode = isTestAccessToken(accessToken);
+  const accessToken = getAccessToken(credentials);
+  const isTestMode = isMercadoPagoTestMode(accessToken);
 
   const payload = await mercadoPagoRequest<MercadoPagoPreferenceResponse>('/checkout/preferences', {
     method: 'POST',
@@ -122,7 +138,7 @@ export async function createMercadoPagoCheckoutPreference(
         },
       ],
     }),
-  });
+  }, credentials);
 
   const checkoutUrl = isTestMode
     ? payload.sandbox_init_point || payload.init_point || null
@@ -137,16 +153,22 @@ export async function createMercadoPagoCheckoutPreference(
   };
 }
 
-export async function getMercadoPagoPayment(paymentId: string) {
+export async function getMercadoPagoPayment(
+  paymentId: string,
+  credentials?: MercadoPagoApiCredentials | null,
+) {
   const normalizedPaymentId = String(paymentId || '').trim();
   if (!normalizedPaymentId) {
     throw new Error('Payment id invalido para consultar Mercado Pago.');
   }
 
-  return mercadoPagoRequest<MercadoPagoPaymentResponse>(`/v1/payments/${normalizedPaymentId}`);
+  return mercadoPagoRequest<MercadoPagoPaymentResponse>(`/v1/payments/${normalizedPaymentId}`, undefined, credentials);
 }
 
-export async function searchLatestMercadoPagoPaymentByExternalReference(externalReference: string) {
+export async function searchLatestMercadoPagoPaymentByExternalReference(
+  externalReference: string,
+  credentials?: MercadoPagoApiCredentials | null,
+) {
   const normalizedExternalReference = String(externalReference || '').trim();
   if (!normalizedExternalReference) {
     throw new Error('External reference invalida para buscar pagos en Mercado Pago.');
@@ -160,12 +182,17 @@ export async function searchLatestMercadoPagoPaymentByExternalReference(external
   });
   const payload = await mercadoPagoRequest<MercadoPagoPaymentSearchResponse>(
     `/v1/payments/search?${params.toString()}`,
+    undefined,
+    credentials,
   );
 
   return payload.results?.[0] || null;
 }
 
-export async function createMercadoPagoRefund(paymentId: string) {
+export async function createMercadoPagoRefund(
+  paymentId: string,
+  credentials?: MercadoPagoApiCredentials | null,
+) {
   const normalizedPaymentId = String(paymentId || '').trim();
   if (!normalizedPaymentId) {
     throw new Error('Payment id invalido para crear reembolso en Mercado Pago.');
@@ -177,6 +204,7 @@ export async function createMercadoPagoRefund(paymentId: string) {
       method: 'POST',
       body: JSON.stringify({}),
     },
+    credentials,
   );
 
   return {

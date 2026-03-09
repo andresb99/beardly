@@ -2,8 +2,10 @@ import Link from 'next/link';
 import { Card, CardBody } from '@heroui/card';
 import { AdminBarbershopSettingsForm } from '@/components/admin/barbershop-settings-form';
 import { CustomDomainSettingsForm } from '@/components/admin/custom-domain-settings-form';
+import { MercadoPagoSettingsPanel } from '@/components/admin/mercadopago-settings-panel';
 import { SubscriptionBillingPanel } from '@/components/admin/subscription-billing-panel';
 import { requireAdmin } from '@/lib/auth';
+import { getShopMercadoPagoAccountSummary } from '@/lib/shop-payment-accounts.server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import type { SubscriptionStatus, SubscriptionTier } from '@/lib/subscription-plans';
 import { buildAdminHref } from '@/lib/workspace-routes';
@@ -12,6 +14,7 @@ interface AdminBarbershopSettingsPageProps {
   searchParams: Promise<{
     shop?: string;
     billing?: string;
+    payments?: string;
   }>;
 }
 
@@ -88,6 +91,35 @@ function resolveBillingMessage(value: string | null | undefined) {
   return null;
 }
 
+function resolvePaymentsMessage(value: string | null | undefined) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'connected') {
+    return 'Mercado Pago quedo conectado. Las nuevas reservas online se cobraran en la cuenta del dueño.';
+  }
+
+  if (normalized === 'disconnected') {
+    return 'Mercado Pago fue desconectado. Las reservas online quedaran deshabilitadas hasta reconectar una cuenta.';
+  }
+
+  if (normalized === 'oauth_denied') {
+    return 'La autorizacion de Mercado Pago fue cancelada por el usuario.';
+  }
+
+  if (normalized === 'connect_error') {
+    return 'No se pudo conectar Mercado Pago. Verifica la configuracion OAuth y vuelve a intentar.';
+  }
+
+  if (normalized === 'disconnect_error') {
+    return 'No se pudo desconectar Mercado Pago. Intenta nuevamente.';
+  }
+
+  if (normalized === 'missing_code' || normalized === 'invalid_state') {
+    return 'La respuesta de Mercado Pago no se pudo validar. Inicia la conexion otra vez.';
+  }
+
+  return null;
+}
+
 export default async function AdminBarbershopSettingsPage({
   searchParams,
 }: AdminBarbershopSettingsPageProps) {
@@ -131,6 +163,8 @@ export default async function AdminBarbershopSettingsPage({
   const currentPlan = resolveCurrentPlan(subscriptionData?.plan);
   const currentStatus = resolveCurrentStatus(subscriptionData?.status);
   const billingMessage = resolveBillingMessage(params.billing);
+  const paymentsMessage = resolvePaymentsMessage(params.payments);
+  const paymentAccount = await getShopMercadoPagoAccountSummary(ctx.shopId);
 
   return (
     <section className="space-y-6">
@@ -207,6 +241,27 @@ export default async function AdminBarbershopSettingsPage({
             initialCustomDomain={shopData?.custom_domain || null}
             initialDomainStatus={shopData?.domain_status || null}
             initialDomainVerifiedAt={shopData?.domain_verified_at || null}
+          />
+        </CardBody>
+      </Card>
+
+      <Card className="soft-panel rounded-[1.9rem] border-0 shadow-none">
+        <CardBody className="space-y-5 p-5 md:p-6">
+          <div>
+            <p className="hero-eyebrow">Pagos online</p>
+            <h2 className="mt-2 font-[family-name:var(--font-heading)] text-2xl font-semibold text-ink dark:text-slate-100">
+              Cobros de reservas
+            </h2>
+            <p className="mt-2 text-sm text-slate/80 dark:text-slate-300">
+              Cada barberia debe conectar su propia cuenta de Mercado Pago para recibir el dinero
+              de las reservas online directamente.
+            </p>
+          </div>
+
+          <MercadoPagoSettingsPanel
+            shopSlug={ctx.shopSlug}
+            account={paymentAccount}
+            message={paymentsMessage}
           />
         </CardBody>
       </Card>

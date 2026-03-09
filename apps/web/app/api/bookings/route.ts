@@ -3,10 +3,11 @@ import { bookingInputSchema } from '@navaja/shared';
 import { createAppointmentFromBookingIntent } from '@/lib/booking-payments.server';
 import { env } from '@/lib/env';
 import { getMercadoPagoServerEnv } from '@/lib/env.server';
-import { createMercadoPagoCheckoutPreference } from '@/lib/mercado-pago.server';
+import { createMercadoPagoCheckoutPreference, isMercadoPagoTestMode } from '@/lib/mercado-pago.server';
 import { trackProductEvent } from '@/lib/product-analytics';
 import { getRequestOrigin } from '@/lib/request-origin';
 import { readSanitizedJsonBody, sanitizeText } from '@/lib/sanitize';
+import { getShopMercadoPagoCredentials } from '@/lib/shop-payment-accounts.server';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
@@ -16,10 +17,6 @@ function normalizeEmail(value: string | null | undefined) {
 
 function resolveRequestedSourceChannel(value: unknown) {
   return value === 'MOBILE' ? 'MOBILE' : 'WEB';
-}
-
-function isMercadoPagoTestMode(accessToken: string | null | undefined) {
-  return String(accessToken || '').trim().toUpperCase().startsWith('TEST-');
 }
 
 function isMercadoPagoTestEmail(email: string | null | undefined) {
@@ -119,6 +116,25 @@ export async function POST(request: NextRequest) {
     ].join('-');
     const serviceName = String((service as { name?: string } | null)?.name || 'Servicio');
     const staffName = String((staffMember as { name?: string } | null)?.name || 'Barbero');
+    let shopPaymentAccount;
+
+    try {
+      shopPaymentAccount = await getShopMercadoPagoCredentials({ shopId: parsed.data.shop_id });
+    } catch (accountError) {
+      return new NextResponse(
+        accountError instanceof Error
+          ? accountError.message
+          : 'No se pudo validar la cuenta de cobro online de la barberia.',
+        { status: 400 },
+      );
+    }
+
+    if (!shopPaymentAccount) {
+      return new NextResponse(
+        'La barberia no tiene Mercado Pago conectado. Activa una cuenta de cobro online desde Administracion > Configuracion.',
+        { status: 400 },
+      );
+    }
 
     const paymentPayload = {
       shop_id: parsed.data.shop_id,
@@ -147,6 +163,7 @@ export async function POST(request: NextRequest) {
         amount_cents: amountCents,
         currency_code: 'UYU',
         payer_email: resolvedCustomerEmail,
+        shop_payment_account_id: shopPaymentAccount.paymentAccountId,
         payload: paymentPayload,
         created_by_user_id: user?.id || null,
       })
@@ -168,7 +185,7 @@ export async function POST(request: NextRequest) {
 
     try {
       const mercadoPagoEnv = getMercadoPagoServerEnv();
-      const isTestMode = isMercadoPagoTestMode(mercadoPagoEnv.MERCADO_PAGO_ACCESS_TOKEN);
+      const isTestMode = isMercadoPagoTestMode(shopPaymentAccount.accessToken);
       if (isTestMode && !isMercadoPagoTestEmail(resolvedCustomerEmail)) {
         return new NextResponse(
           'En modo prueba de Mercado Pago debes usar un email de comprador test (@testuser.com).',
@@ -184,7 +201,7 @@ export async function POST(request: NextRequest) {
         throw new Error('Falta configurar MERCADO_PAGO_WEBHOOK_SECRET para habilitar pagos.');
       }
       const requestOrigin = getRequestOrigin(request);
-      const webhookUrl = `${env.NEXT_PUBLIC_APP_URL}/api/payments/mercadopago/webhook?token=${encodeURIComponent(webhookToken)}`;
+      const webhookUrl = `${env.NEXT_PUBLIC_APP_URL}/api/payments/mercadopago/webhook?token=${encodeURIComponent(webhookToken)}&shop_id=${encodeURIComponent(parsed.data.shop_id)}&payment_account_id=${encodeURIComponent(shopPaymentAccount.paymentAccountId)}`;
 
       const checkout = await createMercadoPagoCheckoutPreference({
         item: {
@@ -202,7 +219,11 @@ export async function POST(request: NextRequest) {
         metadata: {
           intent_id: String(paymentIntent.id),
           intent_type: 'booking',
+          shop_id: parsed.data.shop_id,
+          shop_payment_account_id: shopPaymentAccount.paymentAccountId,
         },
+      }, {
+        accessToken: shopPaymentAccount.accessToken,
       });
 
       await supabase

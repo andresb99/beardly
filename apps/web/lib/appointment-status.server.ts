@@ -5,6 +5,10 @@ import { env } from '@/lib/env';
 import { createMercadoPagoRefund, getMercadoPagoPayment } from '@/lib/mercado-pago.server';
 import { trackProductEvent } from '@/lib/product-analytics';
 import { createSignedReviewToken } from '@/lib/review-links';
+import {
+  getPlatformMercadoPagoCredentials,
+  getShopMercadoPagoCredentials,
+} from '@/lib/shop-payment-accounts.server';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 
 type PaymentIntentStatus =
@@ -106,7 +110,7 @@ async function refundAppointmentPaymentIfNeeded(input: {
 
   const { data: paymentIntent, error: paymentIntentError } = await admin
     .from('payment_intents')
-    .select('id, shop_id, status, provider, provider_payment_id, payload')
+    .select('id, shop_id, status, provider, provider_payment_id, shop_payment_account_id, payload')
     .eq('id', paymentIntentId)
     .maybeSingle();
 
@@ -199,13 +203,29 @@ async function refundAppointmentPaymentIfNeeded(input: {
     throw new Error('No se encontro el identificador del cobro aprobado para devolver el dinero.');
   }
 
+  const paymentAccountId = String(
+    (paymentIntent as { shop_payment_account_id?: string | null }).shop_payment_account_id || '',
+  ).trim();
+  const credentials = paymentAccountId
+    ? await getShopMercadoPagoCredentials({
+        shopId: input.appointment.shop_id,
+        paymentAccountId,
+      }).then((account) => {
+        if (!account) {
+          throw new Error('No se encontro la cuenta de cobro asociada al pago.');
+        }
+
+        return { accessToken: account.accessToken };
+      })
+    : getPlatformMercadoPagoCredentials();
+
   let providerRefundId: string | null = null;
   try {
-    const refund = await createMercadoPagoRefund(providerPaymentId);
+    const refund = await createMercadoPagoRefund(providerPaymentId, credentials);
     providerRefundId = refund.refundId;
   } catch {
     try {
-      const providerPayment = await getMercadoPagoPayment(providerPaymentId);
+      const providerPayment = await getMercadoPagoPayment(providerPaymentId, credentials);
       if (!isMercadoPagoRefundedStatus(providerPayment.status)) {
         throw new Error('Mercado Pago no reporta el pago como devuelto.');
       }

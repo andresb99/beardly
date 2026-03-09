@@ -1,6 +1,13 @@
 import { render, screen } from '@testing-library/react';
 import { AdminAppointmentsTable } from '@/components/admin/appointments-table';
 
+vi.mock('next/navigation', () => ({
+  usePathname: () => '/admin/appointments',
+  useRouter: () => ({
+    push: vi.fn(),
+  }),
+}));
+
 vi.mock('@/components/admin/appointment-status-form', () => ({
   AdminAppointmentStatusForm: ({
     appointmentId,
@@ -51,7 +58,7 @@ describe('AdminAppointmentsTable', () => {
     expect(screen.getByText('Pendiente')).toBeInTheDocument();
     expect(screen.getByText('Aprobado')).toBeInTheDocument();
     expect(container.querySelector('a[href="tel:+59891234567"]')).not.toBeNull();
-    expect(container.querySelector('a[href*="sort_by=customer"]')).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Ordenar por cliente' })).toBeInTheDocument();
   });
 
   it('renders the empty content when there are no appointments', () => {

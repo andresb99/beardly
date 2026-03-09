@@ -1,11 +1,16 @@
 'use client';
 
+import type { FormEvent } from 'react';
+import { useCallback, useTransition } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 import { Button } from '@heroui/button';
 import { Input } from '@heroui/input';
 import { Select, SelectItem } from '@heroui/select';
 import {
   ADMIN_APPOINTMENTS_PAGE_SIZE_OPTIONS,
   ADMIN_APPOINTMENTS_SORT_OPTIONS,
+  buildAdminAppointmentsQueryString,
+  type AdminAppointmentsQueryState,
   type AdminAppointmentsSortDir,
   type AdminAppointmentsSortField,
 } from '@/lib/admin-appointments';
@@ -40,6 +45,9 @@ export function AdminAppointmentsFilters({
   selectedSortDir,
   staff,
 }: AdminAppointmentsFiltersProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const [isPending, startTransition] = useTransition();
   const staffOptions = [{ id: 'all', name: 'Todo el equipo' }, ...staff];
   const statusOptions = [
     { id: 'all', label: 'Todos' },
@@ -49,11 +57,66 @@ export function AdminAppointmentsFilters({
     { id: 'no_show', label: 'No asistio' },
     { id: 'done', label: 'Realizada' },
   ];
+  const formKey = [
+    shopSlug,
+    from,
+    to,
+    selectedView || 'table',
+    selectedStaffId || 'all',
+    selectedStatus || 'all',
+    selectedPageSize,
+    selectedSortBy,
+    selectedSortDir,
+  ].join('|');
+
+  const handleSubmit = useCallback(
+    (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+
+      const formData = new FormData(event.currentTarget);
+      const staffIdValue = String(formData.get('staff_id') || 'all');
+      const statusValue = String(formData.get('status') || 'all');
+      const nextQueryState: AdminAppointmentsQueryState = {
+        shopSlug,
+        from: String(formData.get('from') || from),
+        to: String(formData.get('to') || to),
+        selectedView:
+          String(formData.get('view') || selectedView || 'table') === 'cards' ? 'cards' : 'table',
+        page: 1,
+        pageSize: Number.parseInt(String(formData.get('page_size') || selectedPageSize), 10) || selectedPageSize,
+        sortBy: String(formData.get('sort_by') || selectedSortBy) as AdminAppointmentsSortField,
+        sortDir: String(formData.get('sort_dir') || selectedSortDir) as AdminAppointmentsSortDir,
+        ...(staffIdValue !== 'all' ? { selectedStaffId: staffIdValue } : {}),
+        ...(statusValue !== 'all' ? { selectedStatus: statusValue } : {}),
+      };
+
+      startTransition(() => {
+        router.replace(`${pathname}?${buildAdminAppointmentsQueryString(nextQueryState)}`, {
+          scroll: false,
+        });
+      });
+    },
+    [
+      from,
+      pathname,
+      router,
+      selectedPageSize,
+      selectedSortBy,
+      selectedSortDir,
+      selectedStatus,
+      selectedStaffId,
+      selectedView,
+      shopSlug,
+      to,
+    ],
+  );
 
   return (
     <form
+      key={formKey}
       className="spotlight-card soft-panel grid gap-3 rounded-[1.8rem] border-0 p-4 md:grid-cols-2 xl:grid-cols-4"
       method="get"
+      onSubmit={handleSubmit}
     >
       <input type="hidden" name="shop" value={shopSlug} />
       <input type="hidden" name="page" value="1" />
@@ -149,6 +212,7 @@ export function AdminAppointmentsFilters({
       <div className="flex items-end">
         <Button
           type="submit"
+          isLoading={isPending}
           className="action-primary h-14 min-h-[56px] w-full px-4 text-sm font-semibold leading-none"
         >
           Aplicar filtros

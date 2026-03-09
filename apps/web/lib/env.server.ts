@@ -17,6 +17,14 @@ const mercadoPagoServerEnvSchema = z.object({
   MERCADO_PAGO_API_BASE_URL: z.string().url().optional(),
 });
 
+const mercadoPagoOAuthEnvSchema = z.object({
+  MERCADO_PAGO_APP_ID: z.string().min(6),
+  MERCADO_PAGO_CLIENT_SECRET: z.string().min(12),
+  MERCADO_PAGO_OAUTH_REDIRECT_URI: z.string().url(),
+  MERCADO_PAGO_OAUTH_AUTH_BASE_URL: z.string().url().optional(),
+  SHOP_PAYMENT_ACCOUNT_CRYPTO_SECRET: z.string().min(32),
+});
+
 const paymentOpsEnvSchema = z.object({
   PAYMENT_RECONCILE_CRON_SECRET: z.string().min(20),
 });
@@ -70,6 +78,16 @@ export function getMercadoPagoServerEnv() {
     MERCADO_PAGO_WEBHOOK_TOKEN: process.env.MERCADO_PAGO_WEBHOOK_TOKEN,
     MERCADO_PAGO_WEBHOOK_SECRET: process.env.MERCADO_PAGO_WEBHOOK_SECRET,
     MERCADO_PAGO_API_BASE_URL: process.env.MERCADO_PAGO_API_BASE_URL,
+  });
+}
+
+export function getMercadoPagoOAuthEnv() {
+  return parseServerSection(mercadoPagoOAuthEnvSchema, {
+    MERCADO_PAGO_APP_ID: process.env.MERCADO_PAGO_APP_ID,
+    MERCADO_PAGO_CLIENT_SECRET: process.env.MERCADO_PAGO_CLIENT_SECRET,
+    MERCADO_PAGO_OAUTH_REDIRECT_URI: process.env.MERCADO_PAGO_OAUTH_REDIRECT_URI,
+    MERCADO_PAGO_OAUTH_AUTH_BASE_URL: process.env.MERCADO_PAGO_OAUTH_AUTH_BASE_URL,
+    SHOP_PAYMENT_ACCOUNT_CRYPTO_SECRET: process.env.SHOP_PAYMENT_ACCOUNT_CRYPTO_SECRET,
   });
 }
 
