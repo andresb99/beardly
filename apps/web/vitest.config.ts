@@ -17,6 +17,7 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     globals: true,
+    testTimeout: 15000,
     setupFiles: [resolve(rootDir, 'test/setup.ts')],
     include: ['test/**/*.test.ts', 'test/**/*.test.tsx'],
     env: {

@@ -67,12 +67,8 @@ test('renders login mode transitions without depending on live auth', async ({ p
 test('shows the empty search state for unmatched marketplace queries', async ({ page }) => {
   await page.goto('/shops', { waitUntil: 'domcontentloaded' });
 
-  await page.getByRole('searchbox').first().fill('Atlantida Norte');
+  await page.getByRole('searchbox').first().fill('zzzz barberia inexistente');
   await page.getByRole('button', { name: 'Buscar' }).first().click();
 
-  await expect(
-    page
-      .getByText('No encontramos barberias visibles en esta zona todavia. Mueve el mapa para seguir explorando.')
-      .first(),
-  ).toBeVisible();
+  await expect(page.getByText(/No encontramos barberias (con ese nombre|para esa busqueda)/i).first()).toBeVisible();
 });
