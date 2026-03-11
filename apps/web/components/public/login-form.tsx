@@ -490,7 +490,7 @@ export function LoginForm({
     setSelectedPlanId(planId);
   }, []);
   const modeButtonClassName = (isActive: boolean) =>
-    `group relative flex h-11 items-center justify-center gap-2 rounded-[0.95rem] border text-[0.82rem] font-semibold transition ${
+    `group relative flex min-h-[2.75rem] items-center justify-center gap-1.5 rounded-[0.95rem] border px-2 py-2 text-center text-[0.75rem] font-semibold leading-tight transition sm:gap-2 sm:px-3 sm:text-[0.82rem] ${
       isActive
         ? 'border-transparent bg-white text-slate-900 shadow-[0_16px_26px_-18px_rgba(15,23,42,0.58)]'
         : 'border-transparent bg-transparent text-slate/80 hover:bg-white/70 hover:text-ink dark:text-slate-200 dark:hover:bg-white/[0.08] dark:hover:text-slate-100'
@@ -523,7 +523,7 @@ export function LoginForm({
             <p className="mb-2 text-right text-[10px] font-semibold uppercase tracking-[0.16em] text-white/72 dark:text-white/72">
               Ahorra hasta {maxAnnualSavingsPercent}%
             </p>
-            <div className="relative grid grid-cols-2 items-center rounded-full border border-white/12 bg-white/[0.04] p-1 dark:border-white/10 dark:bg-black/20">
+            <div className="relative grid grid-cols-2 items-stretch rounded-full border border-white/12 bg-white/[0.04] p-1 dark:border-white/10 dark:bg-black/20">
               <span
                 aria-hidden="true"
                 className={`pointer-events-none absolute bottom-1 left-1 top-1 w-[calc(50%-0.25rem)] rounded-full bg-white shadow-[0_14px_24px_-18px_rgba(148,163,184,0.45)] transition-transform duration-300 dark:bg-[linear-gradient(135deg,rgba(246,247,250,0.98),rgba(223,229,236,0.96))] dark:shadow-[0_14px_24px_-18px_rgba(0,0,0,0.42)] ${
@@ -535,7 +535,7 @@ export function LoginForm({
                 size="sm"
                 radius="full"
                 variant="light"
-                className={`relative z-10 rounded-full px-3 py-2 text-xs font-semibold transition ${
+                className={`relative z-10 h-auto min-h-[2.75rem] rounded-full px-2 py-2 text-center text-[11px] font-semibold leading-tight whitespace-normal transition sm:px-3 sm:text-xs ${
                   billingMode === 'monthly' ? 'text-slate-900' : 'text-white/78 dark:text-white/78'
                 }`}
                 aria-pressed={billingMode === 'monthly'}
@@ -550,7 +550,7 @@ export function LoginForm({
                 size="sm"
                 radius="full"
                 variant="light"
-                className={`relative z-10 rounded-full px-3 py-2 text-xs font-semibold transition ${
+                className={`relative z-10 h-auto min-h-[2.75rem] rounded-full px-2 py-2 text-center text-[11px] font-semibold leading-tight whitespace-normal transition sm:px-3 sm:text-xs ${
                   billingMode === 'annual_installments'
                     ? 'text-slate-900'
                     : 'text-white/78 dark:text-white/78'
@@ -565,15 +565,20 @@ export function LoginForm({
             </div>
           </div>
 
-          <div className="mt-3 grid grid-cols-3 gap-2">
-            {planOptions.map((plan) => {
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {planOptions.map((plan, index) => {
+              const isLastOddMobileCard =
+                planOptions.length > 1 &&
+                planOptions.length % 2 === 1 &&
+                index === planOptions.length - 1;
+
               return (
                 <Button
                   key={`plan-option-${plan.id}`}
                   type="button"
                   variant="light"
                   onPress={() => handleSelectPlanId(plan.id)}
-                  className={`rounded-[1rem] border px-3 py-2 text-left transition ${
+                  className={`rounded-[1rem] border px-3 py-2 text-left transition ${isLastOddMobileCard ? 'col-span-2 sm:col-span-1' : ''} ${
                     plan.isSelected
                       ? 'border-sky-300/45 bg-sky-400/15 shadow-[0_16px_26px_-20px_rgba(56,189,248,0.4)] dark:border-white/14 dark:bg-[linear-gradient(135deg,rgba(86,124,178,0.12),rgba(140,38,74,0.09))] dark:shadow-[0_16px_26px_-20px_rgba(0,0,0,0.54)]'
                       : 'border-white/12 bg-white/[0.03] hover:bg-white/[0.07] dark:border-white/12 dark:bg-white/[0.03] dark:hover:bg-white/[0.07]'

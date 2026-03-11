@@ -461,6 +461,7 @@ html.dark .bg-white\/55 {
 }
 
 .soft-panel {
+  min-width: 0;
   background: var(--brand-panel-shell-light), var(--brand-panel-aura-strong);
   border: 1px solid rgba(255, 255, 255, 0.78);
   box-shadow:
@@ -481,6 +482,7 @@ html.dark .soft-panel {
 
 .section-hero {
   position: relative;
+  min-width: 0;
   overflow: hidden;
   border-radius: 2rem;
   border: 1px solid rgb(255 255 255 / 0.82);
@@ -533,6 +535,7 @@ html.dark .section-hero::after {
 }
 
 .surface-card {
+  min-width: 0;
   border-radius: 1.4rem;
   border: 1px solid rgb(255 255 255 / 0.76);
   background: var(--brand-panel-shell-light-soft), var(--brand-panel-aura-soft);
@@ -1026,6 +1029,7 @@ html.dark .places-search-empty {
 
 .stat-tile {
   position: relative;
+  min-width: 0;
   overflow: hidden;
   border-radius: 1.35rem;
   border: 1px solid rgb(255 255 255 / 0.74);
@@ -1092,6 +1096,7 @@ html.dark .admin-stage::before {
 
 .data-card {
   position: relative;
+  min-width: 0;
   overflow: hidden;
   border-radius: 1.45rem;
   border: 1px solid rgb(255 255 255 / 0.68);
@@ -1159,6 +1164,7 @@ html.dark .data-card::before {
 
 .admin-premium-hero {
   position: relative;
+  min-width: 0;
   overflow: hidden;
   isolation: isolate;
   border: 1px solid rgb(255 255 255 / 0.82);
@@ -1211,6 +1217,7 @@ html.dark .admin-premium-hero::before {
 }
 
 .admin-premium-card {
+  min-width: 0;
   border: 1px solid rgb(255 255 255 / 0.76);
   background: var(--brand-panel-shell-light-soft), var(--brand-panel-aura-strong);
   box-shadow:
@@ -1230,6 +1237,7 @@ html.dark .admin-premium-card {
 }
 
 .admin-premium-accent {
+  min-width: 0;
   border: 1px solid rgb(255 255 255 / 0.78);
   background: var(--brand-panel-shell-light-soft), var(--brand-panel-aura-strong);
   box-shadow:
@@ -1248,6 +1256,7 @@ html.dark .admin-premium-accent {
 }
 
 .admin-premium-subcard {
+  min-width: 0;
   border: 1px solid rgb(255 255 255 / 0.65);
   background: var(--brand-panel-shell-light-soft), var(--brand-panel-aura-soft);
   box-shadow:

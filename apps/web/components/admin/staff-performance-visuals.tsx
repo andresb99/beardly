@@ -406,13 +406,13 @@ export function StaffPerformanceVisuals({ staff }: StaffPerformanceVisualsProps)
             Dashboard grafico del equipo
           </h2>
           <p className="mt-2 max-w-2xl text-sm text-slate/80 dark:text-slate-300">
-            Graficos con ApexCharts integrados al lenguaje visual actual del panel para lectura rapida
-            y comparaciones claras.
+            Graficos con ApexCharts integrados al lenguaje visual actual del panel para lectura
+            rapida y comparaciones claras.
           </p>
         </div>
 
         <div className="grid gap-2 sm:grid-cols-2">
-          <div className="data-card min-w-[220px] rounded-[1.5rem] p-4">
+          <div className="data-card w-full sm:min-w-[220px] rounded-[1.5rem] p-4">
             <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate/55 dark:text-slate-400">
               Mejor por hora
             </p>
@@ -423,7 +423,7 @@ export function StaffPerformanceVisuals({ staff }: StaffPerformanceVisualsProps)
               {topPerHour ? formatCurrency(topPerHour.revenuePerAvailableHourCents) : 'Sin lectura'}
             </p>
           </div>
-          <div className="data-card min-w-[220px] rounded-[1.5rem] p-4">
+          <div className="data-card w-full sm:min-w-[220px] rounded-[1.5rem] p-4">
             <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate/55 dark:text-slate-400">
               Mayor ocupacion
             </p>

@@ -1,11 +1,10 @@
 ﻿import Link from 'next/link';
 import { Button } from '@heroui/button';
 import { Card, CardBody } from '@heroui/card';
-import { Input } from '@heroui/input';
 import { formatCurrency } from '@navaja/shared';
 import { BarChart3, CalendarClock, Clock3, Store, type LucideIcon } from 'lucide-react';
 import { Container } from '@/components/heroui/container';
-import { SurfaceCheckbox } from '@/components/heroui/surface-field';
+import { SurfaceCheckbox, SurfaceInput } from '@/components/heroui/surface-field';
 
 interface ServiceWorkspaceItem {
   id: string;
@@ -34,8 +33,7 @@ interface AdminServicesWorkspaceProps {
   services: ServiceWorkspaceItem[];
 }
 
-const inputClassNames = {
-  label: 'text-[11px] font-semibold uppercase tracking-[0.16em] text-slate/60 dark:text-slate-400',
+const serviceInputClassNames = {
   inputWrapper:
     'border border-white/65 bg-white/72 shadow-none transition data-[hover=true]:border-white/75 group-data-[focus=true]:border-sky-400 dark:border-white/10 dark:bg-white/[0.04]',
   input: 'text-sm text-ink dark:text-slate-100',
@@ -390,19 +388,19 @@ export function AdminServicesWorkspace({
                   <input type="hidden" name="shop_id" value={shopId} />
                   <input type="hidden" name="shop_slug" value={shopSlug} />
 
-                  <Input
+                  <SurfaceInput
                     name="name"
                     label="Nombre del servicio"
                     labelPlacement="outside"
                     variant="bordered"
                     radius="lg"
                     required
-                    classNames={inputClassNames}
+                    classNames={serviceInputClassNames}
                     placeholder="Ej. Corte premium"
                   />
 
                   <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
-                    <Input
+                    <SurfaceInput
                       name="price_cents"
                       type="number"
                       label="Precio (pesos UYU)"
@@ -412,10 +410,10 @@ export function AdminServicesWorkspace({
                       step="0.01"
                       min="0"
                       required
-                      classNames={inputClassNames}
+                      classNames={serviceInputClassNames}
                       placeholder="850"
                     />
-                    <Input
+                    <SurfaceInput
                       name="duration_minutes"
                       type="number"
                       label="Duracion en minutos"
@@ -424,7 +422,7 @@ export function AdminServicesWorkspace({
                       radius="lg"
                       min="1"
                       required
-                      classNames={inputClassNames}
+                      classNames={serviceInputClassNames}
                       placeholder="45"
                     />
                   </div>

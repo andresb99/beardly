@@ -4,8 +4,6 @@ import { useCallback, useEffect, useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation';
 import { X } from 'lucide-react';
 import { Button } from '@heroui/button';
-import { Input } from '@heroui/input';
-import { SelectItem } from '@heroui/select';
 import {
   createStaffInvitationsAction,
   createTimeOffAction,
@@ -13,7 +11,7 @@ import {
   upsertWorkingHoursRangeAction,
 } from '@/app/admin/actions';
 import { AdminSelect } from '@/components/heroui/admin-select';
-import { SurfaceCheckbox } from '@/components/heroui/surface-field';
+import { SurfaceCheckbox, SurfaceInput } from '@/components/heroui/surface-field';
 
 interface StaffOption {
   id: string;
@@ -37,17 +35,10 @@ interface InviteePreview {
   avatarUrl: string | null;
 }
 
-const formInputClassNames = {
-  label: 'text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-zinc-500',
-  inputWrapper:
-    'min-h-[56px] rounded-[1.2rem] border border-slate-900/10 bg-white/82 shadow-none transition data-[hover=true]:border-sky-300 group-data-[focus=true]:border-sky-400 dark:border-white/10 dark:bg-white/[0.04]',
-  input: 'text-sm text-slate-900 dark:text-zinc-100',
-} as const;
-
-const temporalInputClassNames = {
-  ...formInputClassNames,
-  input: 'temporal-placeholder-hidden text-sm text-slate-900 dark:text-zinc-100',
-} as const;
+const inviteRoleOptions = [
+  { key: 'staff', label: 'Personal' },
+  { key: 'admin', label: 'Administrador' },
+] as const;
 
 function getInviteeInitials(name: string, email: string) {
   const source = name.trim() || email.trim();
@@ -68,6 +59,14 @@ export function AdminStaffForms({ shopId, shopSlug, staff, weekdays }: AdminStaf
   const router = useRouter();
   const hasStaff = staff.length > 0;
   const defaultStaffKeys = staff[0]?.id ? [staff[0].id] : [];
+  const staffOptions = useMemo(
+    () => staff.map((item) => ({ key: item.id, label: item.name })),
+    [staff],
+  );
+  const weekdayOptions = useMemo(
+    () => weekdays.map((day, index) => ({ key: String(index), label: day })),
+    [weekdays],
+  );
   const [inviteQuery, setInviteQuery] = useState('');
   const [inviteRole, setInviteRole] = useState<InviteRole>('staff');
   const [searchResults, setSearchResults] = useState<InviteePreview[]>([]);
@@ -238,14 +237,13 @@ export function AdminStaffForms({ shopId, shopSlug, staff, weekdays }: AdminStaf
 
           <form onSubmit={handleInviteSubmit} className="mt-5 grid gap-4">
             <div className="relative">
-              <Input
+              <SurfaceInput
                 value={inviteQuery}
                 onValueChange={handleInviteQueryChange}
                 label="Buscar usuario"
                 labelPlacement="inside"
                 type="text"
                 placeholder="usuario@correo.com"
-                classNames={formInputClassNames}
               />
 
               {inviteQuery.trim().length >= 2 ? (
@@ -302,10 +300,8 @@ export function AdminStaffForms({ shopId, shopSlug, staff, weekdays }: AdminStaf
               labelPlacement="inside"
               selectedKeys={[inviteRole]}
               onChange={(event) => setInviteRole(event.target.value as InviteRole)}
-            >
-              <SelectItem key="staff">Personal</SelectItem>
-              <SelectItem key="admin">Administrador</SelectItem>
-            </AdminSelect>
+              options={inviteRoleOptions}
+            />
 
             <div className="rounded-[1.4rem] border border-white/65 bg-white/50 px-4 py-4 dark:border-white/10 dark:bg-white/[0.03]">
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -411,13 +407,10 @@ export function AdminStaffForms({ shopId, shopSlug, staff, weekdays }: AdminStaf
                 disallowEmptySelection
                 isDisabled={!hasStaff}
                 isRequired
-              >
-                {staff.map((item) => (
-                  <SelectItem key={item.id}>{item.name}</SelectItem>
-                ))}
-              </AdminSelect>
+                options={staffOptions}
+              />
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid gap-3 sm:grid-cols-2">
                 <AdminSelect
                   name="day_from"
                   aria-label="Dia inicial"
@@ -427,11 +420,8 @@ export function AdminStaffForms({ shopId, shopSlug, staff, weekdays }: AdminStaf
                   isDisabled={!hasStaff}
                   isRequired
                   defaultSelectedKeys={['1']}
-                >
-                  {weekdays.map((day, index) => (
-                    <SelectItem key={String(index)}>{day}</SelectItem>
-                  ))}
-                </AdminSelect>
+                  options={weekdayOptions}
+                />
 
                 <AdminSelect
                   name="day_to"
@@ -442,34 +432,31 @@ export function AdminStaffForms({ shopId, shopSlug, staff, weekdays }: AdminStaf
                   isDisabled={!hasStaff}
                   isRequired
                   defaultSelectedKeys={['5']}
-                >
-                  {weekdays.map((day, index) => (
-                    <SelectItem key={String(index)}>{day}</SelectItem>
-                  ))}
-                </AdminSelect>
+                  options={weekdayOptions}
+                />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <Input
+              <div className="grid gap-3 sm:grid-cols-2">
+                <SurfaceInput
                   id="working-hours-start-time"
                   name="start_time"
                   type="time"
                   label="Desde"
                   labelPlacement="inside"
                   defaultValue="09:00"
-                  classNames={temporalInputClassNames}
+                  uiVariant="temporal"
                   isDisabled={!hasStaff}
                   required
                 />
 
-                <Input
+                <SurfaceInput
                   id="working-hours-end-time"
                   name="end_time"
                   type="time"
                   label="Hasta"
                   labelPlacement="inside"
                   defaultValue="17:00"
-                  classNames={temporalInputClassNames}
+                  uiVariant="temporal"
                   isDisabled={!hasStaff}
                   required
                 />
@@ -534,39 +521,35 @@ export function AdminStaffForms({ shopId, shopSlug, staff, weekdays }: AdminStaf
                 disallowEmptySelection
                 isDisabled={!hasStaff}
                 isRequired
-              >
-                {staff.map((item) => (
-                  <SelectItem key={item.id}>{item.name}</SelectItem>
-                ))}
-              </AdminSelect>
+                options={staffOptions}
+              />
 
-              <Input
+              <SurfaceInput
                 id="time-off-start-at"
                 name="start_at"
                 type="datetime-local"
                 label="Inicio"
                 labelPlacement="inside"
-                classNames={temporalInputClassNames}
+                uiVariant="temporal"
                 isDisabled={!hasStaff}
                 required
               />
 
-              <Input
+              <SurfaceInput
                 id="time-off-end-at"
                 name="end_at"
                 type="datetime-local"
                 label="Fin"
                 labelPlacement="inside"
-                classNames={temporalInputClassNames}
+                uiVariant="temporal"
                 isDisabled={!hasStaff}
                 required
               />
 
-              <Input
+              <SurfaceInput
                 name="reason"
                 label="Motivo"
                 labelPlacement="inside"
-                classNames={formInputClassNames}
                 isDisabled={!hasStaff}
               />
 

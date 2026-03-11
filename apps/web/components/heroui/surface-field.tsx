@@ -4,16 +4,23 @@ import type { ComponentProps } from 'react';
 import { Checkbox } from '@heroui/react';
 import { Input, Textarea } from '@heroui/input';
 import { cn } from '@/lib/cn';
+import { mergeSlotClasses } from '@/lib/merge-slot-classes';
 
 type InputClassNames = NonNullable<ComponentProps<typeof Input>['classNames']>;
 type TextareaClassNames = NonNullable<ComponentProps<typeof Textarea>['classNames']>;
 type CheckboxClassNames = NonNullable<ComponentProps<typeof Checkbox>['classNames']>;
 
-export type SurfaceInputProps = ComponentProps<typeof Input>;
+export type SurfaceInputUiVariant = 'default' | 'temporal';
+export type SurfaceInputClassNames = InputClassNames;
+export type SurfaceTextareaClassNames = TextareaClassNames;
+export type SurfaceCheckboxClassNames = CheckboxClassNames;
+export type SurfaceInputProps = ComponentProps<typeof Input> & {
+  uiVariant?: SurfaceInputUiVariant;
+};
 export type SurfaceTextareaProps = ComponentProps<typeof Textarea>;
 export type SurfaceCheckboxProps = ComponentProps<typeof Checkbox>;
 
-const surfaceInputClassNames: InputClassNames = {
+export const surfaceInputClassNames: SurfaceInputClassNames = {
   label: 'text-[11px] font-semibold uppercase tracking-[0.14em] text-slate/60 dark:text-slate-400',
   inputWrapper:
     'min-h-[56px] rounded-[1.2rem] border border-white/70 bg-white/72 shadow-[0_18px_24px_-24px_rgba(15,23,42,0.22)] transition data-[hover=true]:border-[hsl(var(--primary)/0.34)] data-[hover=true]:bg-white/84 group-data-[focus=true]:border-[hsl(var(--primary)/0.42)] group-data-[focus=true]:bg-white/88 dark:border-white/10 dark:bg-white/[0.05] dark:shadow-none dark:data-[hover=true]:border-[hsl(var(--primary)/0.22)] dark:data-[hover=true]:bg-white/[0.08] dark:group-data-[focus=true]:border-[hsl(var(--primary)/0.3)] dark:group-data-[focus=true]:bg-white/[0.08]',
@@ -23,7 +30,12 @@ const surfaceInputClassNames: InputClassNames = {
   errorMessage: 'text-xs text-rose-600 dark:text-rose-300',
 };
 
-const surfaceTextareaClassNames: TextareaClassNames = {
+export const surfaceTemporalInputClassNames: SurfaceInputClassNames = {
+  ...surfaceInputClassNames,
+  input: cn(surfaceInputClassNames.input, 'temporal-placeholder-hidden'),
+};
+
+export const surfaceTextareaClassNames: SurfaceTextareaClassNames = {
   label: surfaceInputClassNames.label,
   inputWrapper: cn(surfaceInputClassNames.inputWrapper, 'py-2'),
   input: cn(surfaceInputClassNames.input, 'resize-y'),
@@ -31,7 +43,7 @@ const surfaceTextareaClassNames: TextareaClassNames = {
   errorMessage: surfaceInputClassNames.errorMessage,
 };
 
-const surfaceCheckboxClassNames: CheckboxClassNames = {
+export const surfaceCheckboxClassNames: SurfaceCheckboxClassNames = {
   base: 'group inline-flex max-w-fit items-center gap-2',
   wrapper:
     'before:border before:border-white/65 before:bg-white/78 before:shadow-none group-data-[hover=true]:before:border-[hsl(var(--primary)/0.34)] group-data-[selected=true]:before:border-[hsl(var(--primary))] group-data-[selected=true]:before:bg-[hsl(var(--primary))] dark:before:border-white/12 dark:before:bg-white/[0.05] dark:group-data-[hover=true]:before:border-[hsl(var(--primary)/0.34)] dark:group-data-[selected=true]:before:border-[hsl(var(--primary))] dark:group-data-[selected=true]:before:bg-[hsl(var(--primary))]',
@@ -39,29 +51,11 @@ const surfaceCheckboxClassNames: CheckboxClassNames = {
   icon: 'text-white',
 };
 
-function mergeSlotClasses<T extends Record<string, unknown>>(
-  base: T,
-  overrides?: Record<string, unknown>,
-): T {
-  const next = { ...base } as Record<string, unknown>;
+export function SurfaceInput({ uiVariant = 'default', classNames, ...props }: SurfaceInputProps) {
+  const inputClassNames =
+    uiVariant === 'temporal' ? surfaceTemporalInputClassNames : surfaceInputClassNames;
 
-  if (!overrides) {
-    return next as T;
-  }
-
-  for (const [key, value] of Object.entries(overrides)) {
-    if (!value) {
-      continue;
-    }
-
-    next[key] = cn(next[key] as string | undefined, value as string | undefined);
-  }
-
-  return next as T;
-}
-
-export function SurfaceInput({ classNames, ...props }: SurfaceInputProps) {
-  return <Input {...props} classNames={mergeSlotClasses(surfaceInputClassNames, classNames)} />;
+  return <Input {...props} classNames={mergeSlotClasses(inputClassNames, classNames)} />;
 }
 
 export function SurfaceTextarea({ classNames, ...props }: SurfaceTextareaProps) {

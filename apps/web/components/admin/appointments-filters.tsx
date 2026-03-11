@@ -4,8 +4,6 @@ import type { FormEvent } from 'react';
 import { useCallback, useTransition } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { Button } from '@heroui/button';
-import { Input } from '@heroui/input';
-import { SelectItem } from '@heroui/select';
 import {
   ADMIN_APPOINTMENTS_PAGE_SIZE_OPTIONS,
   ADMIN_APPOINTMENTS_SORT_OPTIONS,
@@ -15,6 +13,7 @@ import {
   type AdminAppointmentsSortField,
 } from '@/lib/admin-appointments';
 import { AdminSelect } from '@/components/heroui/admin-select';
+import { SurfaceInput } from '@/components/heroui/surface-field';
 
 interface StaffOption {
   id: string;
@@ -49,15 +48,26 @@ export function AdminAppointmentsFilters({
   const router = useRouter();
   const pathname = usePathname();
   const [isPending, startTransition] = useTransition();
-  const staffOptions = [{ id: 'all', name: 'Todo el equipo' }, ...staff];
-  const statusOptions = [
-    { id: 'all', label: 'Todos' },
-    { id: 'pending', label: 'Pendiente' },
-    { id: 'confirmed', label: 'Confirmada' },
-    { id: 'cancelled', label: 'Cancelada' },
-    { id: 'no_show', label: 'No asistio' },
-    { id: 'done', label: 'Realizada' },
+  const staffOptions = [
+    { key: 'all', label: 'Todo el equipo' },
+    ...staff.map((item) => ({ key: item.id, label: item.name })),
   ];
+  const statusOptions = [
+    { key: 'all', label: 'Todos' },
+    { key: 'pending', label: 'Pendiente' },
+    { key: 'confirmed', label: 'Confirmada' },
+    { key: 'cancelled', label: 'Cancelada' },
+    { key: 'no_show', label: 'No asistio' },
+    { key: 'done', label: 'Realizada' },
+  ];
+  const sortOptions = ADMIN_APPOINTMENTS_SORT_OPTIONS.map((item) => ({
+    key: item.id,
+    label: item.label,
+  }));
+  const pageSizeOptions = ADMIN_APPOINTMENTS_PAGE_SIZE_OPTIONS.map((value) => ({
+    key: String(value),
+    label: `${value} por pagina`,
+  }));
   const formKey = [
     shopSlug,
     from,
@@ -69,13 +79,6 @@ export function AdminAppointmentsFilters({
     selectedSortBy,
     selectedSortDir,
   ].join('|');
-  const inputClassNames = {
-    label:
-      'text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-zinc-500',
-    inputWrapper:
-      'min-h-[56px] rounded-[1.2rem] border border-slate-900/10 bg-white/82 shadow-none transition data-[hover=true]:border-sky-300 group-data-[focus=true]:border-sky-400 dark:border-white/10 dark:bg-white/[0.04]',
-    input: 'text-sm text-slate-900 dark:text-zinc-100',
-  } as const;
   const handleSubmit = useCallback(
     (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault();
@@ -130,30 +133,24 @@ export function AdminAppointmentsFilters({
       <input type="hidden" name="shop" value={shopSlug} />
       <input type="hidden" name="page" value="1" />
       {selectedView === 'cards' ? <input type="hidden" name="view" value="cards" /> : null}
-      <Input
+      <SurfaceInput
         id="from"
         name="from"
         type="date"
         label="Desde"
         labelPlacement="inside"
         defaultValue={from}
-        classNames={{
-          ...inputClassNames,
-          input: 'temporal-placeholder-hidden text-sm text-slate-900 dark:text-zinc-100',
-        }}
+        uiVariant="temporal"
       />
 
-      <Input
+      <SurfaceInput
         id="to"
         name="to"
         type="date"
         label="Hasta"
         labelPlacement="inside"
         defaultValue={to}
-        classNames={{
-          ...inputClassNames,
-          input: 'temporal-placeholder-hidden text-sm text-slate-900 dark:text-zinc-100',
-        }}
+        uiVariant="temporal"
       />
 
       <AdminSelect
@@ -163,11 +160,8 @@ export function AdminAppointmentsFilters({
         label="Equipo"
         labelPlacement="inside"
         defaultSelectedKeys={[selectedStaffId || 'all']}
-      >
-        {staffOptions.map((item) => (
-          <SelectItem key={item.id}>{item.name}</SelectItem>
-        ))}
-      </AdminSelect>
+        options={staffOptions}
+      />
 
       <AdminSelect
         id="status"
@@ -176,11 +170,8 @@ export function AdminAppointmentsFilters({
         label="Estado"
         labelPlacement="inside"
         defaultSelectedKeys={[selectedStatus || 'all']}
-      >
-        {statusOptions.map((item) => (
-          <SelectItem key={item.id}>{item.label}</SelectItem>
-        ))}
-      </AdminSelect>
+        options={statusOptions}
+      />
 
       <AdminSelect
         id="sort_by"
@@ -189,11 +180,8 @@ export function AdminAppointmentsFilters({
         label="Ordenar por"
         labelPlacement="inside"
         defaultSelectedKeys={[selectedSortBy]}
-      >
-        {ADMIN_APPOINTMENTS_SORT_OPTIONS.map((item) => (
-          <SelectItem key={item.id}>{item.label}</SelectItem>
-        ))}
-      </AdminSelect>
+        options={sortOptions}
+      />
 
       <AdminSelect
         id="sort_dir"
@@ -202,10 +190,11 @@ export function AdminAppointmentsFilters({
         label="Direccion"
         labelPlacement="inside"
         defaultSelectedKeys={[selectedSortDir]}
-      >
-        <SelectItem key="asc">Menor a mayor</SelectItem>
-        <SelectItem key="desc">Mayor a menor</SelectItem>
-      </AdminSelect>
+        options={[
+          { key: 'asc', label: 'Menor a mayor' },
+          { key: 'desc', label: 'Mayor a menor' },
+        ]}
+      />
 
       <AdminSelect
         id="page_size"
@@ -214,11 +203,8 @@ export function AdminAppointmentsFilters({
         label="Por pagina"
         labelPlacement="inside"
         defaultSelectedKeys={[String(selectedPageSize)]}
-      >
-        {ADMIN_APPOINTMENTS_PAGE_SIZE_OPTIONS.map((value) => (
-          <SelectItem key={String(value)}>{`${value} por pagina`}</SelectItem>
-        ))}
-      </AdminSelect>
+        options={pageSizeOptions}
+      />
 
       <div className="flex items-end md:col-span-2 xl:col-span-4 xl:justify-end">
         <Button

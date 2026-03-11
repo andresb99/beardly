@@ -2188,7 +2188,7 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
             onPointerDown={handleMobileSheetDragStart}
           >
             {mobileSheetStage === 'collapsed' ? (
-              <p className="px-4 text-center whitespace-nowrap text-base font-semibold leading-none text-ink dark:text-slate-100">
+              <p className="max-w-full truncate px-4 text-center text-sm font-semibold leading-none text-ink dark:text-slate-100 sm:text-base">
                 {mobileCollapsedCountLabel}
               </p>
             ) : (
@@ -2411,7 +2411,7 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
                         {getLocationSummary(mapPreviewShop)}
                       </p>
                     </div>
-                    <p className="shrink-0 whitespace-nowrap text-sm font-semibold text-ink dark:text-slate-100">
+                    <p className="text-sm font-semibold leading-tight text-ink dark:text-slate-100 sm:shrink-0 sm:whitespace-nowrap">
                       <Star className="mr-1 inline h-3.5 w-3.5 fill-current text-amber-500" />
                       {formatRating(mapPreviewShop.averageRating)} (
                       {mapPreviewShop.reviewCount || 0})

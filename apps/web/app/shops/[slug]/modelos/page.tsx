@@ -111,7 +111,7 @@ export default async function ShopModelosPage({ params }: ShopModelosPageProps) 
                   </p>
                 </div>
 
-                <div className="surface-card min-w-[220px]">
+                <div className="surface-card w-full sm:min-w-[220px] sm:w-auto">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate/60 dark:text-slate-400">
                     Compensacion
                   </p>
