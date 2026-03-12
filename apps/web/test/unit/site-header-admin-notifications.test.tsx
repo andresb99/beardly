@@ -92,7 +92,7 @@ describe('SiteHeader admin notifications', () => {
     expect(await screen.findByText('Solicitud de ausencia')).toBeInTheDocument();
     expect(screen.getByText('Pago de reserva pendiente')).toBeInTheDocument();
     expect(screen.getByText('Nueva notificacion')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Ver mas' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Abrir inbox' })).toHaveAttribute(
       'href',
       '/admin/notifications?shop=barberandres',
     );

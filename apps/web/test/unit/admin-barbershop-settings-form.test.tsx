@@ -43,12 +43,12 @@ describe('AdminBarbershopSettingsForm', () => {
     expect(
       screen.getByRole('heading', { name: 'Politicas y friccion del checkout' }),
     ).toBeInTheDocument();
-    expect(screen.getByText('Vista previa publica')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Ver perfil' })).toHaveAttribute(
+    expect(screen.getByText(/Vista previa/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Ver perfil' })).toHaveAttribute(
       'href',
       '/shops/navaja-club',
     );
-    expect(screen.getByRole('link', { name: 'Ver reservas' })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: 'Ver reservas' })).toHaveAttribute(
       'href',
       '/shops/navaja-club/book',
     );
@@ -61,11 +61,11 @@ describe('AdminBarbershopSettingsForm', () => {
       target: { value: 'nueva-barberia' },
     });
 
-    expect(screen.getByRole('link', { name: 'Ver perfil' })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: 'Ver perfil' })).toHaveAttribute(
       'href',
       '/shops/nueva-barberia',
     );
-    expect(screen.getByRole('link', { name: 'Ver reservas' })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: 'Ver reservas' })).toHaveAttribute(
       'href',
       '/shops/nueva-barberia/book',
     );
