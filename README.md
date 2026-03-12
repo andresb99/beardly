@@ -1,197 +1,170 @@
 # Navaja Barber Platform
 
-Plataforma multicanal para barberias: marketplace, reservas, operacion interna, cursos, modelos, postulantes y metricas en un solo producto.
+Navaja is a multi-surface barber shop platform built as a pnpm monorepo. It combines a public marketplace, online booking, internal shop operations, education flows, model calls, job applications, and business metrics in a single product.
 
-El repo esta pensado para evolucionar de MVP a producto comercial con planes escalables.
+The repository is structured to support both current product delivery and future commercialization through scalable plans and multi-tenant shop workspaces.
 
-## 1) Que problema resuelve
+## What the product covers
 
-Navaja centraliza los flujos que normalmente estan dispersos:
-- Captacion de clientes y reservas online.
-- Operacion diaria de equipo (agenda, estados, ausencias).
-- Expansion de negocio (cursos, modelos de practica, bolsa de trabajo).
-- Relacion con cliente (notificaciones, historial, resenas).
-- Control financiero y operativo (KPIs, productividad, ocupacion).
+Navaja centralizes workflows that are usually fragmented across several tools:
 
-Resultado: menos carga operativa manual, mejor conversion de reservas y mas control sobre la rentabilidad.
+- Public shop discovery with map and marketplace flows
+- Online booking and appointment management
+- Staff operations, schedules, and time-off handling
+- Customer account history, notifications, and reviews
+- Courses, practice models, and hiring pipelines
+- Business reporting for billing, utilization, and staff performance
 
-## 2) Funcionalidad por tipo de usuario
+In practice, the goal is simple: reduce manual operational overhead while improving booking conversion and decision-making.
 
-### Cliente final (web + mobile)
-- Buscar barberias en mapa y marketplace.
-- Reservar turno en flujo guiado.
-- Gestionar su cuenta y ver historial.
-- Recibir notificaciones de cambios de cita.
-- Dejar resena cuando la cita se completa.
-- Ver cursos y postularse como modelo o postulante laboral.
+## Surfaces
 
-### Staff / Barbero
-- Ver agenda propia.
-- Cambiar estado de citas permitidas.
-- Solicitar ausencias/licencias.
-- Seguir rendimiento personal (segun rol y permisos).
+### Web
 
-### Admin / Owner
-- Gestion completa de citas, servicios, staff y horarios.
-- Gestion de ausencias y excepciones.
-- Gestion de cursos, sesiones e inscripciones.
-- Gestion de convocatoria de modelos y asistencia.
-- Gestion de postulantes con CV.
-- Metricas de facturacion, ticket, ocupacion y rendimiento por staff.
+The web app includes:
 
-## 3) Arquitectura tecnica
+- Public marketplace and tenant storefronts
+- Booking flows
+- Customer account flows
+- Admin and staff workspaces
+- Internal operational tooling
 
-### Monorepo
-- `apps/web`: Next.js (App Router) para sitio publico + panel admin/staff.
-- `apps/mobile`: Expo Router para experiencia mobile.
-- `packages/shared`: contratos compartidos (schemas zod, tipos, utilidades).
-- `supabase`: migraciones SQL, RLS, seed y funciones de negocio.
+Location: `apps/web`
 
-### Stack principal
-- Next.js 16 + React 19 + TypeScript.
-- Expo + React Native.
-- Supabase (Postgres, Auth, Storage, RLS).
-- HeroUI + Tailwind para UI web.
-- pnpm workspaces + Turborepo.
+### Mobile
 
-### Patrons de integracion
-- Server Actions y API routes en web.
-- Mobile consume API web cuando aplica (`EXPO_PUBLIC_API_BASE_URL`).
-- Validacion de payloads con schemas compartidos.
-- Seguridad por RLS + validaciones de rol/tenant en servidor.
+The mobile app mirrors the core business flows from web where applicable:
 
-## 4) Multi-tenant y seguridad
+- Marketplace and booking access
+- Account and review flows
+- Admin and staff operational views
+- Subscription and workspace-aware flows
 
-El sistema opera por workspace de barberia:
-- Aislamiento por `shop_id` y `shop_slug`.
-- Membresias por usuario (`shop_memberships`) con estado (`invited`, `active`, etc.).
-- Roles operativos (`admin`, `staff`, `user`) con rutas y acciones restringidas.
-- Politicas RLS para operaciones publicas y privadas.
-- Uso de service role key solo del lado servidor.
+Location: `apps/mobile`
 
-## 5) Modulos funcionales (resumen)
+### Shared package
 
-| Modulo | Objetivo | Valor de negocio |
-| --- | --- | --- |
-| Marketplace + mapa | Descubrir barberias por zona/viewport/busqueda | Captacion y conversion |
-| Reservas | Tomar turnos y asignar staff | Ingreso directo |
-| Operacion de citas | Confirmar/cancelar/finalizar/no-show | Orden operativo |
-| Notificaciones de cuenta | Eventos de cita y solicitud de resena | Retencion y NPS |
-| Servicios | Catalogo editable por shop | Control de oferta y margen |
-| Staff + horarios | Disponibilidad por rango de dias + excepciones | Menos friccion operativa |
-| Cursos | Venta de formacion y sesiones | Nueva linea de ingresos |
-| Modelos | Cobertura de demanda para practica | Escalabilidad academica |
-| Postulantes | Pipeline de talento con CV | Contratacion mas rapida |
-| Metricas | Facturacion, ocupacion, ticket, rendimiento | Decisiones con datos |
+Shared contracts live in `packages/shared` and are used to keep business behavior aligned across surfaces:
 
-## 6) API y backend (web)
+- Zod schemas
+- Shared types
+- Product configuration
+- Subscription and marketing data
+- Cross-platform helpers
 
-Rutas API relevantes:
-- `/api/availability`
-- `/api/bookings`
-- `/api/shops/search`
-- `/api/shops/viewport`
-- `/api/account/appointments`
-- `/api/account/reviews`
-- `/api/account/invitations/respond`
-- `/api/review/preview`
-- `/api/review/submit`
-- `/api/courses/enroll`
-- `/api/modelos/registro`
-- `/api/jobs/apply`
-- `/api/jobs/network`
-- `/api/onboarding/barbershop`
-- `/api/admin/barbershop`
-
-## 7) Modelo de datos (Supabase)
-
-Entidades base:
-- `shops`, `shop_memberships`, `shop_locations`, `subscriptions`
-- `staff`, `working_hours`, `time_off`
-- `services`, `customers`, `appointments`
-- `appointment_reviews`, `review_invites`, `account_notifications`
-- `courses`, `course_sessions`, `course_enrollments`
-- `models`, `model_requirements`, `model_applications`, `waivers`
-- `job_applications`, `marketplace_job_profiles`, `marketplace_models`
-- `user_profiles`, `shop_gallery_images`
-
-Storage:
-- `cvs` (privado)
-- `public-assets` (publico)
-
-## 8) Moneda y facturacion
-
-- Moneda visible en producto: `UYU` (pesos uruguayos).
-- Formato visual: locale `es-UY`.
-- Persistencia en DB: campos `*_cents` para precision y consistencia.
-- Inputs de admin en UI se cargan en pesos, y se convierten internamente a cents.
-
-## 9) Flujo de notificaciones y resenas
-
-Cuando cambia el estado de una cita:
-- Se genera notificacion de cuenta para el cliente (`confirmed`, `cancelled`, `done`, `no_show`).
-- Al finalizar cita se dispara solicitud de resena.
-- Al abrir/enviar resena se marca la notificacion correspondiente como leida.
-
-Esto vive en:
-- tabla `account_notifications`
-- trigger SQL en `appointments`
-- lectura/acciones en web y mobile.
-
-## 10) Mapas y descubrimiento
-
-La experiencia de mapa combina:
-- Busqueda de ubicaciones (zonas, direcciones, intersecciones).
-- Busqueda por nombre de barberia.
-- Carga de barberias por viewport (lo visible en mapa).
-- Estilos por tema (light/dark) para mantener coherencia visual.
-
-Variables de entorno de mapas:
-- web: `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`
-- mobile: `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY`
-
-## 11) Estructura de carpetas
+## Monorepo layout
 
 ```text
 apps/
-  web/
-  mobile/
+  web/         Next.js web app
+  mobile/      Expo / React Native app
 packages/
-  shared/
+  shared/      Shared contracts, types, helpers
 supabase/
-  migrations/
-  seed.sql
+  migrations/  SQL migrations
+  seed.sql     Optional seed data
 docs/
 ```
 
-## 12) Requisitos de entorno
+## Tech stack
 
-- Node.js 20+
-- pnpm 10+
-- Proyecto Supabase (cloud o local)
-- Opcional: Supabase CLI
+### Web
 
-## 13) Instalacion y setup local
+- Next.js 16
+- React 19
+- TypeScript
+- HeroUI
+- Tailwind CSS
+- ApexCharts
 
-### 13.1 Instalar dependencias
+### Mobile
+
+- Expo 54
+- React Native 0.81
+- Expo Router
+- HeroUI Native
+- react-native-gifted-charts
+- Uniwind
+
+### Backend and platform
+
+- Supabase Auth
+- Supabase Postgres
+- Supabase Storage
+- Row Level Security (RLS)
+- SQL migrations
+
+### Tooling
+
+- pnpm workspaces
+- Turborepo
+- Vitest
+- Playwright
+- ESLint
+- Prettier
+
+## Multi-tenant model
+
+The platform is shop-centric. Each barber shop operates as a workspace.
+
+Core concepts:
+
+- `shop_id` and `shop_slug` identify the workspace
+- `shop_memberships` define tenant membership and status
+- Operational roles include `admin`, `staff`, and `user`
+- Server-side checks and RLS policies protect tenant boundaries
+- Mobile consumes web APIs where direct native access would diverge from business rules
+
+This is important: business behavior should be consistent across web and mobile, but enforcement still happens server-side.
+
+## Main functional areas
+
+| Area | Purpose |
+| --- | --- |
+| Marketplace + map | Discover shops by viewport, location, or search |
+| Booking | Create and manage appointments |
+| Customer account | Notifications, history, and reviews |
+| Staff operations | Agenda, availability, and time off |
+| Admin operations | Staff, services, shop settings, notifications |
+| Courses | Educational products and enrollments |
+| Models | Practice model calls and applications |
+| Jobs | Candidate intake and marketplace exposure |
+| Metrics | Billing, occupancy, ticket size, performance |
+| Subscriptions | Plan management and billing flows |
+
+## Getting started
+
+### Requirements
+
+- Node.js 20 or newer
+- pnpm 10 or newer
+- A Supabase project
+- Optional: Supabase CLI
+
+CI currently runs on Node 24, so using a recent Node version locally is recommended.
+
+### Install dependencies
 
 ```bash
 pnpm install
 ```
 
-Si pnpm pide aprobaciones de build:
+If pnpm asks for build approvals:
 
 ```bash
 pnpm approve-builds
 ```
 
-### 13.2 Variables de entorno
+## Environment variables
 
-Copiar:
+Copy the example files first:
+
 - `apps/web/.env.example` -> `apps/web/.env.local`
 - `apps/mobile/.env.example` -> `apps/mobile/.env`
 
-#### Web (`apps/web/.env.local`)
+### Web
+
+`apps/web/.env.local`
 
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=
@@ -204,7 +177,9 @@ NEXT_PUBLIC_PLATFORM_ROOT_DOMAIN=
 NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=
 ```
 
-#### Mobile (`apps/mobile/.env`)
+### Mobile
+
+`apps/mobile/.env`
 
 ```bash
 EXPO_PUBLIC_SUPABASE_URL=
@@ -214,17 +189,19 @@ EXPO_PUBLIC_API_BASE_URL=
 EXPO_PUBLIC_GOOGLE_MAPS_API_KEY=
 ```
 
-Nota:
-- `EXPO_PUBLIC_API_BASE_URL` debe apuntar a la web (local o deploy) para endpoints de cuenta/reservas/reviews.
-- `NEXT_PUBLIC_PLATFORM_ROOT_DOMAIN` define el dominio base para resolver subdominios del marketplace y reservar hosts internos frente a custom domains.
+Notes:
 
-### 13.3 Base de datos
+- `EXPO_PUBLIC_API_BASE_URL` must point to the web app for API-backed flows such as account, booking, reviews, and subscriptions.
+- `NEXT_PUBLIC_PLATFORM_ROOT_DOMAIN` is used to resolve marketplace subdomains and protect reserved internal hosts.
 
-Opcion SQL Editor:
-1. Ejecutar migraciones de `supabase/migrations` en orden.
-2. Ejecutar `supabase/seed.sql` (opcional para datos demo).
+## Database setup
 
-Opcion CLI:
+### Option 1: Supabase SQL editor
+
+1. Run the migrations from `supabase/migrations` in order.
+2. Optionally run `supabase/seed.sql` for demo data.
+
+### Option 2: Supabase CLI
 
 ```bash
 supabase link --project-ref <project-ref>
@@ -232,86 +209,158 @@ supabase db push
 psql "<postgres-connection-string>" -f supabase/seed.sql
 ```
 
-## 14) Desarrollo local
+## Local development
 
-Todo el monorepo:
+### Run the whole monorepo
 
 ```bash
 pnpm dev
 ```
 
-Solo web:
+### Run only the web app
 
 ```bash
 pnpm --filter @navaja/web dev
 ```
 
-Solo mobile:
+### Run only the mobile app
 
 ```bash
 pnpm --filter @navaja/mobile dev
 ```
 
-## 15) Calidad, testing y comandos
+Useful mobile commands:
 
-Comandos raiz:
-- `pnpm dev`
-- `pnpm build`
-- `pnpm lint`
-- `pnpm typecheck`
-- `pnpm test`
-- `pnpm test:unit`
-- `pnpm test:integration`
-- `pnpm test:e2e`
-- `pnpm coverage`
+```bash
+pnpm --filter @navaja/mobile android
+pnpm --filter @navaja/mobile ios
+pnpm --filter @navaja/mobile web
+```
 
-## 16) Deploy
+## Root scripts
 
-### Web (Vercel)
-1. Importar repo.
-2. Root directory: `apps/web`.
-3. Cargar envs de web.
-4. Deploy.
+| Command | Purpose |
+| --- | --- |
+| `pnpm dev` | Run workspace dev scripts in parallel |
+| `pnpm build` | Build the monorepo |
+| `pnpm lint` | Run lint across workspaces |
+| `pnpm typecheck` | Run TypeScript checks across workspaces |
+| `pnpm test` | Run workspace test scripts |
+| `pnpm test:unit` | Run web unit tests |
+| `pnpm test:integration` | Run web integration tests |
+| `pnpm test:e2e` | Run web Playwright tests |
+| `pnpm coverage` | Run web coverage |
+| `pnpm format` | Format the repository |
 
-Para custom domains de tenants Business:
-- Revisa `docs/custom-domains.md`.
-- Agrega cada dominio manualmente en Vercel y configura el DNS con el target que Vercel indique.
-- Luego activa el dominio desde `admin/barbershop`.
-- Verifica en Search Console el dominio principal y, si usas custom domains reales, cada host importante con su propio `/sitemap.xml`.
+## Quality and testing
 
-### Mobile (Expo EAS)
-1. `npx expo login`
-2. Configurar credenciales/profiles.
-3. Build:
+### Web
+
+- Unit tests: Vitest
+- Integration tests: Vitest + React Testing Library
+- E2E tests: Playwright
+- Coverage: Vitest V8 coverage
+
+### Mobile
+
+- Type checking and linting
+- Vitest coverage for mobile-specific helpers and contracts where available
+
+### Shared
+
+- Vitest for shared logic and contracts
+
+Current CI workflow runs:
+
+- install
+- Playwright browser setup
+- lint
+- typecheck
+- coverage
+- E2E
+
+Workflow file: `.github/workflows/ci.yml`
+
+## API and backend notes
+
+The web app contains both App Router pages and API routes. Important areas include:
+
+- booking and availability
+- account notifications and reviews
+- courses enrollment
+- jobs and models
+- onboarding and shop administration
+- subscriptions and billing flows
+- admin notification summaries and inbox endpoints
+
+Business enforcement belongs on the server. Mobile should reuse those endpoints when the flow is business-critical.
+
+## Data model overview
+
+Core tables include:
+
+- `shops`, `shop_memberships`, `shop_locations`, `subscriptions`
+- `staff`, `working_hours`, `time_off`
+- `services`, `customers`, `appointments`
+- `appointment_reviews`, `review_invites`, `account_notifications`
+- `courses`, `course_sessions`, `course_enrollments`
+- `models`, `model_requirements`, `model_applications`, `waivers`
+- `job_applications`, `marketplace_job_profiles`, `marketplace_models`
+- `user_profiles`, `shop_gallery_images`
+
+Storage buckets currently include:
+
+- `cvs` for private candidate files
+- `public-assets` for public-facing assets
+
+## Maps, payments, and regional assumptions
+
+- Visible product currency: `UYU`
+- Formatting locale: `es-UY`
+- Internal monetary persistence uses `*_cents` fields
+- Maps require Google Maps keys on both web and mobile
+- Mercado Pago flows are integrated into checkout and subscription logic
+
+## Deployment
+
+### Web
+
+The web app is intended to be deployed on Vercel.
+
+Basic steps:
+
+1. Import the repository
+2. Set the root directory to `apps/web`
+3. Configure web environment variables
+4. Deploy
+
+For custom tenant domains, review the domain flow and DNS requirements in `docs/custom-domains.md`.
+
+### Mobile
+
+The mobile app is intended for Expo / EAS builds.
 
 ```bash
 pnpm --filter @navaja/mobile exec eas build --platform ios --profile production
 pnpm --filter @navaja/mobile exec eas build --platform android --profile production
 ```
 
-## 17) Propuesta de evolucion comercial (Pro / Business)
+## Development principles for this repo
 
-Estas ideas estan alineadas con la arquitectura actual y pueden implementarse incrementalmente.
+- Keep business logic aligned across web and mobile
+- Prefer shared contracts over duplicated payload shapes
+- Treat the web backend as the source of truth for protected business flows
+- Preserve tenant isolation through RLS and server checks
+- Avoid introducing temporary workspace artifacts into version control
 
-### Plan Pro (1 local o cadena chica)
-- Recordatorios automaticos por WhatsApp/SMS/email (24h y 2h antes).
-- Politicas de no-show: senias, penalizaciones, bloqueos suaves.
-- Campanas de retencion: reactivacion de clientes inactivos.
-- Segmentacion de clientes por ticket/frecuencia/servicio.
-- Dashboards avanzados por staff y servicio (margen, recurrencia, cancelaciones).
-- Automatizacion de resenas (solicitud inteligente segun estado real).
-- Exportes avanzados (CSV/Excel) con filtros guardados.
+## Status
 
-### Plan Business (multi-sucursal / operacion grande)
-- Multi-sucursal real con consolidado ejecutivo y comparativas entre locales.
-- Presupuestos, metas y alertas por sucursal/equipo.
-- Integraciones enterprise (POS, ERP, payroll, CRM) via API/webhooks.
-- RBAC avanzado (roles personalizados + permisos granulares).
-- Auditoria completa (quien hizo que, cuando, desde donde).
-- SSO (Google Workspace / Microsoft) y seguridad enterprise.
-- SLA, soporte prioritario y onboarding dedicado.
-- White-label (dominio y branding corporativo).
+This repository already contains the foundations for a production SaaS product:
 
----
+- public acquisition flows
+- operational admin/staff tooling
+- mobile parity work
+- subscription and billing foundations
+- automated test coverage in CI
 
-Si quieres convertir este README en material comercial/tactico (deck de ventas + pricing page), la base de este documento ya esta lista para eso.
+The repo is not just a landing or booking MVP. It is structured to keep growing into a commercial multi-tenant barber platform.
