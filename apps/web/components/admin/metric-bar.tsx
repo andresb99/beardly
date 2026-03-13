@@ -5,7 +5,7 @@ interface MetricBarProps {
 }
 
 const toneClassName: Record<NonNullable<MetricBarProps['tone']>, string> = {
-  ink: 'from-sky-500 via-cyan-400 to-blue-500',
+  ink: 'from-violet-500 via-fuchsia-400 to-indigo-500',
   brass: 'from-amber-400 via-orange-300 to-yellow-300',
   rose: 'from-rose-500 via-pink-500 to-orange-400',
 };
@@ -18,11 +18,11 @@ export function MetricBar({ value, max, tone = 'ink' }: MetricBarProps) {
   return (
     <div className="relative h-2 rounded-full bg-slate/10 dark:bg-white/[0.06]">
       <div
-        className={`h-2 rounded-full bg-gradient-to-r ${toneClassName[tone]} shadow-[0_0_18px_rgba(56,189,248,0.22)]`}
+        className={`h-2 rounded-full bg-gradient-to-r ${toneClassName[tone]} shadow-[0_0_18px_rgba(139,92,246,0.22)]`}
         style={{ width: `${ratioPercent}%` }}
       />
       <div
-        className="absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/70 bg-white shadow-[0_8px_18px_-10px_rgba(56,189,248,0.55)] dark:border-transparent dark:bg-slate-100"
+        className="absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/70 bg-white shadow-[0_8px_18px_-10px_rgba(139,92,246,0.55)] dark:border-transparent dark:bg-slate-100"
         style={{ left: `${ratioPercent}%` }}
       />
     </div>

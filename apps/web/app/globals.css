@@ -14,11 +14,11 @@
   --focus-light: 139 92 246;
   --focus-dark: 234 176 72;
   --brand-panel-aura-soft:
-    radial-gradient(circle at 100% 0%, rgba(56, 189, 248, 0.12), transparent 30%),
-    radial-gradient(circle at 0% 100%, rgba(244, 63, 94, 0.08), transparent 26%);
+    radial-gradient(circle at 100% 0%, rgba(139, 92, 246, 0.12), transparent 30%),
+    radial-gradient(circle at 0% 100%, rgba(217, 70, 239, 0.08), transparent 26%);
   --brand-panel-aura-strong:
-    radial-gradient(circle at 100% 0%, rgba(56, 189, 248, 0.18), transparent 34%),
-    radial-gradient(circle at 0% 100%, rgba(244, 63, 94, 0.12), transparent 30%);
+    radial-gradient(circle at 100% 0%, rgba(139, 92, 246, 0.18), transparent 34%),
+    radial-gradient(circle at 0% 100%, rgba(217, 70, 239, 0.12), transparent 30%);
   --brand-premium-shell-light: linear-gradient(
     118deg,
     rgba(245, 248, 255, 0.97) 0%,
@@ -27,9 +27,9 @@
     rgba(255, 241, 245, 0.95) 100%
   );
   --brand-premium-aura-light:
-    radial-gradient(circle at 100% 0%, rgba(56, 189, 248, 0.26), transparent 34%),
-    radial-gradient(circle at 0% 100%, rgba(59, 130, 246, 0.14), transparent 28%),
-    radial-gradient(circle at 100% 100%, rgba(244, 63, 94, 0.18), transparent 30%);
+    radial-gradient(circle at 100% 0%, rgba(168, 85, 247, 0.26), transparent 34%),
+    radial-gradient(circle at 0% 100%, rgba(139, 92, 246, 0.14), transparent 28%),
+    radial-gradient(circle at 100% 100%, rgba(217, 70, 239, 0.18), transparent 30%);
   --brand-panel-shell-light: linear-gradient(
     140deg,
     rgba(255, 255, 255, 0.92) 0%,
@@ -57,8 +57,8 @@ body {
   background-color: #f4f7fc;
   background-image:
     radial-gradient(circle at 12% 12%, rgba(15, 23, 42, 0.04), transparent 28%),
-    radial-gradient(circle at 88% 4%, rgba(14, 165, 233, 0.12), transparent 24%),
-    radial-gradient(circle at 72% 78%, rgba(244, 63, 94, 0.1), transparent 24%);
+    radial-gradient(circle at 88% 4%, rgba(139, 92, 246, 0.12), transparent 24%),
+    radial-gradient(circle at 72% 78%, rgba(217, 70, 239, 0.1), transparent 24%);
   background-attachment: fixed;
   font-feature-settings:
     'liga' 1,
@@ -83,8 +83,8 @@ body::before {
   height: 28rem;
   background:
     radial-gradient(circle at 18% 18%, rgba(255, 255, 255, 0.82), transparent 26%),
-    radial-gradient(circle at 78% 24%, rgba(14, 165, 233, 0.22), transparent 22%),
-    radial-gradient(circle at 64% 56%, rgba(244, 63, 94, 0.18), transparent 20%);
+    radial-gradient(circle at 78% 24%, rgba(139, 92, 246, 0.22), transparent 22%),
+    radial-gradient(circle at 64% 56%, rgba(217, 70, 239, 0.18), transparent 20%);
   filter: blur(72px);
   opacity: 0.95;
   pointer-events: none;
@@ -126,25 +126,25 @@ p {
 html.dark {
   color-scheme: dark;
   --brand-surface-dark: linear-gradient(180deg, rgb(21 18 35), rgb(13 11 24));
-  --brand-surface-dark-strong: linear-gradient(180deg, rgb(18 15 31), rgb(11 9 20));
-  --brand-surface-dark-subtle: linear-gradient(180deg, rgb(16 14 28), rgb(10 9 18));
+  --brand-surface-dark-strong: linear-gradient(180deg, rgb(19 13 31), rgb(9 6 17));
+  --brand-surface-dark-subtle: linear-gradient(180deg, rgb(24 17 37), rgb(11 8 20));
   --brand-panel-aura-soft:
-    radial-gradient(circle at 112% 2%, rgba(99, 102, 241, 0.08), transparent 28%),
-    radial-gradient(circle at 0% 100%, rgba(56, 189, 248, 0.05), transparent 32%);
+    radial-gradient(circle at 112% 2%, rgba(139, 92, 246, 0.1), transparent 28%),
+    radial-gradient(circle at 0% 100%, rgba(217, 70, 239, 0.06), transparent 32%);
   --brand-panel-aura-strong:
-    radial-gradient(circle at 114% 2%, rgba(99, 102, 241, 0.12), transparent 30%),
-    radial-gradient(circle at 0% 100%, rgba(56, 189, 248, 0.08), transparent 34%);
+    radial-gradient(circle at 114% 2%, rgba(168, 85, 247, 0.16), transparent 30%),
+    radial-gradient(circle at 0% 100%, rgba(217, 70, 239, 0.1), transparent 34%);
   --brand-panel-shell-dark: linear-gradient(
     140deg,
-    rgba(14, 12, 24, 0.92) 0%,
-    rgba(6, 4, 13, 0.9) 58%,
-    rgba(12, 10, 22, 0.9) 100%
+    rgba(20, 13, 31, 0.94) 0%,
+    rgba(8, 5, 16, 0.92) 58%,
+    rgba(17, 11, 28, 0.92) 100%
   );
   --brand-panel-shell-dark-soft: linear-gradient(
     150deg,
-    rgba(20, 18, 32, 0.85) 0%,
-    rgba(10, 8, 20, 0.8) 58%,
-    rgba(18, 16, 30, 0.82) 100%
+    rgba(26, 18, 38, 0.88) 0%,
+    rgba(11, 7, 20, 0.84) 58%,
+    rgba(20, 14, 32, 0.86) 100%
   );
 }
 
@@ -467,15 +467,16 @@ html.dark .bg-white\/55 {
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.96) inset,
     0 28px 70px -36px rgba(15, 23, 42, 0.16),
-    0 12px 24px -18px rgba(14, 165, 233, 0.1);
+    0 12px 24px -18px rgba(139, 92, 246, 0.1);
   backdrop-filter: blur(22px);
 }
 
 html.dark .soft-panel {
-  background: var(--brand-surface-dark);
+  background: var(--brand-panel-shell-dark), var(--brand-panel-aura-strong);
   border-color: rgb(255 255 255 / 0.08);
   box-shadow:
     0 26px 52px -40px rgba(0, 0, 0, 0.52),
+    0 16px 30px -24px rgba(139, 92, 246, 0.12),
     inset 0 1px 0 rgba(255, 255, 255, 0.04);
   backdrop-filter: none;
 }
@@ -1187,9 +1188,10 @@ html.dark .admin-stage::before {
 
 html.dark .data-card {
   border-color: rgb(255 255 255 / 0.08);
-  background: var(--brand-surface-dark-strong);
+  background: var(--brand-panel-shell-dark-soft), var(--brand-panel-aura-soft);
   box-shadow:
     0 20px 36px -30px rgb(0 0 0 / 0.44),
+    0 12px 20px -18px rgba(139, 92, 246, 0.1),
     inset 0 1px 0 rgb(255 255 255 / 0.04);
   backdrop-filter: none;
 }
@@ -1280,8 +1282,8 @@ html.dark .admin-premium-hero::before {
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.96) inset,
     0 30px 64px -38px rgba(15, 23, 42, 0.16),
-    0 12px 22px -18px rgba(56, 189, 248, 0.1),
-    0 14px 24px -20px rgba(244, 63, 94, 0.08);
+    0 12px 22px -18px rgba(139, 92, 246, 0.1),
+    0 14px 24px -20px rgba(217, 70, 239, 0.08);
   backdrop-filter: blur(24px);
 }
 
@@ -1300,7 +1302,7 @@ html.dark .admin-premium-card {
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.96) inset,
     0 28px 70px -36px rgba(15, 23, 42, 0.16),
-    0 12px 24px -18px rgba(14, 165, 233, 0.1);
+    0 12px 24px -18px rgba(139, 92, 246, 0.1);
   backdrop-filter: blur(24px);
 }
 
@@ -1369,9 +1371,9 @@ html.dark .admin-premium-subcard[data-tone='warning'] {
 }
 
 html.dark .meta-chip {
-  border-color: transparent;
-  background: rgb(255 255 255 / 0.04);
-  color: rgb(203 213 225 / 0.8);
+  border-color: rgb(168 85 247 / 0.14);
+  background: rgb(139 92 246 / 0.08);
+  color: rgb(233 213 255 / 0.86);
 }
 
 .meta-chip[data-tone='success'] {

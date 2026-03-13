@@ -9,7 +9,10 @@ import {
   DEFAULT_SITE_HEADER_STATE,
   type SiteHeaderInitialState,
 } from '@/lib/site-header-state';
-import { getAccessibleWorkspacesForCurrentUser } from '@/lib/workspaces';
+import {
+  getAccessibleWorkspacesForCurrentUser,
+  getSelectedWorkspaceForCurrentUser,
+} from '@/lib/workspaces';
 
 function isMissingAccountNotificationsTableError(error: unknown) {
   if (!error) {
@@ -62,7 +65,10 @@ export const getSiteHeaderInitialState = cache(async (): Promise<SiteHeaderIniti
     };
   }
 
-  const catalog = await getAccessibleWorkspacesForCurrentUser();
+  const [catalog, selectedWorkspace] = await Promise.all([
+    getAccessibleWorkspacesForCurrentUser(),
+    getSelectedWorkspaceForCurrentUser(),
+  ]);
   const workspaces = catalog?.workspaces || [];
   const accessibleShopIds = workspaces.map((workspace) => workspace.shopId);
   const role = resolveRoleFromWorkspaces(workspaces);
@@ -153,5 +159,8 @@ export const getSiteHeaderInitialState = cache(async (): Promise<SiteHeaderIniti
     isPlatformAdmin: Boolean(platformAdminRow?.user_id),
     publicTenantSlug: publicTenantContext.shopSlug,
     publicTenantMode: publicTenantContext.mode,
+    selectedWorkspaceId: selectedWorkspace?.shopId || null,
+    selectedWorkspaceSlug: selectedWorkspace?.shopSlug || null,
+    selectedWorkspaceName: selectedWorkspace?.shopName || null,
   };
 });

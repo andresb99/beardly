@@ -13,7 +13,7 @@ import {
   type AdminAppointmentsSortField,
 } from '@/lib/admin-appointments';
 import { AdminSelect } from '@/components/heroui/admin-select';
-import { SurfaceInput } from '@/components/heroui/surface-field';
+import { SurfaceDatePicker } from '@/components/heroui/surface-field';
 
 interface StaffOption {
   id: string;
@@ -133,24 +133,20 @@ export function AdminAppointmentsFilters({
       <input type="hidden" name="shop" value={shopSlug} />
       <input type="hidden" name="page" value="1" />
       {selectedView === 'cards' ? <input type="hidden" name="view" value="cards" /> : null}
-      <SurfaceInput
+      <SurfaceDatePicker
         id="from"
         name="from"
-        type="date"
         label="Desde"
         labelPlacement="inside"
         defaultValue={from}
-        uiVariant="temporal"
       />
 
-      <SurfaceInput
+      <SurfaceDatePicker
         id="to"
         name="to"
-        type="date"
         label="Hasta"
         labelPlacement="inside"
         defaultValue={to}
-        uiVariant="temporal"
       />
 
       <AdminSelect

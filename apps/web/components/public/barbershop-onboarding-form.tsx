@@ -682,7 +682,7 @@ export function BarbershopOnboardingForm() {
             portada publica de la barberia. Maximo: {MAX_SHOP_IMAGES}.
           </p>
           {shopPhotos.length >= MAX_SHOP_IMAGES ? (
-            <p className="text-xs font-medium text-sky-700 dark:text-sky-200">
+            <p className="text-xs font-medium text-violet-700 dark:text-violet-200">
               Ya alcanzaste el maximo de {MAX_SHOP_IMAGES} fotos.
             </p>
           ) : null}

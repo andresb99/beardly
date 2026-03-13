@@ -123,6 +123,7 @@ export async function createAppointmentFromBookingIntent(
     sourceChannel?: AppointmentSourceChannel;
     customerAuthUserId?: string | null;
     customerAuthUserEmail?: string | null;
+    initialStatus?: 'pending' | 'confirmed';
   },
 ): Promise<CreatedAppointmentResult> {
   const parsed = bookingInputSchema.safeParse({
@@ -136,6 +137,7 @@ export async function createAppointmentFromBookingIntent(
 
   const normalizedPaymentIntentId = String(options?.paymentIntentId || '').trim() || null;
   const sourceChannel = options?.sourceChannel || 'WEB';
+  const initialStatus = options?.initialStatus === 'confirmed' ? 'confirmed' : 'pending';
   const customerAuthUserId = String(options?.customerAuthUserId || '').trim() || null;
   const customerAuthUserEmail = normalizeEmail(options?.customerAuthUserEmail);
   const resolvedCustomerEmail = normalizeEmail(payload.customer_email);
@@ -312,7 +314,7 @@ export async function createAppointmentFromBookingIntent(
     end_at: new Date(
       new Date(payload.start_at).getTime() + serviceDurationMinutes * 60 * 1000,
     ).toISOString(),
-    status: 'pending' as const,
+    status: initialStatus,
     notes: payload.notes || null,
   };
   let includePaymentIntent = Boolean(normalizedPaymentIntentId && canUsePaymentIntentColumn);

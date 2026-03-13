@@ -27,10 +27,10 @@ function formatRating(value: number | null) {
 
 function getFallbackCoverStyle(name: string) {
   const palettes = [
-    ['rgba(14, 165, 233, 0.92)', 'rgba(15, 23, 42, 0.96)'],
-    ['rgba(244, 63, 94, 0.88)', 'rgba(30, 41, 59, 0.96)'],
-    ['rgba(236, 72, 153, 0.86)', 'rgba(17, 24, 39, 0.96)'],
-    ['rgba(234, 176, 72, 0.9)', 'rgba(22, 28, 45, 0.96)'],
+    ['rgba(139, 92, 246, 0.92)', 'rgba(15, 23, 42, 0.96)'],
+    ['rgba(124, 58, 237, 0.88)', 'rgba(30, 41, 59, 0.96)'],
+    ['rgba(217, 70, 239, 0.86)', 'rgba(17, 24, 39, 0.96)'],
+    ['rgba(168, 85, 247, 0.9)', 'rgba(22, 28, 45, 0.96)'],
   ] as const;
   const paletteIndex = name.length % palettes.length;
   const palette = palettes[paletteIndex] || palettes[0];

@@ -76,7 +76,7 @@ export function AdminAppointmentsPagination({
           classNames={{
             wrapper: 'gap-1',
             item: 'border border-slate-900/10 bg-white/72 text-slate-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-zinc-200',
-            cursor: 'border-transparent bg-sky-500 text-white shadow-none',
+            cursor: 'border-transparent bg-violet-500 text-white shadow-none',
             prev: 'border border-slate-900/10 bg-white/72 text-slate-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-zinc-200',
             next: 'border border-slate-900/10 bg-white/72 text-slate-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-zinc-200',
           }}

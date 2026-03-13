@@ -13,6 +13,7 @@ import {
   SelectItem,
   Textarea,
 } from '@heroui/react';
+import { SurfaceDatePicker } from '@/components/heroui/surface-field';
 
 interface ServiceOption {
   id: string;
@@ -35,12 +36,16 @@ interface AvailabilitySlot {
 
 interface BookingFlowProps {
   shopId: string;
+  shopSlug: string;
+  shopName: string;
+  shopTimezone: string;
   services: ServiceOption[];
   staff: StaffOption[];
   initialCustomerEmail?: string;
   initialCustomerName?: string;
   initialCustomerPhone?: string;
   preferredPaymentMethod?: string | null;
+  supportsOnlinePayment?: boolean;
   cancellationNoticeHours?: number;
   staffCancellationRefundMode?: 'automatic_full' | 'manual_review';
   cancellationPolicyText?: string | null;
@@ -109,12 +114,16 @@ function areAvailabilitySlotsEqual(left: AvailabilitySlot[], right: Availability
 
 export function BookingFlow({
   shopId,
+  shopSlug,
+  shopName,
+  shopTimezone,
   services,
   staff,
   initialCustomerEmail,
   initialCustomerName = '',
   initialCustomerPhone = '',
   preferredPaymentMethod = null,
+  supportsOnlinePayment = true,
   cancellationNoticeHours = 6,
   staffCancellationRefundMode = 'automatic_full',
   cancellationPolicyText = null,
@@ -131,7 +140,7 @@ export function BookingFlow({
   const [customerPhone, setCustomerPhone] = useState(initialCustomerPhone);
   const [customerEmail, setCustomerEmail] = useState(initialCustomerEmail || '');
   const [notes, setNotes] = useState('');
-  const [payInStore, setPayInStore] = useState(false);
+  const [payInStore, setPayInStore] = useState(!supportsOnlinePayment);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -144,6 +153,8 @@ export function BookingFlow({
     () => staff.find((item) => item.id === staffId) || null,
     [staff, staffId],
   );
+  const requiresOnlinePayment =
+    supportsOnlinePayment && !payInStore && Number(selectedService?.price_cents || 0) > 0;
   const renderedSlots = useMemo(
     () =>
       slots.map((slot) => {
@@ -178,6 +189,12 @@ export function BookingFlow({
     setSelectedSlot(slot);
     setStep((currentStep) => Math.max(currentStep, 4));
   }, []);
+
+  useEffect(() => {
+    if (!supportsOnlinePayment) {
+      setPayInStore(true);
+    }
+  }, [supportsOnlinePayment]);
 
   useEffect(() => {
     if (!serviceId || !date) {
@@ -301,9 +318,17 @@ export function BookingFlow({
         return;
       }
 
-      router.push(
-        `/book/success?appointment=${payload.appointment_id}&start=${encodeURIComponent(selectedSlot.start_at)}&service=${encodeURIComponent(selectedService.name)}&staff=${encodeURIComponent(selectedSlot.staff_name)}`,
-      );
+      const successParams = new URLSearchParams({
+        appointment: payload.appointment_id,
+        start: selectedSlot.start_at,
+        service: selectedService.name,
+        staff: selectedSlot.staff_name,
+        shop: shopSlug,
+        shop_name: shopName,
+        timezone: shopTimezone,
+      });
+
+      router.push(`/book/success?${successParams.toString()}`);
     } catch (submitError) {
       setError(
         submitError instanceof Error ? submitError.message : 'No se pudo confirmar la cita.',
@@ -412,17 +437,13 @@ export function BookingFlow({
               </p>
             </div>
             <div className="w-full max-w-xs">
-              <Input
+              <SurfaceDatePicker
                 id="booking-date"
-                type="date"
                 value={date}
-                onChange={(event) => setDate(event.target.value)}
+                onValueChange={setDate}
                 isDisabled={!serviceId}
                 label="Fecha"
                 labelPlacement="inside"
-                classNames={{
-                  input: 'temporal-placeholder-hidden',
-                }}
               />
             </div>
           </div>
@@ -441,7 +462,7 @@ export function BookingFlow({
                   variant="light"
                   className={`rounded-2xl border border-transparent px-3 py-3 text-left text-xs transition ${
                     isSelected
-                      ? 'border-sky-400/38 bg-sky-500/[0.1] dark:border-sky-300/22 dark:bg-sky-400/[0.08]'
+                      ? 'border-violet-400/38 bg-violet-500/[0.1] dark:border-violet-300/22 dark:bg-violet-400/[0.08]'
                       : 'bg-white/58 md:hover:bg-white/78 dark:bg-white/[0.03] dark:md:hover:bg-white/[0.05]'
                   }`}
                   onPress={() => handleSelectSlot(slot)}
@@ -480,11 +501,11 @@ export function BookingFlow({
             <Input
               id="customerEmail"
               type="email"
-              label={payInStore ? 'Email (opcional)' : 'Email (requerido para pago online)'}
+              label={requiresOnlinePayment ? 'Email (requerido para pago online)' : 'Email (opcional)'}
               labelPlacement="inside"
               value={customerEmail}
               onChange={(event) => setCustomerEmail(event.target.value)}
-              required={!payInStore}
+              required={requiresOnlinePayment}
             />
             <Textarea
               id="notes"
@@ -496,16 +517,25 @@ export function BookingFlow({
               onChange={(event) => setNotes(event.target.value)}
             />
             <div className="md:col-span-2">
-              <Checkbox isSelected={payInStore} onValueChange={setPayInStore}>
-                Pagar en el local
-              </Checkbox>
-              <p className="mt-1 text-[11px] text-slate/70 dark:text-slate-400">
-                Si no marcas esta opcion, te enviaremos al checkout online para completar la
-                reserva.
-              </p>
+              {supportsOnlinePayment ? (
+                <>
+                  <Checkbox isSelected={payInStore} onValueChange={setPayInStore}>
+                    Pagar en el local
+                  </Checkbox>
+                  <p className="mt-1 text-[11px] text-slate/70 dark:text-slate-400">
+                    Si no marcas esta opcion y el servicio requiere cobro, te enviaremos al
+                    checkout online para completar la reserva.
+                  </p>
+                </>
+              ) : (
+                <div className="rounded-[1.2rem] border border-violet-300/45 bg-violet-50/85 px-4 py-3 text-sm text-violet-950 shadow-[0_16px_30px_-26px_rgba(139,92,246,0.32)] dark:border-violet-200/16 dark:bg-violet-300/[0.08] dark:text-violet-100">
+                  Esta barberia confirma reservas pagando en el local. El checkout online no esta
+                  disponible por ahora.
+                </div>
+              )}
             </div>
           </div>
-          {preferredPaymentMethod ? (
+          {supportsOnlinePayment && preferredPaymentMethod ? (
             <p className="mt-2 text-[11px] text-slate/70 dark:text-slate-400">
               Metodo guardado: {preferredPaymentMethod}
             </p>
@@ -540,7 +570,7 @@ export function BookingFlow({
               !selectedSlot ||
               !customerName ||
               !customerPhone ||
-              (!payInStore && !customerEmail) ||
+              (requiresOnlinePayment && !customerEmail) ||
               submitting
             }
             isLoading={submitting}
@@ -550,9 +580,9 @@ export function BookingFlow({
               ? 'Creando...'
               : !selectedSlot
                 ? 'Elige horario'
-                : payInStore
-                  ? 'Confirmar reserva'
-                  : 'Continuar al pago'}
+                : requiresOnlinePayment
+                  ? 'Continuar al pago'
+                  : 'Confirmar reserva'}
           </Button>
         </div>
       </CardBody>

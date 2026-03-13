@@ -195,7 +195,7 @@ export function AdminCourseForm({
                     onPress={() => toggleCategory(category.value)}
                     className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
                       isActive
-                        ? 'border-cyan-400/65 bg-cyan-500/18 text-cyan-900 dark:border-cyan-300/55 dark:bg-cyan-400/20 dark:text-cyan-100'
+                        ? 'border-violet-400/65 bg-violet-500/18 text-violet-900 dark:border-violet-300/55 dark:bg-violet-400/20 dark:text-violet-100'
                         : 'border-white/65 bg-white/72 text-slate-700 hover:bg-white dark:border-white/12 dark:bg-white/[0.05] dark:text-slate-300 dark:hover:bg-white/[0.08]'
                     }`}
                   >

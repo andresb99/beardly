@@ -1,142 +1,93 @@
+import NextLink from 'next/link';
 import { formatCurrency } from '@navaja/shared';
-import { Button } from '@heroui/button';
 import { Card, CardBody } from '@heroui/card';
 import { Chip } from '@heroui/chip';
-import {
-  createManualAppointmentAction,
-  createStaffTimeOffRequestAction,
-} from '@/app/admin/actions';
-import { AdminSelect } from '@/components/heroui/admin-select';
+import { Calendar, type CalendarEvent } from '@/components/calendar/calendar';
 import { requireStaff } from '@/lib/auth';
+import {
+  deriveCalendarHours,
+  resolveAppointmentEnd,
+  toCalendarEventStatus,
+} from '@/lib/calendar-schedule';
 import { getStaffPerformanceDetail } from '@/lib/metrics';
-import { createSupabaseServerClient } from '@/lib/supabase/server';
-import { isPendingTimeOffReason, stripPendingTimeOffReason } from '@/lib/time-off-requests';
-import { Container } from '@/components/heroui/container';
-import { SurfaceInput } from '@/components/heroui/surface-field';
-
-const weekdays = ['Domingo', 'Lunes', 'Martes', 'Miercoles', 'Jueves', 'Viernes', 'Sabado'];
-
-const statusTone: Record<string, 'default' | 'success' | 'warning' | 'danger'> = {
-  pending: 'warning',
-  confirmed: 'default',
-  cancelled: 'danger',
-  no_show: 'danger',
-  done: 'success',
-};
-
-const statusLabel: Record<string, string> = {
-  pending: 'Pendiente',
-  confirmed: 'Confirmada',
-  cancelled: 'Cancelada',
-  no_show: 'No asistio',
-  done: 'Realizada',
-};
-
-const paymentStatusTone: Record<string, 'default' | 'success' | 'warning' | 'danger'> = {
-  pending: 'warning',
-  processing: 'warning',
-  approved: 'success',
-  refunded: 'default',
-  rejected: 'danger',
-  cancelled: 'danger',
-  expired: 'danger',
-};
-
-const paymentStatusLabel: Record<string, string> = {
-  pending: 'Pendiente',
-  processing: 'Procesando',
-  approved: 'Aprobado',
-  refunded: 'Devuelto',
-  rejected: 'Rechazado',
-  cancelled: 'Cancelado',
-  expired: 'Expirado',
-};
-
-interface PaymentIntentStatusItem {
-  id: string | null;
-  status: string | null;
-}
-
-function formatHours(minutes: number) {
-  return `${(minutes / 60).toFixed(1)} h`;
-}
-
-function getInitials(name: string) {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-
-  if (!parts.length) {
-    return 'ST';
-  }
-
-  if (parts.length === 1) {
-    return parts[0]!.slice(0, 2).toUpperCase();
-  }
-
-  return `${parts[0]!.charAt(0)}${parts[1]!.charAt(0)}`.toUpperCase();
-}
+import {
+  formatHours,
+  listStaffAppointments,
+  listStaffTimeOffRecords,
+  listStaffWorkingHours,
+  splitTimeOffRecords,
+} from '@/lib/staff-portal';
+import { buildStaffHref } from '@/lib/workspace-routes';
 
 interface StaffPageProps {
   searchParams: Promise<{ shop?: string }>;
 }
 
+function overlapsRange(startAt: string, endAt: string, rangeStart: Date, rangeEnd: Date) {
+  const start = new Date(startAt);
+  const end = new Date(endAt);
+
+  return end.getTime() > rangeStart.getTime() && start.getTime() < rangeEnd.getTime();
+}
+
+function startOfMonth(date: Date) {
+  const normalized = new Date(date);
+  normalized.setDate(1);
+  normalized.setHours(0, 0, 0, 0);
+  return normalized;
+}
+
+function addMonths(date: Date, amount: number) {
+  const next = new Date(date);
+  next.setMonth(next.getMonth() + amount);
+  return next;
+}
+
 export default async function StaffPage({ searchParams }: StaffPageProps) {
   const params = await searchParams;
   const ctx = await requireStaff({ shopSlug: params.shop });
-  const supabase = await createSupabaseServerClient();
 
   const start = new Date();
-  start.setUTCHours(0, 0, 0, 0);
   const end = new Date(start);
   end.setUTCDate(end.getUTCDate() + 7);
+  const calendarRangeStart = startOfMonth(addMonths(start, -1));
+  const calendarRangeEndExclusive = startOfMonth(addMonths(start, 2));
 
   const [
-    appointmentsResult,
-    workingHoursResult,
-    timeOffResult,
-    coursesResult,
-    staffResult,
-    servicesResult,
+    appointments,
+    timeOffRecords,
+    calendarAppointments,
+    calendarTimeOffRecords,
+    workingHours,
     performance,
   ] = await Promise.all([
-    supabase
-      .from('appointments')
-      .select(
-        'id, start_at, end_at, status, payment_intent_id, customer_name_snapshot, customer_phone_snapshot, services(name), customers(name, phone), notes',
-      )
-      .eq('staff_id', ctx.staffId)
-      .gte('start_at', start.toISOString())
-      .lt('start_at', end.toISOString())
-      .order('start_at'),
-    supabase
-      .from('working_hours')
-      .select('id, staff_id, day_of_week, start_time, end_time, staff(name)')
-      .eq('shop_id', ctx.shopId)
-      .order('day_of_week'),
-    supabase
-      .from('time_off')
-      .select('id, staff_id, start_at, end_at, reason, created_at, staff(name)')
-      .eq('shop_id', ctx.shopId)
-      .order('start_at', { ascending: false })
-      .limit(20),
-    supabase
-      .from('courses')
-      .select('id, title, level, duration_hours, price_cents')
-      .eq('shop_id', ctx.shopId)
-      .eq('is_active', true)
-      .order('created_at', { ascending: false })
-      .limit(6),
-    supabase
-      .from('staff')
-      .select('id, name')
-      .eq('shop_id', ctx.shopId)
-      .eq('is_active', true)
-      .order('name'),
-    supabase
-      .from('services')
-      .select('id, name')
-      .eq('shop_id', ctx.shopId)
-      .eq('is_active', true)
-      .order('name'),
+    listStaffAppointments({
+      shopId: ctx.shopId,
+      staffId: ctx.staffId,
+      fromIso: start.toISOString(),
+      toIso: end.toISOString(),
+    }),
+    listStaffTimeOffRecords({
+      shopId: ctx.shopId,
+      staffId: ctx.staffId,
+      limit: 12,
+    }),
+    listStaffAppointments({
+      shopId: ctx.shopId,
+      staffId: ctx.staffId,
+      fromIso: calendarRangeStart.toISOString(),
+      toIso: calendarRangeEndExclusive.toISOString(),
+    }),
+    listStaffTimeOffRecords({
+      shopId: ctx.shopId,
+      staffId: ctx.staffId,
+      fromIso: calendarRangeStart.toISOString(),
+      toIso: calendarRangeEndExclusive.toISOString(),
+    }),
+    listStaffWorkingHours({
+      shopId: ctx.shopId,
+      staffId: ctx.staffId,
+    }),
     getStaffPerformanceDetail(
       ctx.staffId,
       {
@@ -146,144 +97,153 @@ export default async function StaffPage({ searchParams }: StaffPageProps) {
     ).catch(() => null),
   ]);
 
-  const appointments = appointmentsResult.data || [];
-  const paymentIntentIds = Array.from(
-    new Set(
-      appointments
-        .map((item) =>
-          String((item as { payment_intent_id?: string | null }).payment_intent_id || '').trim(),
-        )
-        .filter(Boolean),
-    ),
+  const visibleTimeOffRecords = calendarTimeOffRecords.filter((record) =>
+    overlapsRange(record.startAt, record.endAt, calendarRangeStart, calendarRangeEndExclusive),
   );
-  const paymentStatusByIntentId = new Map<string, string>();
-
-  if (paymentIntentIds.length) {
-    const { data: paymentIntents } = await supabase
-      .from('payment_intents')
-      .select('id, status')
-      .in('id', paymentIntentIds);
-
-    (paymentIntents || []).forEach((item) => {
-      const row = item as PaymentIntentStatusItem;
-      const intentId = String(row.id || '').trim();
-      const status = String(row.status || '')
-        .trim()
-        .toLowerCase();
-      if (intentId && status) {
-        paymentStatusByIntentId.set(intentId, status);
-      }
-    });
-  }
-
-  const timeOffRows = timeOffResult.data || [];
-  const staffOptions = staffResult.data || [];
-  const serviceOptions = servicesResult.data || [];
-  const hasManualBookingOptions = Boolean(staffOptions.length && serviceOptions.length);
-  const defaultManualStartAt = new Date().toISOString().slice(0, 16);
-  const groupedWorkingHours = new Map<
-    string,
-    Array<{
-      id: string;
-      dayLabel: string;
-      startTime: string;
-      endTime: string;
-    }>
-  >();
-
-  for (const entry of workingHoursResult.data || []) {
-    const staffName = String((entry.staff as { name?: string } | null)?.name || 'Personal');
-
-    if (!groupedWorkingHours.has(staffName)) {
-      groupedWorkingHours.set(staffName, []);
-    }
-
-    groupedWorkingHours.get(staffName)?.push({
-      id: String(entry.id),
-      dayLabel: weekdays[Number(entry.day_of_week || 0)] || 'Dia',
-      startTime: String(entry.start_time),
-      endTime: String(entry.end_time),
-    });
-  }
-
-  const myPendingTimeOff = timeOffRows.filter(
-    (item) =>
-      String(item.staff_id || '') === ctx.staffId &&
-      isPendingTimeOffReason(item.reason as string | null),
-  );
-  const myApprovedTimeOff = timeOffRows.filter(
-    (item) =>
-      String(item.staff_id || '') === ctx.staffId &&
-      !isPendingTimeOffReason(item.reason as string | null),
-  );
+  const timeOff = splitTimeOffRecords(timeOffRecords);
+  const nextAppointments = appointments.slice(0, 4);
+  const calendarEvents: CalendarEvent[] = [
+    ...calendarAppointments.map((appointment) => ({
+      id: `appointment:${appointment.id}`,
+      title: appointment.serviceName,
+      clientName: appointment.customerName,
+      start: new Date(appointment.startAt),
+      end: resolveAppointmentEnd(appointment.startAt, appointment.endAt),
+      status: toCalendarEventStatus(appointment.status),
+      tone: toCalendarEventStatus(appointment.status),
+    })),
+    ...visibleTimeOffRecords.map((record) => ({
+      id: `time-off:${record.id}`,
+      title: record.reason || 'Bloque no disponible',
+      clientName: record.isPending ? 'Ausencia pendiente' : 'Ausencia aprobada',
+      start: new Date(record.startAt),
+      end: new Date(record.endAt),
+      tone: record.isPending ? ('pending' as const) : ('absence' as const),
+      statusLabel: record.isPending ? 'Pendiente' : 'Ausencia',
+    })),
+  ];
+  const calendarHours = deriveCalendarHours({
+    workingHours,
+    appointments: calendarAppointments,
+    timeOffRecords: visibleTimeOffRecords,
+  });
 
   return (
     <section className="space-y-6">
-      <Container variant="hero" className="px-6 py-7 md:px-8 md:py-8">
-        <div className="relative z-10">
-          <h1 className="font-[family-name:var(--font-heading)] text-3xl font-bold text-ink md:text-[2.1rem] dark:text-slate-100">
-            Panel de staff
-          </h1>
-          <p className="mt-2 text-sm text-slate/80 dark:text-slate-300">
-            Vista operativa de {ctx.shopName} para {ctx.email || 'tu cuenta'}: tus reservas,
-            metricas propias, horarios del equipo y solicitudes de ausencia.
-          </p>
-        </div>
-      </Container>
-
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <Card className="data-card rounded-[1.7rem] border-0 shadow-none">
           <CardBody className="p-5">
-            <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-slate/60 dark:text-slate-400">
+            <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-slate/60 dark:text-slate-400">
               Proximas citas
-            </h3>
+            </h2>
             <p className="mt-2 text-2xl font-semibold text-ink dark:text-slate-100">
               {appointments.length}
             </p>
-          </CardBody>
-        </Card>
-        <Card className="data-card rounded-[1.7rem] border-0 shadow-none">
-          <CardBody className="p-5">
-            <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-slate/60 dark:text-slate-400">
-              Ausencias pendientes
-            </h3>
-            <p className="mt-2 text-2xl font-semibold text-ink dark:text-slate-100">
-              {myPendingTimeOff.length}
+            <p className="mt-1 text-xs text-slate/70 dark:text-slate-400">
+              Agenda propia de los proximos 7 dias.
             </p>
           </CardBody>
         </Card>
+
         <Card className="data-card rounded-[1.7rem] border-0 shadow-none">
           <CardBody className="p-5">
-            <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-slate/60 dark:text-slate-400">
+            <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-slate/60 dark:text-slate-400">
+              Ausencias pendientes
+            </h2>
+            <p className="mt-2 text-2xl font-semibold text-ink dark:text-slate-100">
+              {timeOff.pending.length}
+            </p>
+            <p className="mt-1 text-xs text-slate/70 dark:text-slate-400">
+              Solicitudes esperando respuesta del admin.
+            </p>
+          </CardBody>
+        </Card>
+
+        <Card className="data-card rounded-[1.7rem] border-0 shadow-none">
+          <CardBody className="p-5">
+            <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-slate/60 dark:text-slate-400">
               Resena promedio
-            </h3>
+            </h2>
             <p className="mt-2 text-2xl font-semibold text-ink dark:text-slate-100">
               {performance ? performance.metric.trustedRating.toFixed(1) : '0.0'}
+            </p>
+            <p className="mt-1 text-xs text-slate/70 dark:text-slate-400">
+              Valoracion consolidada de tu desempeno.
+            </p>
+          </CardBody>
+        </Card>
+
+        <Card className="data-card rounded-[1.7rem] border-0 shadow-none">
+          <CardBody className="p-5">
+            <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-slate/60 dark:text-slate-400">
+              Facturacion 7d
+            </h2>
+            <p className="mt-2 text-2xl font-semibold text-ink dark:text-slate-100">
+              {performance ? formatCurrency(performance.metric.totalRevenueCents) : '$ 0'}
+            </p>
+            <p className="mt-1 text-xs text-slate/70 dark:text-slate-400">
+              Solo tu produccion individual.
             </p>
           </CardBody>
         </Card>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
+      <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
         <Card className="soft-panel rounded-[1.9rem] border-0 shadow-none">
           <CardBody className="space-y-4 p-5">
-            <div>
-              <h3 className="text-xl font-semibold text-ink dark:text-slate-100">Mis metricas</h3>
-              <p className="text-sm text-slate/80 dark:text-slate-300">
-                Solo lectura. Ves tu rendimiento personal sin acceso a la gestion global del equipo.
-              </p>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="text-xl font-semibold text-ink dark:text-slate-100">
+                  Acciones rapidas
+                </h2>
+                <p className="text-sm text-slate/80 dark:text-slate-300">
+                  Entradas pensadas para resolver tu operativa diaria sin salir del flujo staff.
+                </p>
+              </div>
+              {performance ? (
+                <Chip
+                  size="sm"
+                  radius="full"
+                  variant="flat"
+                  className="border border-violet-400/18 bg-violet-500/[0.12] text-violet-100"
+                >
+                  {performance.metric.healthLabel}
+                </Chip>
+              ) : null}
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-3">
+              <NextLink
+                href={buildStaffHref('/staff/citas', ctx.shopSlug)}
+                className="data-card rounded-[1.5rem] p-4 no-underline transition-transform duration-150 hover:-translate-y-0.5"
+              >
+                <p className="text-sm font-semibold text-ink dark:text-slate-100">Mis citas</p>
+                <p className="mt-2 text-xs leading-5 text-slate/70 dark:text-slate-400">
+                  Ver agenda, registrar walk-ins y cerrar estados.
+                </p>
+              </NextLink>
+              <NextLink
+                href={buildStaffHref('/staff/metricas', ctx.shopSlug)}
+                className="data-card rounded-[1.5rem] p-4 no-underline transition-transform duration-150 hover:-translate-y-0.5"
+              >
+                <p className="text-sm font-semibold text-ink dark:text-slate-100">Mis metricas</p>
+                <p className="mt-2 text-xs leading-5 text-slate/70 dark:text-slate-400">
+                  Facturacion, ocupacion, ticket y resenas propias.
+                </p>
+              </NextLink>
+              <NextLink
+                href={buildStaffHref('/staff/ausencias', ctx.shopSlug)}
+                className="data-card rounded-[1.5rem] p-4 no-underline transition-transform duration-150 hover:-translate-y-0.5"
+              >
+                <p className="text-sm font-semibold text-ink dark:text-slate-100">Mis ausencias</p>
+                <p className="mt-2 text-xs leading-5 text-slate/70 dark:text-slate-400">
+                  Pedidos pendientes, historial y horario propio.
+                </p>
+              </NextLink>
             </div>
 
             {performance ? (
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                <div className="data-card rounded-2xl p-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate/55 dark:text-slate-400">
-                    Facturacion
-                  </p>
-                  <p className="mt-2 text-lg font-semibold text-ink dark:text-slate-100">
-                    {formatCurrency(performance.metric.totalRevenueCents)}
-                  </p>
-                </div>
                 <div className="data-card rounded-2xl p-3">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate/55 dark:text-slate-400">
                     Realizadas
@@ -308,10 +268,18 @@ export default async function StaffPage({ searchParams }: StaffPageProps) {
                     {formatHours(performance.metric.bookedMinutes)}
                   </p>
                 </div>
+                <div className="data-card rounded-2xl p-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate/55 dark:text-slate-400">
+                    Ticket promedio
+                  </p>
+                  <p className="mt-2 text-lg font-semibold text-ink dark:text-slate-100">
+                    {formatCurrency(performance.metric.averageTicketCents)}
+                  </p>
+                </div>
               </div>
             ) : (
-              <p className="text-sm text-slate/70 dark:text-slate-400">
-                Aun no hay suficientes datos para mostrar tus metricas.
+              <p className="rounded-[1.4rem] border border-white/50 bg-white/45 px-4 py-3 text-sm text-slate/75 dark:border-violet-400/10 dark:bg-violet-500/[0.06] dark:text-slate-300">
+                Todavia no hay suficientes datos para armar un resumen confiable de tu desempeno.
               </p>
             )}
           </CardBody>
@@ -320,381 +288,158 @@ export default async function StaffPage({ searchParams }: StaffPageProps) {
         <Card className="soft-panel rounded-[1.9rem] border-0 shadow-none">
           <CardBody className="space-y-4 p-5">
             <div>
-              <h3 className="text-xl font-semibold text-ink dark:text-slate-100">
-                Solicitar ausencia
-              </h3>
+              <h2 className="text-xl font-semibold text-ink dark:text-slate-100">
+                Mi horario fijo
+              </h2>
               <p className="text-sm text-slate/80 dark:text-slate-300">
-                Tu solicitud entra como pendiente y el admin la aprueba o la rechaza desde sus
-                notificaciones.
+                Referencia rapida de tus bloques habituales. No expone horarios del resto del equipo.
               </p>
             </div>
 
-            <form action={createStaffTimeOffRequestAction} className="grid gap-3">
-              <input type="hidden" name="shop_id" value={ctx.shopId} />
-              <div className="grid gap-3 sm:grid-cols-2">
-                <SurfaceInput
-                  id="staff-time-off-start-at"
-                  name="start_at"
-                  type="datetime-local"
-                  label="Inicio"
-                  labelPlacement="inside"
-                  isRequired
-                />
-                <SurfaceInput
-                  id="staff-time-off-end-at"
-                  name="end_at"
-                  type="datetime-local"
-                  label="Fin"
-                  labelPlacement="inside"
-                  isRequired
-                />
+            {workingHours.length === 0 ? (
+              <p className="text-sm text-slate/70 dark:text-slate-400">
+                Todavia no hay horarios cargados para tu perfil.
+              </p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {workingHours.map((entry) => (
+                  <span
+                    key={entry.id}
+                    className="rounded-full border border-white/55 bg-white/45 px-3 py-1.5 text-[11px] font-semibold text-slate/80 dark:border-violet-400/10 dark:bg-violet-500/[0.06] dark:text-slate-300"
+                  >
+                    {entry.dayLabel.slice(0, 3)} {entry.startTime}-{entry.endTime}
+                  </span>
+                ))}
               </div>
-              <SurfaceInput
-                name="reason"
-                type="text"
-                label="Motivo"
-                labelPlacement="inside"
-                placeholder="Motivo de la ausencia"
-              />
-              <Button
-                type="submit"
-                className="action-primary inline-flex w-fit rounded-full px-5 py-2.5 text-sm font-semibold"
-              >
-                Enviar solicitud
-              </Button>
-            </form>
+            )}
           </CardBody>
         </Card>
       </div>
 
-      <Card className="soft-panel rounded-[1.9rem] border-0 shadow-none">
-        <CardBody className="p-5">
-          <h3 className="text-xl font-semibold text-ink dark:text-slate-100">
-            Registrar cliente presencial
-          </h3>
-          <p className="text-sm text-slate/80 dark:text-slate-300">
-            Crea reservas manuales y registralas en la misma agenda del sistema.
-          </p>
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
+        <Calendar
+          events={calendarEvents}
+          startHour={calendarHours.startHour}
+          endHour={calendarHours.endHour}
+          initialDate={start}
+          locale="es-UY"
+          title="Agenda visual de la semana"
+          description="Reservas, huecos y ausencias en un solo plano para arrancar el dia con lectura operativa real."
+          availableRangeStart={calendarRangeStart}
+          availableRangeEndExclusive={calendarRangeEndExclusive}
+        />
 
-          {!hasManualBookingOptions ? (
-            <p className="mt-3 rounded-2xl border border-amber-400/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
-              Necesitas al menos un barbero activo y un servicio activo para registrar reservas.
-            </p>
-          ) : null}
-
-          <form
-            action={createManualAppointmentAction}
-            className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4"
-          >
-            <input type="hidden" name="shop_id" value={ctx.shopId} />
-
-            <AdminSelect
-              name="source_channel"
-              aria-label="Canal de reserva"
-              label="Canal"
-              labelPlacement="inside"
-              defaultSelectedKeys={['WALK_IN']}
-              isDisabled={!hasManualBookingOptions}
-              isRequired
-              disallowEmptySelection
-              options={[
-                { key: 'WALK_IN', label: 'Presencial' },
-                { key: 'ADMIN_CREATED', label: 'Carga manual' },
-              ]}
-            />
-
-            <AdminSelect
-              name="service_id"
-              aria-label="Servicio"
-              label="Servicio"
-              labelPlacement="inside"
-              placeholder="Servicio"
-              isDisabled={!hasManualBookingOptions}
-              isRequired
-              options={serviceOptions.map((item) => ({
-                key: String(item.id),
-                label: String(item.name),
-              }))}
-            />
-
-            <AdminSelect
-              name="staff_id"
-              aria-label="Barbero"
-              label="Barbero"
-              labelPlacement="inside"
-              defaultSelectedKeys={[ctx.staffId]}
-              isDisabled={!hasManualBookingOptions}
-              isRequired
-              disallowEmptySelection
-              options={staffOptions.map((item) => ({
-                key: String(item.id),
-                label: String(item.name),
-              }))}
-            />
-
-            <SurfaceInput
-              name="start_at"
-              type="datetime-local"
-              label="Inicio"
-              labelPlacement="inside"
-              defaultValue={defaultManualStartAt}
-              isDisabled={!hasManualBookingOptions}
-              isRequired
-            />
-            <SurfaceInput
-              name="customer_name"
-              type="text"
-              label="Cliente"
-              labelPlacement="inside"
-              placeholder="Nombre del cliente"
-              isDisabled={!hasManualBookingOptions}
-              isRequired
-            />
-            <SurfaceInput
-              name="customer_phone"
-              type="tel"
-              label="Telefono"
-              labelPlacement="inside"
-              placeholder="Telefono"
-              isDisabled={!hasManualBookingOptions}
-              isRequired
-            />
-            <SurfaceInput
-              name="customer_email"
-              type="email"
-              label="Email"
-              labelPlacement="inside"
-              placeholder="Email (opcional)"
-              isDisabled={!hasManualBookingOptions}
-            />
-            <SurfaceInput
-              name="notes"
-              type="text"
-              label="Notas"
-              labelPlacement="inside"
-              placeholder="Notas (opcional)"
-              isDisabled={!hasManualBookingOptions}
-              className="xl:col-span-2"
-            />
-
-            <div className="md:col-span-2 xl:col-span-4">
-              <Button
-                type="submit"
-                isDisabled={!hasManualBookingOptions}
-                className="action-primary inline-flex w-fit rounded-full px-5 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                Guardar reserva manual
-              </Button>
-            </div>
-          </form>
-        </CardBody>
-      </Card>
-
-      <Card className="soft-panel rounded-[1.9rem] border-0 shadow-none">
-        <CardBody className="p-5">
-          <h3 className="text-xl font-semibold text-ink dark:text-slate-100">Mis citas</h3>
-          <p className="text-sm text-slate/80 dark:text-slate-300">
-            Vista de tus proximos 7 dias. Desde aqui no editas estados ni equipo.
-          </p>
-
-          <div className="mt-4 space-y-3">
-            {appointments.length === 0 ? (
-              <p className="text-sm text-slate/70">No hay citas en este periodo.</p>
-            ) : null}
-
-            {appointments.map((item) => {
-              const paymentStatus =
-                paymentStatusByIntentId.get(
-                  String(
-                    (item as { payment_intent_id?: string | null }).payment_intent_id || '',
-                  ).trim(),
-                ) || null;
-              const normalizedPaymentStatus = String(paymentStatus || '')
-                .trim()
-                .toLowerCase();
-              const paymentLabel = normalizedPaymentStatus
-                ? paymentStatusLabel[normalizedPaymentStatus] || normalizedPaymentStatus
-                : 'Sin pago online';
-              const paymentTone = normalizedPaymentStatus
-                ? paymentStatusTone[normalizedPaymentStatus] || 'default'
-                : 'default';
-
-              return (
-                <div key={String(item.id)} className="surface-card rounded-2xl p-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="font-medium text-ink dark:text-slate-100">
-                      {new Date(String(item.start_at)).toLocaleString('es-UY')} -{' '}
-                      {String((item.services as { name?: string } | null)?.name || 'Servicio')}
-                    </p>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Chip
-                        size="sm"
-                        radius="full"
-                        variant="flat"
-                        color={statusTone[String(item.status)] || 'default'}
-                      >
-                        {statusLabel[String(item.status)] || String(item.status)}
-                      </Chip>
-                      <Chip size="sm" radius="full" variant="flat" color={paymentTone}>
-                        Pago: {paymentLabel}
-                      </Chip>
-                    </div>
-                  </div>
-                  <p className="mt-1 text-xs text-slate/70">
-                    Cliente:{' '}
-                    {String(
-                      (item as { customer_name_snapshot?: string | null }).customer_name_snapshot ||
-                        (item.customers as { name?: string } | null)?.name ||
-                        'Sin nombre',
-                    )}{' '}
-                    -{' '}
-                    {String(
-                      (item as { customer_phone_snapshot?: string | null })
-                        .customer_phone_snapshot ||
-                        (item.customers as { phone?: string } | null)?.phone ||
-                        'Sin telefono',
-                    )}
-                  </p>
-                  {item.notes ? (
-                    <p className="mt-1 text-xs text-slate/70">Notas: {String(item.notes)}</p>
-                  ) : null}
-                </div>
-              );
-            })}
-          </div>
-        </CardBody>
-      </Card>
-
-      <div className="grid gap-4 xl:grid-cols-2">
         <Card className="soft-panel rounded-[1.9rem] border-0 shadow-none">
-          <CardBody className="p-5">
-            <h3 className="text-xl font-semibold text-ink dark:text-slate-100">
-              Horarios del equipo
-            </h3>
-            <p className="text-sm text-slate/80 dark:text-slate-300">
-              Puedes ver tu agenda y la del equipo, pero no editarla.
-            </p>
+          <CardBody className="space-y-4 p-5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="text-xl font-semibold text-ink dark:text-slate-100">
+                  Lectura rapida
+                </h2>
+                <p className="text-sm text-slate/80 dark:text-slate-300">
+                  Resumen corto de lo proximo y de los bloqueos que impactan tu semana.
+                </p>
+              </div>
+              <span className="meta-chip">Dia, semana y mes</span>
+            </div>
 
-            <div className="mt-4 grid gap-3">
-              {Array.from(groupedWorkingHours.entries()).map(([staffName, items]) => (
-                <div key={staffName} className="data-card rounded-[1.5rem] p-4">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-white/60 bg-white/55 text-sm font-semibold text-ink dark:border-transparent dark:bg-white/[0.05] dark:text-slate-100">
-                      {getInitials(staffName)}
-                    </div>
-                    <p className="text-base font-semibold text-ink dark:text-slate-100">
-                      {staffName}
+            <div className="grid gap-3">
+              <div className="data-card rounded-[1.5rem] p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate/55 dark:text-slate-400">
+                      Proximas citas
+                    </p>
+                    <p className="mt-2 text-base font-semibold text-ink dark:text-slate-100">
+                      {nextAppointments.length}
                     </p>
                   </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {items.map((entry) => (
-                      <span
-                        key={entry.id}
-                        className="rounded-full border border-white/55 bg-white/45 px-3 py-1.5 text-[11px] font-semibold text-slate/80 dark:border-transparent dark:bg-white/[0.04] dark:text-slate-300"
+                  <NextLink
+                    href={buildStaffHref('/staff/citas', ctx.shopSlug)}
+                    className="text-sm font-semibold text-[hsl(var(--primary))] no-underline dark:text-violet-200 dark:hover:text-violet-100"
+                  >
+                    Abrir agenda
+                  </NextLink>
+                </div>
+
+                {nextAppointments.length === 0 ? (
+                  <p className="mt-3 text-sm text-slate/75 dark:text-slate-400">
+                    No tienes citas programadas para los proximos dias.
+                  </p>
+                ) : (
+                  <div className="mt-3 space-y-3">
+                    {nextAppointments.map((appointment) => (
+                      <div
+                        key={appointment.id}
+                        className="rounded-[1.1rem] border border-white/60 bg-white/55 px-3 py-3 dark:border-violet-400/10 dark:bg-violet-500/[0.06]"
                       >
-                        {entry.dayLabel.slice(0, 3)} {entry.startTime}-{entry.endTime}
-                      </span>
+                        <p className="text-sm font-semibold text-ink dark:text-slate-100">
+                          {new Intl.DateTimeFormat('es-UY', {
+                            weekday: 'short',
+                            day: '2-digit',
+                            month: 'short',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            timeZone: ctx.shopTimezone,
+                          }).format(new Date(appointment.startAt))}
+                        </p>
+                        <p className="mt-1 text-sm text-slate/80 dark:text-slate-300">
+                          {appointment.serviceName} - {appointment.customerName}
+                        </p>
+                        <p className="mt-1 text-xs text-slate/70 dark:text-slate-400">
+                          {appointment.customerPhone}
+                        </p>
+                      </div>
                     ))}
                   </div>
+                )}
+              </div>
+
+              <div className="data-card rounded-[1.5rem] p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate/55 dark:text-slate-400">
+                      Solicitudes pendientes
+                    </p>
+                    <p className="mt-2 text-base font-semibold text-ink dark:text-slate-100">
+                      {timeOff.pending.length} en revision
+                    </p>
+                  </div>
+                  <NextLink
+                    href={buildStaffHref('/staff/ausencias', ctx.shopSlug)}
+                    className="text-sm font-semibold text-[hsl(var(--primary))] no-underline dark:text-violet-200 dark:hover:text-violet-100"
+                  >
+                    Ver ausencias
+                  </NextLink>
                 </div>
-              ))}
-            </div>
-          </CardBody>
-        </Card>
+              </div>
 
-        <Card className="soft-panel rounded-[1.9rem] border-0 shadow-none">
-          <CardBody className="p-5">
-            <h3 className="text-xl font-semibold text-ink dark:text-slate-100">Mis ausencias</h3>
-            <p className="text-sm text-slate/80 dark:text-slate-300">
-              Las solicitudes nuevas quedan pendientes hasta que el admin las apruebe.
-            </p>
-
-            <div className="mt-4 grid gap-3">
-              {myPendingTimeOff.length === 0 && myApprovedTimeOff.length === 0 ? (
-                <p className="text-sm text-slate/70 dark:text-slate-400">
-                  No tienes ausencias registradas.
+              <div className="data-card rounded-[1.5rem] p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate/55 dark:text-slate-400">
+                  Ausencias aprobadas
                 </p>
+                <p className="mt-2 text-base font-semibold text-ink dark:text-slate-100">
+                  {timeOff.approved.length} registradas
+                </p>
+                <p className="mt-2 text-sm text-slate/75 dark:text-slate-400">
+                  Tambien se pintan dentro de la agenda semanal para leer huecos reales.
+                </p>
+              </div>
+
+              {performance ? (
+                <div className="data-card rounded-[1.5rem] p-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate/55 dark:text-slate-400">
+                    Insight principal
+                  </p>
+                  <p className="mt-2 text-sm leading-6 text-slate/80 dark:text-slate-300">
+                    {performance.insights[0]}
+                  </p>
+                </div>
               ) : null}
-
-              {myPendingTimeOff.map((item) => (
-                <div key={`pending-${String(item.id)}`} className="data-card rounded-[1.5rem] p-4">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-semibold text-ink dark:text-slate-100">
-                        {new Date(String(item.start_at)).toLocaleString('es-UY')}
-                      </p>
-                      <p className="mt-1 text-xs text-slate/70 dark:text-slate-400">
-                        hasta {new Date(String(item.end_at)).toLocaleString('es-UY')}
-                      </p>
-                      <p className="mt-1 text-xs text-slate/70 dark:text-slate-400">
-                        {stripPendingTimeOffReason(item.reason as string | null) || 'Sin motivo'}
-                      </p>
-                    </div>
-                    <span className="meta-chip" data-tone="warning">
-                      Pendiente
-                    </span>
-                  </div>
-                </div>
-              ))}
-
-              {myApprovedTimeOff.map((item) => (
-                <div key={`approved-${String(item.id)}`} className="data-card rounded-[1.5rem] p-4">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-semibold text-ink dark:text-slate-100">
-                        {new Date(String(item.start_at)).toLocaleString('es-UY')}
-                      </p>
-                      <p className="mt-1 text-xs text-slate/70 dark:text-slate-400">
-                        hasta {new Date(String(item.end_at)).toLocaleString('es-UY')}
-                      </p>
-                      <p className="mt-1 text-xs text-slate/70 dark:text-slate-400">
-                        {stripPendingTimeOffReason(item.reason as string | null) || 'Sin motivo'}
-                      </p>
-                    </div>
-                    <span className="meta-chip" data-tone="success">
-                      Aprobada
-                    </span>
-                  </div>
-                </div>
-              ))}
             </div>
           </CardBody>
         </Card>
       </div>
-
-      <Card className="soft-panel rounded-[1.9rem] border-0 shadow-none">
-        <CardBody className="p-5">
-          <h3 className="text-xl font-semibold text-ink dark:text-slate-100">
-            Cursos activos del local
-          </h3>
-          <p className="text-sm text-slate/80 dark:text-slate-300">
-            El sistema todavia no modela asignacion de profesor por curso; por ahora ves el catalogo
-            activo del workspace en modo lectura.
-          </p>
-
-          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {(coursesResult.data || []).length === 0 ? (
-              <p className="text-sm text-slate/70 dark:text-slate-400">
-                No hay cursos activos para esta barberia.
-              </p>
-            ) : null}
-
-            {(coursesResult.data || []).map((course) => (
-              <div key={String(course.id)} className="data-card rounded-[1.5rem] p-4">
-                <p className="text-base font-semibold text-ink dark:text-slate-100">
-                  {String(course.title)}
-                </p>
-                <p className="mt-2 text-xs text-slate/70 dark:text-slate-400">
-                  {String(course.level)} | {String(course.duration_hours)} h
-                </p>
-                <p className="mt-2 text-sm font-semibold text-ink dark:text-slate-100">
-                  {formatCurrency(Number(course.price_cents || 0))}
-                </p>
-              </div>
-            ))}
-          </div>
-        </CardBody>
-      </Card>
     </section>
   );
 }

@@ -260,7 +260,7 @@ export default async function CoursesAdminPage({ searchParams }: CoursesAdminPag
                         {course.is_active ? 'Activo' : 'Inactivo'}
                       </span>
                       {requiresModel ? (
-                        <span className="meta-chip border-cyan-400/28 bg-cyan-500/10 text-cyan-700 dark:text-cyan-200">
+                        <span className="meta-chip border-violet-400/28 bg-violet-500/10 text-violet-700 dark:text-violet-200">
                           Requiere modelos
                         </span>
                       ) : null}
@@ -300,7 +300,7 @@ export default async function CoursesAdminPage({ searchParams }: CoursesAdminPag
                         modelCategories.map((category) => (
                           <span
                             key={`${String(course.id)}-${category}`}
-                            className="meta-chip border-cyan-400/24 bg-cyan-500/10 text-cyan-700 dark:text-cyan-200"
+                            className="meta-chip border-violet-400/24 bg-violet-500/10 text-violet-700 dark:text-violet-200"
                           >
                             {category}
                           </span>
@@ -335,7 +335,7 @@ export default async function CoursesAdminPage({ searchParams }: CoursesAdminPag
                             </p>
                           </div>
                           <span
-                            className="meta-chip border-sky-400/22 bg-sky-500/10 text-sky-700 dark:text-sky-200"
+                            className="meta-chip border-violet-400/22 bg-violet-500/10 text-violet-700 dark:text-violet-200"
                             data-tone={session.status === 'cancelled' ? 'danger' : undefined}
                           >
                             {session.status === 'scheduled'

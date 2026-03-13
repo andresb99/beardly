@@ -47,7 +47,13 @@ function formDateTimeIso(formData: FormData, key: string): string | undefined {
     return undefined;
   }
 
-  const normalized = /z$|[+-]\d{2}:\d{2}$/i.test(value) ? value : `${value}:00Z`;
+  const normalized = /z$|[+-]\d{2}:\d{2}$/i.test(value)
+    ? value
+    : /^\d{4}-\d{2}-\d{2}t\d{2}:\d{2}$/i.test(value)
+      ? `${value}:00Z`
+      : /^\d{4}-\d{2}-\d{2}t\d{2}:\d{2}:\d{2}(?:\.\d+)?$/i.test(value)
+        ? `${value}Z`
+        : value;
   const parsed = new Date(normalized);
   if (Number.isNaN(parsed.getTime())) {
     return value;
@@ -799,6 +805,9 @@ export async function respondToStaffInvitationAction(formData: FormData) {
 
 function revalidateAppointmentMetrics() {
   revalidatePath('/staff');
+  revalidatePath('/staff/citas');
+  revalidatePath('/staff/metricas');
+  revalidatePath('/staff/ausencias');
   revalidatePath('/admin/appointments');
   revalidatePath('/admin/metrics');
   revalidatePath('/cuenta');
@@ -1172,6 +1181,7 @@ export async function createStaffTimeOffRequestAction(formData: FormData) {
   }
 
   revalidatePath('/staff');
+  revalidatePath('/staff/ausencias');
   revalidatePath('/admin');
   revalidatePath('/admin/staff');
   revalidatePath('/admin/notifications');
@@ -1254,18 +1264,21 @@ export async function createManualAppointmentAction(formData: FormData) {
     throw new Error('No tienes permisos para crear reservas manuales.');
   }
 
+  const requestedSourceChannel = formValue(formData, 'source_channel');
   const sourceChannelParsed = manualAppointmentSourceSchema.safeParse(
-    formValue(formData, 'source_channel'),
+    ctx.selectedWorkspaceRole === 'staff' ? 'WALK_IN' : requestedSourceChannel,
   );
 
   if (!sourceChannelParsed.success) {
     throw new Error('Selecciona un canal valido para registrar la reserva.');
   }
 
+  const scopedStaffId =
+    ctx.selectedWorkspaceRole === 'staff' ? ctx.staffId : formValue(formData, 'staff_id');
   const bookingParsed = bookingInputSchema.safeParse({
     shop_id: shopId,
     service_id: formValue(formData, 'service_id'),
-    staff_id: formValue(formData, 'staff_id'),
+    staff_id: scopedStaffId,
     start_at: formDateTimeIso(formData, 'start_at'),
     customer_name: formValue(formData, 'customer_name'),
     customer_phone: formValue(formData, 'customer_phone'),
@@ -1281,6 +1294,9 @@ export async function createManualAppointmentAction(formData: FormData) {
     throw new Error('Selecciona un barbero valido para registrar la cita.');
   }
 
+  const supabase = await createSupabaseServerClient();
+  await ensureStaffBelongsToShop(supabase, bookingParsed.data.staff_id, shopId);
+
   await createAppointmentFromBookingIntent(
     {
       shop_id: bookingParsed.data.shop_id,
@@ -1294,6 +1310,7 @@ export async function createManualAppointmentAction(formData: FormData) {
     },
     {
       sourceChannel: sourceChannelParsed.data,
+      initialStatus: 'confirmed',
     },
   );
 

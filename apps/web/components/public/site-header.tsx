@@ -39,6 +39,7 @@ import {
   type HeaderRole,
   type SiteHeaderInitialState,
 } from '@/lib/site-header-state';
+import { STAFF_NAV_ITEMS } from '@/lib/staff-navigation';
 import { buildAdminHref, buildStaffHref } from '@/lib/workspace-routes';
 
 type NavRole = HeaderRole;
@@ -86,20 +87,14 @@ const adminHeaderLinks = [
   { href: '/admin/metrics', label: 'Metricas' },
 ] as const;
 
-const staffHeaderLinks = [
-  { href: '/staff', label: 'Agenda' },
-  { href: '/book', label: 'Agendar' },
-  { href: '/cuenta', label: 'Cuenta' },
-] as const;
-
 const actionButtonClassName =
-  'h-10 rounded-2xl border border-white/75 bg-white/58 px-4 text-xs font-semibold text-ink no-underline shadow-[0_16px_24px_-20px_rgba(15,23,42,0.24)] transition-[background-color,transform,box-shadow,color,border-color] duration-150 data-[hover=true]:border-white/90 data-[hover=true]:bg-white/84 data-[pressed=true]:scale-[0.98] data-[pressed=true]:bg-white/92 data-[focus-visible=true]:ring-2 data-[focus-visible=true]:ring-sky-400/55 data-[focus-visible=true]:ring-offset-1 data-[focus-visible=true]:ring-offset-transparent dark:border-white/10 dark:bg-white/[0.05] dark:text-slate-100 dark:data-[hover=true]:bg-white/[0.08] dark:data-[pressed=true]:bg-white/[0.09]';
+  'h-10 rounded-2xl border border-white/75 bg-white/58 px-4 text-xs font-semibold text-ink no-underline shadow-[0_16px_24px_-20px_rgba(15,23,42,0.24)] transition-[background-color,transform,box-shadow,color,border-color] duration-150 data-[hover=true]:border-white/90 data-[hover=true]:bg-white/84 data-[pressed=true]:scale-[0.98] data-[pressed=true]:bg-white/92 data-[focus-visible=true]:ring-2 data-[focus-visible=true]:ring-violet-400/55 data-[focus-visible=true]:ring-offset-1 data-[focus-visible=true]:ring-offset-transparent dark:border-white/10 dark:bg-white/[0.05] dark:text-slate-100 dark:data-[hover=true]:bg-white/[0.08] dark:data-[pressed=true]:bg-white/[0.09]';
 
 const subscriptionButtonClassName =
-  'h-10 rounded-2xl border border-sky-200/85 bg-[linear-gradient(135deg,rgba(255,255,255,0.9),rgba(241,245,255,0.72))] px-4 text-xs font-semibold text-ink no-underline shadow-[0_18px_28px_-22px_rgba(56,189,248,0.22)] transition-[background-color,transform,box-shadow,color,border-color] duration-150 data-[hover=true]:border-sky-200 data-[hover=true]:bg-[linear-gradient(135deg,rgba(255,255,255,0.96),rgba(237,246,255,0.84))] data-[pressed=true]:scale-[0.98] data-[pressed=true]:bg-[linear-gradient(135deg,rgba(255,255,255,0.98),rgba(232,244,255,0.86))] data-[focus-visible=true]:ring-2 data-[focus-visible=true]:ring-sky-400/55 data-[focus-visible=true]:ring-offset-1 data-[focus-visible=true]:ring-offset-transparent dark:border-white/10 dark:bg-[linear-gradient(135deg,rgba(255,255,255,0.08),rgba(255,255,255,0.04))] dark:text-slate-100 dark:data-[hover=true]:bg-[linear-gradient(135deg,rgba(255,255,255,0.11),rgba(255,255,255,0.06))] dark:data-[pressed=true]:bg-[linear-gradient(135deg,rgba(255,255,255,0.12),rgba(255,255,255,0.07))]';
+  'h-10 rounded-2xl border border-violet-200/85 bg-[linear-gradient(135deg,rgba(255,255,255,0.9),rgba(246,241,255,0.76))] px-4 text-xs font-semibold text-ink no-underline shadow-[0_18px_28px_-22px_rgba(139,92,246,0.22)] transition-[background-color,transform,box-shadow,color,border-color] duration-150 data-[hover=true]:border-violet-200 data-[hover=true]:bg-[linear-gradient(135deg,rgba(255,255,255,0.96),rgba(243,236,255,0.86))] data-[pressed=true]:scale-[0.98] data-[pressed=true]:bg-[linear-gradient(135deg,rgba(255,255,255,0.98),rgba(239,231,255,0.88))] data-[focus-visible=true]:ring-2 data-[focus-visible=true]:ring-violet-400/55 data-[focus-visible=true]:ring-offset-1 data-[focus-visible=true]:ring-offset-transparent dark:border-white/10 dark:bg-[linear-gradient(135deg,rgba(255,255,255,0.08),rgba(255,255,255,0.04))] dark:text-slate-100 dark:data-[hover=true]:bg-[linear-gradient(135deg,rgba(255,255,255,0.11),rgba(255,255,255,0.06))] dark:data-[pressed=true]:bg-[linear-gradient(135deg,rgba(255,255,255,0.12),rgba(255,255,255,0.07))]';
 
 const workspaceSwitcherClassName =
-  'group hidden lg:flex items-center gap-3 rounded-2xl border border-white/70 bg-white/56 px-3 py-2 text-ink no-underline shadow-[0_16px_24px_-20px_rgba(15,23,42,0.24)] transition-[background-color,border-color,transform,box-shadow] duration-150 hover:border-white/90 hover:bg-white/82 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/55 focus-visible:ring-offset-1 focus-visible:ring-offset-transparent dark:border-white/10 dark:bg-white/[0.05] dark:text-slate-100 dark:hover:bg-white/[0.08]';
+  'group hidden lg:flex items-center gap-3 rounded-2xl border border-white/70 bg-white/56 px-3 py-2 text-ink no-underline shadow-[0_16px_24px_-20px_rgba(15,23,42,0.24)] transition-[background-color,border-color,transform,box-shadow] duration-150 hover:border-white/90 hover:bg-white/82 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/55 focus-visible:ring-offset-1 focus-visible:ring-offset-transparent dark:border-white/10 dark:bg-white/[0.05] dark:text-slate-100 dark:hover:bg-white/[0.08]';
 
 const notificationTriggerClassName =
   'relative flex h-11 w-11 items-center justify-center rounded-[1.15rem] border border-white/75 bg-white/58 text-ink shadow-[0_16px_24px_-20px_rgba(15,23,42,0.24)] transition-[background-color,border-color,color,box-shadow] duration-150 hover:border-white/90 hover:bg-white/84 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--primary)/0.42)] focus-visible:ring-offset-1 focus-visible:ring-offset-transparent dark:border-white/10 dark:bg-white/[0.05] dark:text-white dark:hover:bg-white/[0.08]';
@@ -257,8 +252,8 @@ export function SiteHeader({ initialState = DEFAULT_SITE_HEADER_STATE }: SiteHea
   );
   const publicTenantMode = initialState.publicTenantMode;
   const activeWorkspaceSlug = useMemo(
-    () => searchParams.get('shop')?.trim() || null,
-    [searchParams],
+    () => searchParams.get('shop')?.trim() || initialState.selectedWorkspaceSlug || null,
+    [initialState.selectedWorkspaceSlug, searchParams],
   );
   const [role, setRole] = useState<NavRole>(initialState.role);
   const [profileName, setProfileName] = useState<string | null>(initialState.profileName);
@@ -353,7 +348,7 @@ export function SiteHeader({ initialState = DEFAULT_SITE_HEADER_STATE }: SiteHea
     }
 
     if (navigationContext === 'staff') {
-      return staffHeaderLinks.map((item) => ({
+      return STAFF_NAV_ITEMS.map((item) => ({
         href: buildStaffHref(item.href, activeWorkspaceSlug),
         label: item.label,
         key: `${item.href}:${item.label}`,
@@ -413,10 +408,10 @@ export function SiteHeader({ initialState = DEFAULT_SITE_HEADER_STATE }: SiteHea
       null
     );
   }, [activeWorkspaceSlug, workspaceDirectory]);
-  const activeWorkspaceId = activeWorkspaceMeta?.id || null;
+  const activeWorkspaceId = activeWorkspaceMeta?.id || initialState.selectedWorkspaceId || null;
   const activeWorkspaceName = useMemo(() => {
-    return activeWorkspaceMeta?.name || null;
-  }, [activeWorkspaceMeta]);
+    return activeWorkspaceMeta?.name || initialState.selectedWorkspaceName || null;
+  }, [activeWorkspaceMeta, initialState.selectedWorkspaceName]);
   const activeWorkspaceLabel = activeWorkspaceName || activeWorkspaceSlug;
   const hasMultipleWorkspaces = workspaceDirectory.length > 1;
   const workspaceHubHref = useMemo(() => {
@@ -946,7 +941,7 @@ export function SiteHeader({ initialState = DEFAULT_SITE_HEADER_STATE }: SiteHea
               onPress={handleThemeToggle}
               aria-label={theme === 'dark' ? 'Activar modo claro' : 'Activar modo oscuro'}
               title={theme === 'dark' ? 'Modo claro' : 'Modo oscuro'}
-              className="h-10 w-10 min-w-10 rounded-2xl border border-white/75 bg-white/58 p-0 text-ink shadow-[0_16px_24px_-20px_rgba(15,23,42,0.24)] transition data-[hover=true]:border-white/90 data-[hover=true]:bg-white/84 data-[hover=true]:text-sky-700 data-[pressed=true]:scale-100 data-[pressed=true]:bg-white/88 dark:border-white/10 dark:bg-white/[0.05] dark:text-white dark:data-[hover=true]:bg-white/[0.08] dark:data-[hover=true]:text-sky-200"
+              className="h-10 w-10 min-w-10 rounded-2xl border border-white/75 bg-white/58 p-0 text-ink shadow-[0_16px_24px_-20px_rgba(15,23,42,0.24)] transition data-[hover=true]:border-white/90 data-[hover=true]:bg-white/84 data-[hover=true]:text-violet-700 data-[pressed=true]:scale-100 data-[pressed=true]:bg-white/88 dark:border-white/10 dark:bg-white/[0.05] dark:text-white dark:data-[hover=true]:bg-white/[0.08] dark:data-[hover=true]:text-violet-200"
             >
               {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>

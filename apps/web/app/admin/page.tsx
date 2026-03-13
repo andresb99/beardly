@@ -1,8 +1,15 @@
 import { formatCurrency } from '@navaja/shared';
+import { AdminHomeSchedule } from '@/components/admin/admin-home-schedule';
 import { AdminHomeSummary } from '@/components/admin/admin-home-summary';
 import { AdminNotificationsDigest } from '@/components/admin/admin-notifications-digest';
+import { getAdminScheduleOverview } from '@/lib/admin-schedule';
 import { getAdminNotificationsData } from '@/lib/admin-notifications';
 import { requireAdmin } from '@/lib/auth';
+import {
+  deriveCalendarHours,
+  resolveAppointmentEnd,
+  toCalendarEventStatus,
+} from '@/lib/calendar-schedule';
 import { getDashboardMetrics } from '@/lib/metrics';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
@@ -72,12 +79,33 @@ function trimCopy(value: string | null | undefined, maxLength = 84) {
   return `${normalized.slice(0, maxLength - 1).trimEnd()}...`;
 }
 
+function startOfMonth(date: Date) {
+  const normalized = new Date(date);
+  normalized.setDate(1);
+  normalized.setHours(0, 0, 0, 0);
+  return normalized;
+}
+
+function addMonths(date: Date, amount: number) {
+  const next = new Date(date);
+  next.setMonth(next.getMonth() + amount);
+  return next;
+}
+
 export default async function AdminHomePage({ searchParams }: AdminHomePageProps) {
   const params = await searchParams;
   const ctx = await requireAdmin({ shopSlug: params.shop });
-  const [metrics, notifications] = await Promise.all([
+  const scheduleStart = new Date();
+  const scheduleRangeStart = startOfMonth(addMonths(scheduleStart, -1));
+  const scheduleRangeEndExclusive = startOfMonth(addMonths(scheduleStart, 2));
+  const [metrics, notifications, scheduleOverview] = await Promise.all([
     getDashboardMetrics('today', ctx.shopId),
     getAdminNotificationsData(ctx.shopId),
+    getAdminScheduleOverview({
+      shopId: ctx.shopId,
+      fromIso: scheduleRangeStart.toISOString(),
+      toIso: scheduleRangeEndExclusive.toISOString(),
+    }),
   ]);
   const supabase = await createSupabaseServerClient();
   const nowIso = new Date().toISOString();
@@ -140,6 +168,44 @@ export default async function AdminHomePage({ searchParams }: AdminHomePageProps
     typeof latestReview?.rating === 'number' && Number.isFinite(latestReview.rating)
       ? latestReview.rating.toFixed(1)
       : null;
+  const ownerCalendarEvents = [
+    ...scheduleOverview.appointments.map((appointment) => ({
+      id: `appointment:${appointment.id}`,
+      title: appointment.serviceName,
+      clientName: appointment.customerName,
+      resourceId: appointment.staffId,
+      resourceName: appointment.staffName,
+      start: new Date(appointment.startAt),
+      end: resolveAppointmentEnd(appointment.startAt, appointment.endAt),
+      status: toCalendarEventStatus(appointment.status),
+      tone: toCalendarEventStatus(appointment.status),
+    })),
+    ...scheduleOverview.timeOffRecords.map((record) => ({
+      id: `time-off:${record.id}`,
+      title: record.reason || 'Bloque no disponible',
+      clientName: record.isPending ? 'Ausencia pendiente' : 'Ausencia aprobada',
+      resourceId: record.staffId,
+      resourceName: record.staffName,
+      start: new Date(record.startAt),
+      end: new Date(record.endAt),
+      tone: record.isPending ? ('pending' as const) : ('absence' as const),
+      statusLabel: record.isPending ? 'Pendiente' : 'Ausencia',
+    })),
+  ];
+  const ownerCalendarHours = deriveCalendarHours({
+    workingHours: scheduleOverview.workingHours.map((item) => ({
+      startTime: item.startTime,
+      endTime: item.endTime,
+    })),
+    appointments: scheduleOverview.appointments.map((item) => ({
+      startAt: item.startAt,
+      endAt: item.endAt,
+    })),
+    timeOffRecords: scheduleOverview.timeOffRecords.map((item) => ({
+      startAt: item.startAt,
+      endAt: item.endAt,
+    })),
+  });
 
   return (
     <section className="space-y-6">
@@ -189,6 +255,16 @@ export default async function AdminHomePage({ searchParams }: AdminHomePageProps
               : 'Calidad de servicio',
           },
         ]}
+      />
+
+      <AdminHomeSchedule
+        staff={scheduleOverview.staff}
+        events={ownerCalendarEvents}
+        startHour={ownerCalendarHours.startHour}
+        endHour={ownerCalendarHours.endHour}
+        initialDate={scheduleStart}
+        availableRangeStart={scheduleRangeStart}
+        availableRangeEndExclusive={scheduleRangeEndExclusive}
       />
 
       <AdminNotificationsDigest

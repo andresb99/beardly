@@ -11,7 +11,11 @@ import {
   upsertWorkingHoursRangeAction,
 } from '@/app/admin/actions';
 import { AdminSelect } from '@/components/heroui/admin-select';
-import { SurfaceCheckbox, SurfaceInput } from '@/components/heroui/surface-field';
+import {
+  SurfaceCheckbox,
+  SurfaceDateTimePicker,
+  SurfaceInput,
+} from '@/components/heroui/surface-field';
 
 interface StaffOption {
   id: string;
@@ -524,26 +528,22 @@ export function AdminStaffForms({ shopId, shopSlug, staff, weekdays }: AdminStaf
                 options={staffOptions}
               />
 
-              <SurfaceInput
+              <SurfaceDateTimePicker
                 id="time-off-start-at"
                 name="start_at"
-                type="datetime-local"
                 label="Inicio"
                 labelPlacement="inside"
-                uiVariant="temporal"
                 isDisabled={!hasStaff}
-                required
+                isRequired
               />
 
-              <SurfaceInput
+              <SurfaceDateTimePicker
                 id="time-off-end-at"
                 name="end_at"
-                type="datetime-local"
                 label="Fin"
                 labelPlacement="inside"
-                uiVariant="temporal"
                 isDisabled={!hasStaff}
-                required
+                isRequired
               />
 
               <SurfaceInput

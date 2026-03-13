@@ -5,6 +5,7 @@ import { Input } from '@heroui/input';
 import { SelectItem } from '@heroui/select';
 import { upsertCourseSessionAction } from '@/app/admin/actions';
 import { AdminSelect } from '@/components/heroui/admin-select';
+import { SurfaceDateTimePicker } from '@/components/heroui/surface-field';
 
 interface CourseOption {
   id: string;
@@ -34,16 +35,12 @@ export function AdminCourseSessionForm({ shopId, shopSlug, courses }: AdminCours
           <SelectItem key={String(item.id)}>{String(item.title)}</SelectItem>
         ))}
       </AdminSelect>
-      <Input
+      <SurfaceDateTimePicker
         id="course-session-start-at"
         name="start_at"
-        type="datetime-local"
         label="Inicio"
         labelPlacement="inside"
-        classNames={{
-          input: 'temporal-placeholder-hidden',
-        }}
-        required
+        isRequired
       />
       <Input
         name="capacity"

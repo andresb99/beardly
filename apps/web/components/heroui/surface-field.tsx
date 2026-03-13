@@ -1,14 +1,23 @@
 'use client';
 
 import type { ComponentProps } from 'react';
+import { useEffect, useState } from 'react';
+import { parseDate, parseDateTime } from '@internationalized/date';
+import type { DatePickerProps } from '@heroui/date-picker';
 import { Checkbox } from '@heroui/react';
+import { DatePicker } from '@heroui/react';
 import { Input, Textarea } from '@heroui/input';
+import { CalendarDays } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { mergeSlotClasses } from '@/lib/merge-slot-classes';
 
 type InputClassNames = NonNullable<ComponentProps<typeof Input>['classNames']>;
 type TextareaClassNames = NonNullable<ComponentProps<typeof Textarea>['classNames']>;
 type CheckboxClassNames = NonNullable<ComponentProps<typeof Checkbox>['classNames']>;
+type SurfaceDatePickerClassNames = NonNullable<DatePickerProps['classNames']>;
+type SurfaceDateValue = ReturnType<typeof parseSurfaceCalendarDate>;
+type SurfaceDateTimeValue = ReturnType<typeof parseSurfaceCalendarDateTime>;
+const HeroDatePicker = DatePicker as any;
 
 export type SurfaceInputUiVariant = 'default' | 'temporal';
 export type SurfaceInputClassNames = InputClassNames;
@@ -19,6 +28,21 @@ export type SurfaceInputProps = ComponentProps<typeof Input> & {
 };
 export type SurfaceTextareaProps = ComponentProps<typeof Textarea>;
 export type SurfaceCheckboxProps = ComponentProps<typeof Checkbox>;
+export type SurfaceDatePickerProps = Omit<DatePickerProps, 'defaultValue' | 'name' | 'onChange' | 'value'> & {
+  defaultValue?: string;
+  name?: string;
+  onValueChange?: (value: string) => void;
+  value?: string;
+};
+export type SurfaceDateTimePickerProps = Omit<
+  DatePickerProps,
+  'defaultValue' | 'name' | 'onChange' | 'value'
+> & {
+  defaultValue?: string;
+  name?: string;
+  onValueChange?: (value: string) => void;
+  value?: string;
+};
 
 export const surfaceInputClassNames: SurfaceInputClassNames = {
   label: 'text-[11px] font-semibold uppercase tracking-[0.14em] text-slate/60 dark:text-slate-400',
@@ -51,6 +75,105 @@ export const surfaceCheckboxClassNames: SurfaceCheckboxClassNames = {
   icon: 'text-white',
 };
 
+export const surfaceDatePickerClassNames: SurfaceDatePickerClassNames = {
+  base: 'w-full',
+  label: surfaceInputClassNames.label,
+  inputWrapper: cn(surfaceInputClassNames.inputWrapper, 'px-4'),
+  input: 'flex items-center gap-0.5',
+  innerWrapper: 'gap-2',
+  segment:
+    'rounded-[0.55rem] px-1 py-0.5 text-sm font-medium text-ink outline-none transition data-[placeholder=true]:text-slate/45 data-[editable=true]:text-ink data-[focused=true]:bg-[hsl(var(--primary)/0.14)] data-[focused=true]:text-ink dark:text-slate-100 dark:data-[placeholder=true]:text-slate-500 dark:data-[editable=true]:text-slate-100 dark:data-[focused=true]:bg-[hsl(var(--primary)/0.2)] dark:data-[focused=true]:text-white',
+  helperWrapper: 'px-1 pt-2',
+  description: surfaceInputClassNames.description,
+  errorMessage: surfaceInputClassNames.errorMessage,
+  selectorButton:
+    'h-9 min-h-9 w-9 min-w-9 rounded-[0.95rem] border border-white/65 bg-white/78 text-slate/72 shadow-none transition data-[hover=true]:bg-white/90 data-[hover=true]:text-ink data-[pressed=true]:scale-[0.98] dark:border-white/10 dark:bg-white/[0.05] dark:text-slate-300 dark:data-[hover=true]:bg-white/[0.08] dark:data-[hover=true]:text-white',
+  selectorIcon: 'h-4 w-4',
+  popoverContent:
+    'rounded-[1.45rem] border border-white/70 bg-white/96 p-0 shadow-[0_30px_70px_-34px_rgba(15,23,42,0.34)] dark:border-white/10 dark:bg-[rgb(17,12,30)]',
+  calendar: 'p-3',
+  calendarContent: 'p-0',
+  timeInput: cn(surfaceInputClassNames.inputWrapper, 'min-h-[48px] px-3'),
+  timeInputLabel: surfaceInputClassNames.label,
+};
+
+function padDateSegment(value: number, length = 2) {
+  return String(value).padStart(length, '0');
+}
+
+function isTzAwareDateTime(value: string) {
+  return /z$|[+-]\d{2}:\d{2}$/i.test(value);
+}
+
+export function parseSurfaceCalendarDate(value?: string | null) {
+  const normalized = String(value || '').trim();
+  if (!normalized) {
+    return null;
+  }
+
+  try {
+    return parseDate(normalized);
+  } catch {
+    return null;
+  }
+}
+
+export function parseSurfaceCalendarDateTime(value?: string | null) {
+  const normalized = String(value || '').trim();
+  if (!normalized) {
+    return null;
+  }
+
+  try {
+    return parseDateTime(
+      isTzAwareDateTime(normalized)
+        ? normalized.replace(/z$/i, '').replace(/[+-]\d{2}:\d{2}$/i, '')
+        : normalized,
+    );
+  } catch {
+    return null;
+  }
+}
+
+export function serializeSurfaceCalendarDate(value?: SurfaceDateValue) {
+  return value ? value.toString() : '';
+}
+
+export function serializeSurfaceCalendarDateTime(value?: SurfaceDateTimeValue) {
+  if (!value) {
+    return '';
+  }
+
+  return `${padDateSegment(value.year, 4)}-${padDateSegment(value.month)}-${padDateSegment(
+    value.day,
+  )}T${padDateSegment(value.hour)}:${padDateSegment(value.minute)}`;
+}
+
+function useSurfaceDateValue<TValue>(
+  value: string | undefined,
+  defaultValue: string | undefined,
+  parseValue: (raw?: string | null) => TValue | null,
+) {
+  const [uncontrolledValue, setUncontrolledValue] = useState<TValue | null>(() =>
+    parseValue(defaultValue),
+  );
+  const isControlled = value !== undefined;
+
+  useEffect(() => {
+    if (isControlled) {
+      return;
+    }
+
+    setUncontrolledValue(parseValue(defaultValue));
+  }, [defaultValue, isControlled, parseValue]);
+
+  return {
+    isControlled,
+    setUncontrolledValue,
+    value: isControlled ? parseValue(value) : uncontrolledValue,
+  };
+}
+
 export function SurfaceInput({ uiVariant = 'default', classNames, ...props }: SurfaceInputProps) {
   const inputClassNames =
     uiVariant === 'temporal' ? surfaceTemporalInputClassNames : surfaceInputClassNames;
@@ -72,5 +195,74 @@ export function SurfaceCheckbox({ classNames, ...props }: SurfaceCheckboxProps) 
       size="sm"
       classNames={mergeSlotClasses(surfaceCheckboxClassNames, classNames)}
     />
+  );
+}
+
+export function SurfaceDatePicker({
+  classNames,
+  defaultValue,
+  name,
+  onValueChange,
+  selectorIcon = <CalendarDays className="h-4 w-4" />,
+  value,
+  ...props
+}: SurfaceDatePickerProps) {
+  const state = useSurfaceDateValue(value, defaultValue, parseSurfaceCalendarDate);
+  const serializedValue = serializeSurfaceCalendarDate(state.value);
+
+  return (
+    <>
+      {name ? <input type="hidden" name={name} value={serializedValue} /> : null}
+      <HeroDatePicker
+        {...props}
+        selectorIcon={selectorIcon}
+        value={state.value}
+        classNames={mergeSlotClasses(surfaceDatePickerClassNames, classNames)}
+        onChange={(nextValue: unknown) => {
+          if (!state.isControlled) {
+            state.setUncontrolledValue(nextValue as SurfaceDateValue);
+          }
+
+          onValueChange?.(serializeSurfaceCalendarDate(nextValue as SurfaceDateValue));
+        }}
+      />
+    </>
+  );
+}
+
+export function SurfaceDateTimePicker({
+  classNames,
+  defaultValue,
+  hideTimeZone = true,
+  hourCycle = 24,
+  name,
+  onValueChange,
+  selectorIcon = <CalendarDays className="h-4 w-4" />,
+  value,
+  ...props
+}: SurfaceDateTimePickerProps) {
+  const state = useSurfaceDateValue(value, defaultValue, parseSurfaceCalendarDateTime);
+  const serializedValue = serializeSurfaceCalendarDateTime(state.value);
+
+  return (
+    <>
+      {name ? <input type="hidden" name={name} value={serializedValue} /> : null}
+      <HeroDatePicker
+        {...props}
+        granularity="minute"
+        hideTimeZone={hideTimeZone}
+        hourCycle={hourCycle}
+        selectorIcon={selectorIcon}
+        value={state.value}
+        classNames={mergeSlotClasses(surfaceDatePickerClassNames, classNames)}
+        onChange={(nextValue: unknown) => {
+          if (!state.isControlled) {
+            state.setUncontrolledValue(nextValue as SurfaceDateTimeValue);
+          }
+
+          onValueChange?.(serializeSurfaceCalendarDateTime(nextValue as SurfaceDateTimeValue));
+        }}
+      />
+    </>
   );
 }

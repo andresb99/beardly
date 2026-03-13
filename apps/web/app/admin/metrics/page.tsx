@@ -2,8 +2,8 @@
 import { formatCurrency } from '@navaja/shared';
 import { Button } from '@heroui/button';
 import { Card, CardBody } from '@heroui/card';
-import { Input } from '@heroui/input';
 import { MetricsApexOverview } from '@/components/admin/metrics-apex-overview';
+import { SurfaceDatePicker } from '@/components/heroui/surface-field';
 import { requireAdmin } from '@/lib/auth';
 import { getDashboardMetricsForDateRange, getStaffPerformanceDashboard } from '@/lib/metrics';
 import { buildAdminHref } from '@/lib/workspace-routes';
@@ -140,10 +140,10 @@ function getSparkPalette(tone: SparkTone) {
   }
 
   return {
-    stroke: '#0ea5e9',
-    dot: '#38bdf8',
-    gradientFrom: 'rgba(14,165,233,0.42)',
-    gradientTo: 'rgba(14,165,233,0.02)',
+    stroke: '#8b5cf6',
+    dot: '#c4b5fd',
+    gradientFrom: 'rgba(139,92,246,0.42)',
+    gradientTo: 'rgba(139,92,246,0.02)',
   };
 }
 
@@ -441,27 +441,19 @@ export default async function MetricsPage({ searchParams }: MetricsPageProps) {
                 </p>
               </div>
 
-              <Input
+              <SurfaceDatePicker
                 id="from"
                 name="from"
-                type="date"
                 label="Desde"
                 labelPlacement="inside"
                 defaultValue={dashboard.dateRange.fromDate}
-                classNames={{
-                  input: 'temporal-placeholder-hidden',
-                }}
               />
-              <Input
+              <SurfaceDatePicker
                 id="to"
                 name="to"
-                type="date"
                 label="Hasta"
                 labelPlacement="inside"
                 defaultValue={dashboard.dateRange.toDate}
-                classNames={{
-                  input: 'temporal-placeholder-hidden',
-                }}
               />
               <div className="sm:col-span-2 sm:flex sm:justify-end">
                 <Button

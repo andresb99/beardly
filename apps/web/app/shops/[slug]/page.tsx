@@ -64,6 +64,7 @@ export default async function ShopProfilePage({ params }: ShopProfilePageProps) 
   ]);
 
   const staffById = new Map((staff || []).map((item) => [String(item.id), String(item.name)]));
+  const canBook = Boolean(services?.length) && Boolean(staff?.length);
 
   return (
     <section className="space-y-6">
@@ -120,12 +121,18 @@ export default async function ShopProfilePage({ params }: ShopProfilePageProps) 
       </Container>
 
       <div className="flex flex-wrap gap-3">
-        <Link
-          href={buildTenantPublicHref(shop.slug, routeContext.mode, 'book')}
-          className="action-primary px-5 py-2 text-sm font-semibold"
-        >
-          Reservar cita
-        </Link>
+        {canBook ? (
+          <Link
+            href={buildTenantPublicHref(shop.slug, routeContext.mode, 'book')}
+            className="action-primary px-5 py-2 text-sm font-semibold"
+          >
+            Reservar cita
+          </Link>
+        ) : (
+          <span className="action-secondary cursor-not-allowed px-5 py-2 text-sm font-semibold opacity-75">
+            Agenda no disponible
+          </span>
+        )}
         <Link
           href={buildTenantPublicHref(shop.slug, routeContext.mode, 'jobs')}
           className="action-secondary px-5 py-2 text-sm font-semibold"

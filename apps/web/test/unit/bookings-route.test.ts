@@ -207,4 +207,24 @@ describe('bookings route', () => {
       accessToken: 'TEST-merchant-token',
     });
   });
+
+  it('returns a customer-facing message when online payment is unavailable for the shop', async () => {
+    getShopMercadoPagoCredentialsMock.mockResolvedValueOnce(null);
+
+    const request = new Request('https://beardly.vercel.app/api/bookings', {
+      method: 'POST',
+      body: JSON.stringify({}),
+      headers: {
+        'content-type': 'application/json',
+      },
+    });
+
+    const response = await POST(request as never);
+
+    expect(response.status).toBe(400);
+    await expect(response.text()).resolves.toBe(
+      'El pago online no esta disponible en este local ahora mismo. Puedes reservar pagando en el local.',
+    );
+    expect(createMercadoPagoCheckoutPreferenceMock).not.toHaveBeenCalled();
+  });
 });

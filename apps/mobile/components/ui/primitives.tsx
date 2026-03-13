@@ -68,8 +68,8 @@ function getSheenGradient(
 
 function getCoolFade(colors: ReturnType<typeof useNavajaTheme>['colors']) {
   return colors.mode === 'dark'
-    ? (['rgba(56,189,248,0.08)', 'rgba(56,189,248,0.02)', 'rgba(56,189,248,0)'] as const)
-    : (['rgba(56,189,248,0.09)', 'rgba(56,189,248,0.03)', 'rgba(56,189,248,0)'] as const);
+    ? (['rgba(139,92,246,0.08)', 'rgba(139,92,246,0.02)', 'rgba(139,92,246,0)'] as const)
+    : (['rgba(139,92,246,0.09)', 'rgba(139,92,246,0.03)', 'rgba(139,92,246,0)'] as const);
 }
 
 function getWarmFade(colors: ReturnType<typeof useNavajaTheme>['colors']) {
@@ -303,7 +303,7 @@ export function SurfaceCard({
   const { colors } = useNavajaTheme();
   const overlayColors = active ? getActiveGradient(colors) : getGlassTint(colors);
   const borderColor = active ? colors.borderActive : colors.border;
-  const beamAccent = active ? colors.borderActive : 'rgba(56,189,248,0.16)';
+  const beamAccent = active ? colors.borderActive : 'rgba(139,92,246,0.16)';
 
   const inner = (
     <>

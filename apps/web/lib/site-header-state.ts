@@ -17,6 +17,9 @@ export interface SiteHeaderInitialState {
   isPlatformAdmin: boolean;
   publicTenantSlug: string | null;
   publicTenantMode: 'path' | 'custom_domain' | 'platform_subdomain';
+  selectedWorkspaceId?: string | null;
+  selectedWorkspaceSlug?: string | null;
+  selectedWorkspaceName?: string | null;
 }
 
 export const DEFAULT_SITE_HEADER_STATE: SiteHeaderInitialState = {
@@ -30,4 +33,7 @@ export const DEFAULT_SITE_HEADER_STATE: SiteHeaderInitialState = {
   isPlatformAdmin: false,
   publicTenantSlug: null,
   publicTenantMode: 'path',
+  selectedWorkspaceId: null,
+  selectedWorkspaceSlug: null,
+  selectedWorkspaceName: null,
 };

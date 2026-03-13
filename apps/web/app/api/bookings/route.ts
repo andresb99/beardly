@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
   const [{ data: shop }, { data: service }, { data: staffMember }] = await Promise.all([
     supabase
       .from('shops')
-      .select('id, status')
+      .select('id, status, name, slug, timezone')
       .eq('id', parsed.data.shop_id)
       .eq('status', 'active')
       .maybeSingle(),
@@ -95,6 +95,11 @@ export async function POST(request: NextRequest) {
     return new NextResponse('El barbero seleccionado no esta disponible.', { status: 400 });
   }
 
+  const shopName = String((shop as { name?: string | null } | null)?.name || 'Barberia').trim();
+  const shopSlug = String((shop as { slug?: string | null } | null)?.slug || '').trim();
+  const shopTimezone = String(
+    (shop as { timezone?: string | null } | null)?.timezone || 'America/Montevideo',
+  ).trim();
   const amountCents = Number((service as { price_cents?: number } | null)?.price_cents || 0);
   const requiresOnlinePayment = !parsed.data.pay_in_store && amountCents > 0;
   const eventSource = requestedSourceChannel === 'MOBILE' ? 'mobile' : 'web';
@@ -132,18 +137,16 @@ export async function POST(request: NextRequest) {
 
     try {
       shopPaymentAccount = await getShopMercadoPagoCredentials({ shopId: parsed.data.shop_id });
-    } catch (accountError) {
+    } catch {
       return new NextResponse(
-        accountError instanceof Error
-          ? accountError.message
-          : 'No se pudo validar la cuenta de cobro online de la barberia.',
+        'El pago online no esta disponible en este local ahora mismo. Puedes reservar pagando en el local.',
         { status: 400 },
       );
     }
 
     if (!shopPaymentAccount) {
       return new NextResponse(
-        'La barberia no tiene Mercado Pago conectado. Activa una cuenta de cobro online desde Administracion > Configuracion.',
+        'El pago online no esta disponible en este local ahora mismo. Puedes reservar pagando en el local.',
         { status: 400 },
       );
     }
@@ -193,6 +196,9 @@ export async function POST(request: NextRequest) {
       service: serviceName,
       staff: staffName,
       start: parsed.data.start_at,
+      shop: shopSlug,
+      shop_name: shopName,
+      timezone: shopTimezone,
     });
 
     try {

@@ -108,7 +108,7 @@ export default async function SubscriptionPage({ searchParams }: SubscriptionPag
                 <div className="flex items-start justify-between gap-2">
                   <p className="text-lg font-semibold text-ink dark:text-slate-100">{plan.name}</p>
                   {plan.badge ? (
-                    <span className="rounded-full border border-sky-300/45 bg-sky-400/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-sky-700 dark:text-sky-200">
+                    <span className="rounded-full border border-violet-300/45 bg-violet-400/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-violet-700 dark:text-violet-200">
                       {plan.badge}
                     </span>
                   ) : null}

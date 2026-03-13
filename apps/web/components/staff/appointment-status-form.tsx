@@ -16,6 +16,12 @@ export function StaffAppointmentStatusForm({
   status,
   shopId,
 }: StaffAppointmentStatusFormProps) {
+  const normalizedStatus = status.trim().toLowerCase();
+  const defaultSelectedKeys =
+    normalizedStatus === 'done' || normalizedStatus === 'no_show' || normalizedStatus === 'cancelled'
+      ? [normalizedStatus]
+      : [];
+
   return (
     <form
       action={updateOwnAppointmentStatusAction}
@@ -28,7 +34,8 @@ export function StaffAppointmentStatusForm({
         aria-label="Estado de la cita"
         label="Estado"
         labelPlacement="inside"
-        defaultSelectedKeys={[status]}
+        placeholder="Resultado"
+        defaultSelectedKeys={defaultSelectedKeys}
         className="w-48"
       >
         <SelectItem key="done">Realizada</SelectItem>
@@ -36,7 +43,7 @@ export function StaffAppointmentStatusForm({
         <SelectItem key="cancelled">Cancelada</SelectItem>
       </AdminSelect>
       <Button type="submit" variant="flat" color="default">
-        Guardar estado
+        Actualizar
       </Button>
     </form>
   );

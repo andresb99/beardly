@@ -40,7 +40,7 @@ export const AdminModelsCards = memo(function AdminModelsCards({ rows, className
           key={row.id}
           className={`rounded-[1.6rem] border bg-white/80 p-4 shadow-[0_20px_40px_-34px_rgba(15,23,42,0.45)] dark:bg-white/[0.03] ${
             row.isSelected
-              ? 'border-sky-400/60 dark:border-sky-400/40'
+              ? 'border-violet-400/60 dark:border-violet-400/40'
               : 'border-slate-900/10 dark:border-white/10'
           }`}
         >

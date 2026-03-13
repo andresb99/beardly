@@ -1,6 +1,10 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { BookingFlow } from '@/components/public/booking-flow';
+import { getPublicTenantRouteContext } from '@/lib/public-tenant-context';
+import { buildTenantPublicHref } from '@/lib/shop-links';
+import { getShopMercadoPagoAccountSummary } from '@/lib/shop-payment-accounts.server';
 import { getMarketplaceShopBySlug } from '@/lib/shops';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
@@ -31,6 +35,7 @@ export async function generateMetadata({ params }: ShopBookPageProps): Promise<M
 export default async function ShopBookPage({ params }: ShopBookPageProps) {
   const { slug } = await params;
   const shop = await getMarketplaceShopBySlug(slug);
+  const routeContext = await getPublicTenantRouteContext();
 
   if (!shop) {
     notFound();
@@ -88,7 +93,7 @@ export default async function ShopBookPage({ params }: ShopBookPageProps) {
 
   const supabase = createSupabaseAdminClient();
 
-  const [{ data: services }, { data: staff }] = await Promise.all([
+  const [{ data: services }, { data: staff }, paymentAccount] = await Promise.all([
     supabase
       .from('services')
       .select('id, name, price_cents, duration_minutes')
@@ -101,7 +106,97 @@ export default async function ShopBookPage({ params }: ShopBookPageProps) {
       .eq('shop_id', shop.id)
       .eq('is_active', true)
       .order('name'),
+    getShopMercadoPagoAccountSummary(shop.id),
   ]);
+
+  const hasActiveServices = Boolean(services?.length);
+  const hasActiveStaff = Boolean(staff?.length);
+  const supportsOnlinePayment = Boolean(
+    paymentAccount?.isActive && paymentAccount.status === 'connected',
+  );
+  const profileHref = buildTenantPublicHref(shop.slug, routeContext.mode);
+
+  if (!hasActiveServices || !hasActiveStaff) {
+    const emptyTitle = !hasActiveServices
+      ? 'Esta barberia todavia no tiene servicios listos para reservar'
+      : 'Esta barberia todavia no tiene staff disponible para agenda online';
+    const emptyDescription = !hasActiveServices
+      ? 'El local ya tiene perfil publico, pero aun no publico servicios activos en la agenda.'
+      : 'El local ya publico servicios, pero todavia no asigno staff activo para recibir reservas.';
+
+    return (
+      <section className="space-y-6">
+        <Container variant="hero" className="px-6 py-7 md:px-8 md:py-9">
+          <div className="relative z-10 grid gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-end">
+            <div>
+              <p className="hero-eyebrow">Reservas online</p>
+              <h1 className="mt-3 font-[family-name:var(--font-heading)] text-3xl font-bold text-ink md:text-[2.4rem] dark:text-slate-100">
+                Agenda en {shop.name}
+              </h1>
+              <p className="mt-3 max-w-2xl text-sm text-slate/80 dark:text-slate-300">
+                {emptyDescription}
+              </p>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="stat-tile">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate/60 dark:text-slate-400">
+                  Servicios
+                </p>
+                <p className="mt-2 text-2xl font-semibold text-ink dark:text-slate-100">
+                  {(services || []).length}
+                </p>
+              </div>
+              <div className="stat-tile">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate/60 dark:text-slate-400">
+                  Staff
+                </p>
+                <p className="mt-2 text-2xl font-semibold text-ink dark:text-slate-100">
+                  {(staff || []).length}
+                </p>
+              </div>
+              <div className="stat-tile">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate/60 dark:text-slate-400">
+                  Zona horaria
+                </p>
+                <p className="mt-2 text-sm font-semibold text-ink dark:text-slate-100">
+                  {shop.timezone}
+                </p>
+              </div>
+            </div>
+          </div>
+        </Container>
+
+        <div className="soft-panel rounded-[2rem] p-6">
+          <h2 className="font-[family-name:var(--font-heading)] text-2xl font-semibold text-ink dark:text-slate-100">
+            {emptyTitle}
+          </h2>
+          <p className="mt-3 max-w-2xl text-sm text-slate/80 dark:text-slate-300">
+            Para evitar una reserva frustrada, ocultamos la agenda hasta que el local termine esa
+            configuracion.
+          </p>
+
+          <div className="mt-5 flex flex-wrap gap-3">
+            <Link href={profileHref} className="action-primary px-5 py-2 text-sm font-semibold">
+              Volver al perfil
+            </Link>
+            {shop.phone ? (
+              <a
+                href={`tel:${shop.phone}`}
+                className="action-secondary px-5 py-2 text-sm font-semibold"
+              >
+                Llamar al local
+              </a>
+            ) : (
+              <Link href="/shops" className="action-secondary px-5 py-2 text-sm font-semibold">
+                Ver otras barberias
+              </Link>
+            )}
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="space-y-6">
@@ -149,10 +244,14 @@ export default async function ShopBookPage({ params }: ShopBookPageProps) {
 
       <BookingFlow
         shopId={shop.id}
+        shopSlug={shop.slug}
+        shopName={shop.name}
+        shopTimezone={shop.timezone}
         initialCustomerEmail={user?.email || ''}
         initialCustomerName={initialCustomerName}
         initialCustomerPhone={initialCustomerPhone}
         preferredPaymentMethod={preferredPaymentMethod}
+        supportsOnlinePayment={supportsOnlinePayment}
         cancellationNoticeHours={shop.bookingCancellationNoticeHours}
         staffCancellationRefundMode={shop.bookingStaffCancellationRefundMode}
         cancellationPolicyText={shop.bookingCancellationPolicyText}

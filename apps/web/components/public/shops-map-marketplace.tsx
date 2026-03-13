@@ -158,7 +158,7 @@ function getUserMarkerIcon(google: GoogleMapsLibrary) {
   return {
     path: google.SymbolPath.CIRCLE,
     scale: 7,
-    fillColor: '#38bdf8',
+    fillColor: '#c4b5fd',
     fillOpacity: 1,
     strokeColor: '#e0f2fe',
     strokeOpacity: 1,
@@ -204,10 +204,10 @@ function getShopReviewSummary(shop: MarketplaceShop) {
 
 function getFallbackCoverStyle(shop: MarketplaceShop) {
   const palettes = [
-    ['rgba(14, 165, 233, 0.92)', 'rgba(15, 23, 42, 0.96)'],
-    ['rgba(244, 63, 94, 0.88)', 'rgba(30, 41, 59, 0.96)'],
-    ['rgba(236, 72, 153, 0.86)', 'rgba(17, 24, 39, 0.96)'],
-    ['rgba(234, 176, 72, 0.9)', 'rgba(22, 28, 45, 0.96)'],
+    ['rgba(139, 92, 246, 0.92)', 'rgba(15, 23, 42, 0.96)'],
+    ['rgba(124, 58, 237, 0.88)', 'rgba(30, 41, 59, 0.96)'],
+    ['rgba(217, 70, 239, 0.86)', 'rgba(17, 24, 39, 0.96)'],
+    ['rgba(168, 85, 247, 0.9)', 'rgba(22, 28, 45, 0.96)'],
   ] as const;
   const paletteIndex = shop.name.length % palettes.length;
   const palette = palettes[paletteIndex] || palettes[0];
@@ -401,7 +401,7 @@ const MarketplaceShopCard = memo(
         isFooterBlurred
         className={cn(
           'data-card no-hover-motion h-[22rem] cursor-pointer overflow-hidden rounded-[1.9rem] border-0 p-0 shadow-none',
-          isActive ? 'ring-2 ring-sky-400/35 dark:ring-sky-300/25' : 'ring-1 ring-transparent',
+          isActive ? 'ring-2 ring-violet-400/35 dark:ring-violet-300/25' : 'ring-1 ring-transparent',
         )}
         data-active={String(isActive)}
         onClick={() => onFocus(shop)}
@@ -2424,7 +2424,7 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
 
                   <div className="flex flex-wrap gap-2 text-[11px] font-semibold text-slate/80 dark:text-slate-300">
                     {mapPreviewDistanceKm !== null ? (
-                      <span className="rounded-full bg-sky-500/[0.12] px-2.5 py-1 text-sky-700 dark:bg-sky-400/[0.12] dark:text-sky-200">
+                      <span className="rounded-full bg-violet-500/[0.12] px-2.5 py-1 text-violet-700 dark:bg-violet-400/[0.12] dark:text-violet-200">
                         {mapPreviewDistanceKm.toFixed(1)} km
                       </span>
                     ) : null}

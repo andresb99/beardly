@@ -35,7 +35,7 @@ interface AdminServicesWorkspaceProps {
 
 const serviceInputClassNames = {
   inputWrapper:
-    'border border-white/65 bg-white/72 shadow-none transition data-[hover=true]:border-white/75 group-data-[focus=true]:border-sky-400 dark:border-white/10 dark:bg-white/[0.04]',
+    'border border-white/65 bg-white/72 shadow-none transition data-[hover=true]:border-white/75 group-data-[focus=true]:border-violet-400 dark:border-white/10 dark:bg-white/[0.04]',
   input: 'text-sm text-ink dark:text-slate-100',
 };
 

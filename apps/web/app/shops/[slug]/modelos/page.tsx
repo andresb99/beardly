@@ -136,7 +136,7 @@ export default async function ShopModelosPage({ params }: ShopModelosPageProps) 
                   {modelCategories.map((category) => (
                     <span
                       key={`${call.session_id}-${category}`}
-                      className="meta-chip border-cyan-400/24 bg-cyan-500/10 text-cyan-700 dark:text-cyan-200"
+                      className="meta-chip border-violet-400/24 bg-violet-500/10 text-violet-700 dark:text-violet-200"
                     >
                       {category}
                     </span>

@@ -500,7 +500,7 @@ export function LoginForm({
     <div className="grid gap-5 lg:grid-cols-[0.92fr_1.08fr] xl:gap-6">
       <aside className="relative overflow-hidden rounded-[2rem] border border-white/12 bg-[#05070f] p-6 text-white shadow-[0_36px_60px_-42px_rgba(2,6,23,0.9)] dark:border-white/10 dark:bg-[linear-gradient(145deg,rgba(26,29,37,0.96),rgba(13,15,20,0.94),rgba(19,24,33,0.96))] dark:text-white dark:shadow-[0_36px_60px_-42px_rgba(0,0,0,0.78)] md:p-8">
         <div className="pointer-events-none absolute inset-0">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_8%_0%,rgba(56,189,248,0.2),transparent_36%),radial-gradient(circle_at_100%_100%,rgba(244,63,94,0.16),transparent_38%)] dark:bg-[radial-gradient(circle_at_10%_0%,rgba(86,124,178,0.18),transparent_38%),radial-gradient(circle_at_100%_100%,rgba(140,38,74,0.14),transparent_40%)]" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_8%_0%,rgba(139,92,246,0.2),transparent_36%),radial-gradient(circle_at_100%_100%,rgba(217,70,239,0.16),transparent_38%)] dark:bg-[radial-gradient(circle_at_10%_0%,rgba(124,58,237,0.18),transparent_38%),radial-gradient(circle_at_100%_100%,rgba(168,85,247,0.14),transparent_40%)]" />
           <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.04),transparent_42%,rgba(255,255,255,0.02)_75%,transparent)] dark:bg-[linear-gradient(135deg,rgba(255,255,255,0.05),transparent_42%,rgba(255,255,255,0.025)_75%,transparent)]" />
         </div>
         <div className="relative z-10 flex h-full flex-col">
@@ -580,7 +580,7 @@ export function LoginForm({
                   onPress={() => handleSelectPlanId(plan.id)}
                   className={`rounded-[1rem] border px-3 py-2 text-left transition ${isLastOddMobileCard ? 'col-span-2 sm:col-span-1' : ''} ${
                     plan.isSelected
-                      ? 'border-sky-300/45 bg-sky-400/15 shadow-[0_16px_26px_-20px_rgba(56,189,248,0.4)] dark:border-white/14 dark:bg-[linear-gradient(135deg,rgba(86,124,178,0.12),rgba(140,38,74,0.09))] dark:shadow-[0_16px_26px_-20px_rgba(0,0,0,0.54)]'
+                      ? 'border-violet-300/45 bg-violet-400/15 shadow-[0_16px_26px_-20px_rgba(139,92,246,0.4)] dark:border-white/14 dark:bg-[linear-gradient(135deg,rgba(124,58,237,0.12),rgba(168,85,247,0.09))] dark:shadow-[0_16px_26px_-20px_rgba(0,0,0,0.54)]'
                       : 'border-white/12 bg-white/[0.03] hover:bg-white/[0.07] dark:border-white/12 dark:bg-white/[0.03] dark:hover:bg-white/[0.07]'
                   }`}
                 >
@@ -601,7 +601,7 @@ export function LoginForm({
             })}
           </div>
 
-          <article className="mt-3 rounded-[1.35rem] border border-sky-300/28 bg-[linear-gradient(145deg,rgba(8,14,28,0.94),rgba(8,17,37,0.88))] p-4 text-white shadow-[0_24px_34px_-24px_rgba(56,189,248,0.42)] dark:border-white/10 dark:bg-[linear-gradient(145deg,rgba(28,31,39,0.95),rgba(17,19,25,0.92),rgba(20,25,34,0.94))] dark:text-white dark:shadow-[0_24px_34px_-24px_rgba(0,0,0,0.56)]">
+          <article className="mt-3 rounded-[1.35rem] border border-violet-300/28 bg-[linear-gradient(145deg,rgba(17,11,34,0.94),rgba(27,15,52,0.88))] p-4 text-white shadow-[0_24px_34px_-24px_rgba(139,92,246,0.42)] dark:border-white/10 dark:bg-[linear-gradient(145deg,rgba(28,20,46,0.95),rgba(17,12,30,0.92),rgba(23,16,38,0.94))] dark:text-white dark:shadow-[0_24px_34px_-24px_rgba(0,0,0,0.56)]">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-2xl font-semibold leading-tight text-white dark:text-white">
@@ -612,7 +612,7 @@ export function LoginForm({
                 </p>
               </div>
               {selectedPlan?.badge ? (
-                <span className="inline-flex shrink-0 rounded-full border border-sky-300/45 bg-sky-400/18 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-sky-100 dark:border-white/10 dark:bg-white/[0.08] dark:text-white/88">
+                <span className="inline-flex shrink-0 rounded-full border border-violet-300/45 bg-violet-400/18 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-violet-100 dark:border-white/10 dark:bg-white/[0.08] dark:text-white/88">
                   {selectedPlan.badge}
                 </span>
               ) : null}
@@ -652,7 +652,7 @@ export function LoginForm({
             <Button
               type="button"
               variant="light"
-              className="mt-4 w-full rounded-xl border border-sky-300/45 bg-sky-400/18 px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-sky-100 transition hover:bg-sky-400/24 dark:border-white/12 dark:bg-white/[0.08] dark:text-white dark:hover:bg-white/[0.12]"
+              className="mt-4 w-full rounded-xl border border-violet-300/45 bg-violet-400/18 px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-violet-100 transition hover:bg-violet-400/24 dark:border-white/12 dark:bg-white/[0.08] dark:text-white dark:hover:bg-white/[0.12]"
               onPress={handleSelectPlanCta}
             >
               Elegir {selectedPlan?.name}

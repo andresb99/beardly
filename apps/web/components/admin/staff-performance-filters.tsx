@@ -1,13 +1,12 @@
 import Link from 'next/link';
 import { Button } from '@heroui/button';
-import { Input } from '@heroui/input';
 import type {
   BookingMetricsChannelView,
   ResolvedMetricsRange,
   StaffPerformanceMetric,
 } from '@/lib/metrics';
 import { buildAdminHref } from '@/lib/workspace-routes';
-import { SurfaceCheckbox } from '@/components/heroui/surface-field';
+import { SurfaceCheckbox, SurfaceDatePicker } from '@/components/heroui/surface-field';
 
 interface StaffPerformanceFiltersProps {
   shopSlug: string;
@@ -52,7 +51,7 @@ function buildChannelHref(
 
 function getRangePillClassName(isActive: boolean) {
   if (isActive) {
-    return 'border-white/70 bg-white/78 text-ink shadow-[0_14px_24px_-22px_rgba(56,189,248,0.34)] dark:border-transparent dark:bg-white/[0.06] dark:text-white';
+    return 'border-white/70 bg-white/78 text-ink shadow-[0_14px_24px_-22px_rgba(139,92,246,0.34)] dark:border-transparent dark:bg-white/[0.06] dark:text-white';
   }
 
   return 'border-white/55 bg-white/40 text-slate/80 hover:bg-white/58 dark:border-transparent dark:bg-white/[0.03] dark:text-slate-300 dark:hover:bg-white/[0.05]';
@@ -138,30 +137,22 @@ export function StaffPerformanceFilters({
           <input type="hidden" name="channel" value={selectedChannel} />
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_1fr]">
             <div className="data-card rounded-[1.4rem] p-3">
-              <Input
+              <SurfaceDatePicker
                 id="from"
                 name="from"
-                type="date"
                 label="Desde"
                 labelPlacement="inside"
                 defaultValue={dateRange.fromDate}
-                classNames={{
-                  input: 'temporal-placeholder-hidden',
-                }}
               />
             </div>
 
             <div className="data-card rounded-[1.4rem] p-3">
-              <Input
+              <SurfaceDatePicker
                 id="to"
                 name="to"
-                type="date"
                 label="Hasta"
                 labelPlacement="inside"
                 defaultValue={dateRange.toDate}
-                classNames={{
-                  input: 'temporal-placeholder-hidden',
-                }}
               />
             </div>
           </div>
@@ -194,9 +185,9 @@ export function StaffPerformanceFilters({
                     classNames={{
                       base: `group max-w-full cursor-pointer rounded-2xl border px-3 py-3 transition ${
                         isSelected
-                          ? 'border-white/75 bg-white/76 shadow-[0_14px_24px_-22px_rgba(56,189,248,0.34)] dark:border-transparent dark:bg-white/[0.06]'
+                          ? 'border-white/75 bg-white/76 shadow-[0_14px_24px_-22px_rgba(139,92,246,0.34)] dark:border-transparent dark:bg-white/[0.06]'
                           : 'border-white/55 bg-white/42 hover:bg-white/58 dark:border-transparent dark:bg-white/[0.03] dark:hover:bg-white/[0.045]'
-                      } group-data-[selected=true]:border-white/75 group-data-[selected=true]:bg-white/76 group-data-[selected=true]:shadow-[0_14px_24px_-22px_rgba(56,189,248,0.34)] dark:group-data-[selected=true]:border-transparent dark:group-data-[selected=true]:bg-white/[0.06]`,
+                      } group-data-[selected=true]:border-white/75 group-data-[selected=true]:bg-white/76 group-data-[selected=true]:shadow-[0_14px_24px_-22px_rgba(139,92,246,0.34)] dark:group-data-[selected=true]:border-transparent dark:group-data-[selected=true]:bg-white/[0.06]`,
                       wrapper: 'sr-only absolute opacity-0',
                       label: 'w-full',
                     }}

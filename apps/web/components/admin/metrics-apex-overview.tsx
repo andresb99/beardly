@@ -57,13 +57,13 @@ const AREA_VIEW_OPTIONS_STAFF_FOCUS: Array<{ key: AreaViewKey; label: string }> 
 
 const STATUS_DEFINITIONS: Array<{ key: string; label: string; color: string }> = [
   { key: 'done', label: 'Realizadas', color: '#22c55e' },
-  { key: 'confirmed', label: 'Confirmadas', color: '#0ea5e9' },
+  { key: 'confirmed', label: 'Confirmadas', color: '#8b5cf6' },
   { key: 'pending', label: 'Pendientes', color: '#6366f1' },
   { key: 'cancelled', label: 'Canceladas', color: '#f43f5e' },
   { key: 'no_show', label: 'No show', color: '#f59e0b' },
 ];
 
-const CHANNEL_COLORS = ['#0ea5e9', '#22c55e', '#f59e0b', '#f43f5e', '#6366f1', '#14b8a6'];
+const CHANNEL_COLORS = ['#8b5cf6', '#22c55e', '#f59e0b', '#f43f5e', '#6366f1', '#d946ef'];
 const COMPACT_CURRENCY_FORMATTER = new Intl.NumberFormat('es-UY', {
   style: 'currency',
   currency: 'UYU',
@@ -90,7 +90,7 @@ function sanitizePositiveNumber(value: unknown) {
 
 function getPillClassName(isActive: boolean) {
   if (isActive) {
-    return 'border-white/70 bg-white/78 text-ink shadow-[0_14px_24px_-22px_rgba(56,189,248,0.34)] dark:border-transparent dark:bg-white/[0.06] dark:text-white';
+    return 'border-white/70 bg-white/78 text-ink shadow-[0_14px_24px_-22px_rgba(139,92,246,0.34)] dark:border-transparent dark:bg-white/[0.06] dark:text-white';
   }
 
   return 'border-white/55 bg-white/40 text-slate/80 hover:bg-white/58 dark:border-transparent dark:bg-white/[0.03] dark:text-slate-300 dark:hover:bg-white/[0.05]';
@@ -289,7 +289,7 @@ export function MetricsApexOverview({
         categories: dailyAreaSeries.totalBookings.categories,
         seriesName: 'Reservas',
         data: dailyAreaSeries.totalBookings.data,
-        color: '#38bdf8',
+        color: '#c4b5fd',
         usingMock: dailyAreaSeries.totalBookings.usingMock,
         valueFormatter: (value: number) => `${Math.round(value)} reservas`,
         axisFormatter: (value: number) => `${Math.round(value)}`,
@@ -304,7 +304,7 @@ export function MetricsApexOverview({
         categories: dailyAreaSeries.onlineBookings.categories,
         seriesName: 'Solo web',
         data: dailyAreaSeries.onlineBookings.data,
-        color: '#0ea5e9',
+        color: '#8b5cf6',
         usingMock: dailyAreaSeries.onlineBookings.usingMock,
         valueFormatter: (value: number) => `${Math.round(value)} reservas`,
         axisFormatter: (value: number) => `${Math.round(value)}`,
@@ -546,7 +546,7 @@ export function MetricsApexOverview({
     const real = metrics.channelMix
       .map((item, index) => ({
         label: String(item.label || '').trim() || `Canal ${index + 1}`,
-        color: CHANNEL_COLORS[index % CHANNEL_COLORS.length] || '#0ea5e9',
+        color: CHANNEL_COLORS[index % CHANNEL_COLORS.length] || '#8b5cf6',
         value: sanitizePositiveNumber(item.appointments),
       }))
       .filter((item) => item.value > 0);

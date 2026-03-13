@@ -23,7 +23,11 @@ import {
 import { requireAdmin } from '@/lib/auth';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { Container } from '@/components/heroui/container';
-import { SurfaceInput, SurfaceTextarea } from '@/components/heroui/surface-field';
+import {
+  SurfaceDateTimePicker,
+  SurfaceInput,
+  SurfaceTextarea,
+} from '@/components/heroui/surface-field';
 
 interface AppointmentsPageProps {
   searchParams: Promise<{
@@ -761,9 +765,8 @@ export default async function AppointmentsPage({ searchParams }: AppointmentsPag
                   ]}
                 />
 
-                <SurfaceInput
+                <SurfaceDateTimePicker
                   name="start_at"
-                  type="datetime-local"
                   label="Inicio"
                   labelPlacement="inside"
                   defaultValue={defaultManualStartAt}

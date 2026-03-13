@@ -2,6 +2,8 @@ import type { Metadata } from 'next';
 import { BadgeCheck, CircleX, Clock3 } from 'lucide-react';
 import { Button } from '@heroui/button';
 import { resolveBookingSuccessState, type BookingSuccessState } from '@/lib/booking-success-state';
+import { getPublicTenantRouteContext } from '@/lib/public-tenant-context';
+import { buildTenantPublicHref } from '@/lib/shop-links';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import { buildSitePageMetadata } from '@/lib/site-metadata';
 import { Container } from '@/components/heroui/container';
@@ -14,6 +16,9 @@ interface SuccessPageProps {
     service?: string;
     payment_intent?: string;
     payment_status?: string;
+    shop?: string;
+    shop_name?: string;
+    timezone?: string;
   }>;
 }
 
@@ -33,6 +38,36 @@ interface PaymentIntentRow {
   status: string;
   provider_payment_id: string | null;
   payload: Record<string, unknown> | null;
+}
+
+function formatAppointmentStartLabel(
+  value: string | null | undefined,
+  timezone: string | null | undefined,
+) {
+  const normalizedValue = String(value || '').trim();
+  if (!normalizedValue) {
+    return 'A confirmar';
+  }
+
+  const date = new Date(normalizedValue);
+  if (Number.isNaN(date.getTime())) {
+    return normalizedValue;
+  }
+
+  const normalizedTimezone = String(timezone || '').trim();
+
+  try {
+    return new Intl.DateTimeFormat('es-UY', {
+      dateStyle: 'long',
+      timeStyle: 'short',
+      timeZone: normalizedTimezone || 'UTC',
+    }).format(date);
+  } catch {
+    return new Intl.DateTimeFormat('es-UY', {
+      dateStyle: 'long',
+      timeStyle: 'short',
+    }).format(date);
+  }
 }
 
 async function resolveBookingResult(params: Awaited<SuccessPageProps['searchParams']>) {
@@ -83,14 +118,22 @@ async function resolveBookingResult(params: Awaited<SuccessPageProps['searchPara
 
 export default async function BookingSuccessPage({ searchParams }: SuccessPageProps) {
   const params = await searchParams;
+  const routeContext = await getPublicTenantRouteContext();
   const result = await resolveBookingResult(params);
+  const shopSlug = String(params.shop || '').trim();
+  const shopName = String(params.shop_name || '').trim() || null;
+  const retryHref = shopSlug ? buildTenantPublicHref(shopSlug, routeContext.mode, 'book') : '/book';
+  const profileHref = shopSlug ? buildTenantPublicHref(shopSlug, routeContext.mode) : '/shops';
+  const startLabel = formatAppointmentStartLabel(params.start, params.timezone);
 
   const eyebrow =
     result.paymentState === 'approved'
       ? 'Pago aprobado'
       : result.paymentState === 'pending'
         ? 'Pago en revision'
-        : 'Pago no completado';
+        : result.paymentState === 'incomplete'
+          ? 'Reserva interrumpida'
+          : 'Pago no completado';
   const title =
     result.paymentState === 'approved'
       ? result.appointmentId
@@ -98,7 +141,9 @@ export default async function BookingSuccessPage({ searchParams }: SuccessPagePr
         : 'Pago aprobado'
       : result.paymentState === 'pending'
         ? 'Reserva aun no confirmada'
-        : 'No reservamos tu turno';
+        : result.paymentState === 'incomplete'
+          ? 'No terminaste la reserva'
+          : 'No reservamos tu turno';
   const description =
     result.paymentState === 'approved'
       ? result.appointmentId
@@ -106,13 +151,17 @@ export default async function BookingSuccessPage({ searchParams }: SuccessPagePr
         : 'El pago se aprobo. Estamos creando tu cita y la veras reflejada en breve.'
       : result.paymentState === 'pending'
         ? 'Mercado Pago registro el intento, pero tu turno solo queda reservado cuando el cobro figure como aprobado.'
-        : 'No detectamos un pago completado. Mientras no finalices el pago, el turno no queda reservado.';
+        : result.paymentState === 'incomplete'
+          ? 'No recibimos una confirmacion de pago ni una cita creada. Si cerraste el checkout antes de terminar, puedes retomarlo desde la agenda del local.'
+          : 'No detectamos un pago completado. Mientras no finalices el pago, el turno no queda reservado.';
   const eyebrowClassName =
     result.paymentState === 'approved'
       ? 'hero-eyebrow border-emerald-300/70 bg-emerald-100/80 text-emerald-900 dark:border-emerald-900/70 dark:bg-emerald-950/40 dark:text-emerald-200'
       : result.paymentState === 'pending'
         ? 'hero-eyebrow border-amber-300/70 bg-amber-100/80 text-amber-900 dark:border-amber-900/70 dark:bg-amber-950/40 dark:text-amber-200'
-        : 'hero-eyebrow border-rose-300/70 bg-rose-100/80 text-rose-900 dark:border-rose-900/70 dark:bg-rose-950/40 dark:text-rose-200';
+        : result.paymentState === 'incomplete'
+          ? 'hero-eyebrow border-slate-300/70 bg-slate-100/85 text-slate-900 dark:border-slate-700/70 dark:bg-slate-900/65 dark:text-slate-200'
+          : 'hero-eyebrow border-rose-300/70 bg-rose-100/80 text-rose-900 dark:border-rose-900/70 dark:bg-rose-950/40 dark:text-rose-200';
   const EyebrowIcon =
     result.paymentState === 'approved'
       ? BadgeCheck
@@ -153,32 +202,30 @@ export default async function BookingSuccessPage({ searchParams }: SuccessPagePr
               </dd>
             </div>
             <div className="surface-card">
-              <dt className="text-xs uppercase tracking-[0.12em] text-slate/65">
-                Horario de inicio (UTC)
-              </dt>
+              <dt className="text-xs uppercase tracking-[0.12em] text-slate/65">Barberia</dt>
               <dd className="mt-1 font-medium text-ink dark:text-slate-100">
-                {params.start || 'A confirmar'}
+                {shopName || 'Marketplace'}
               </dd>
+            </div>
+            <div className="surface-card">
+              <dt className="text-xs uppercase tracking-[0.12em] text-slate/65">
+                Horario
+              </dt>
+              <dd className="mt-1 font-medium text-ink dark:text-slate-100">{startLabel}</dd>
             </div>
           </dl>
 
           <div className="mt-6 flex flex-wrap gap-2">
-            {result.paymentState === 'approved' ? (
-              <Button as="a" href="/book" className="action-primary px-5 text-sm font-semibold">
-                Agendar otra
-              </Button>
-            ) : (
-              <Button as="a" href="/book" className="action-primary px-5 text-sm font-semibold">
-                Volver a intentar
-              </Button>
-            )}
+            <Button as="a" href={retryHref} className="action-primary px-5 text-sm font-semibold">
+              {result.paymentState === 'approved' ? 'Agendar otra' : 'Volver a intentar'}
+            </Button>
             <Button
               as="a"
-              href="/"
+              href={profileHref}
               variant="ghost"
               className="action-secondary px-5 text-sm font-semibold"
             >
-              Volver al inicio
+              {shopSlug ? 'Volver a la barberia' : 'Ver marketplace'}
             </Button>
           </div>
         </div>

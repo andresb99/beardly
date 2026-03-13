@@ -630,7 +630,7 @@ export function AdminBarbershopSettingsForm({
                 className={`mt-4 block rounded-[1.4rem] border border-dashed px-4 py-4 transition ${
                   totalImages >= MAX_SHOP_IMAGES
                     ? 'admin-premium-subcard cursor-not-allowed border-dashed opacity-70'
-                    : 'admin-premium-subcard cursor-pointer border-dashed hover:-translate-y-0.5 hover:border-sky-300/55 dark:hover:border-sky-400/30'
+                    : 'admin-premium-subcard cursor-pointer border-dashed hover:-translate-y-0.5 hover:border-violet-300/55 dark:hover:border-violet-400/30'
                 }`}
               >
                 <input
@@ -912,7 +912,7 @@ export function AdminBarbershopSettingsForm({
                   className="h-full w-full object-cover opacity-95"
                 />
               ) : (
-                <div className="flex h-full items-center justify-center bg-[radial-gradient(circle_at_top,_rgba(56,189,248,0.35),_transparent_45%),linear-gradient(135deg,rgba(15,23,42,0.96),rgba(30,41,59,0.92))]">
+                <div className="flex h-full items-center justify-center bg-[radial-gradient(circle_at_top,_rgba(139,92,246,0.35),_transparent_45%),linear-gradient(135deg,rgba(17,13,31,0.96),rgba(33,18,55,0.92))]">
                   <Scissors className="h-10 w-10 text-white/70" />
                 </div>
               )}

@@ -3,6 +3,15 @@ export type BookingSuccessState = 'approved' | 'pending' | 'failure' | 'incomple
 function normalizePaymentState(input: string | null | undefined) {
   const normalized = String(input || '').trim().toLowerCase();
 
+  if (
+    normalized === 'approved' ||
+    normalized === 'authorized' ||
+    normalized === 'paid' ||
+    normalized === 'accredited'
+  ) {
+    return 'approved' as const;
+  }
+
   if (normalized === 'pending' || normalized === 'processing') {
     return 'pending' as const;
   }
@@ -16,7 +25,7 @@ function normalizePaymentState(input: string | null | undefined) {
     return 'failure' as const;
   }
 
-  return 'approved' as const;
+  return null;
 }
 
 export function resolveBookingSuccessState(input: {
@@ -32,9 +41,14 @@ export function resolveBookingSuccessState(input: {
 
   const queryState = normalizePaymentState(input.queryPaymentStatus);
   const intentState = input.intentPaymentStatus
-    ? normalizePaymentState(input.intentPaymentStatus)
+      ? normalizePaymentState(input.intentPaymentStatus)
     : null;
   const hasProviderPaymentId = Boolean(String(input.providerPaymentId || '').trim());
+  const hasPaymentSignal = Boolean(queryState || intentState || hasProviderPaymentId);
+
+  if (!hasPaymentSignal) {
+    return 'incomplete' satisfies BookingSuccessState;
+  }
 
   if (intentState === 'failure' || queryState === 'failure') {
     return 'failure' satisfies BookingSuccessState;
@@ -48,5 +62,9 @@ export function resolveBookingSuccessState(input: {
     return 'pending' satisfies BookingSuccessState;
   }
 
-  return 'approved' satisfies BookingSuccessState;
+  if (intentState === 'approved' || queryState === 'approved') {
+    return 'approved' satisfies BookingSuccessState;
+  }
+
+  return hasProviderPaymentId ? 'pending' : 'incomplete';
 }

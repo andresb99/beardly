@@ -204,7 +204,7 @@ export function StaffPerformanceVisuals({ staff }: StaffPerformanceVisualsProps)
         ...baseOptions.chart,
         type: 'bar',
       },
-      colors: ['#0ea5e9'],
+      colors: ['#8b5cf6'],
       fill: {
         type: 'gradient',
         gradient: {
@@ -275,7 +275,7 @@ export function StaffPerformanceVisuals({ staff }: StaffPerformanceVisualsProps)
         ...baseOptions.chart,
         type: 'line',
       },
-      colors: ['#0ea5e9', '#f43f5e', '#f59e0b'],
+      colors: ['#8b5cf6', '#d946ef', '#f59e0b'],
       fill: {
         type: 'gradient',
         gradient: {
