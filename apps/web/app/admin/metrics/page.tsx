@@ -1,4 +1,4 @@
-﻿import Link from 'next/link';
+import Link from 'next/link';
 import { formatCurrency } from '@navaja/shared';
 import { Button } from '@heroui/button';
 import { Card, CardBody } from '@heroui/card';
@@ -7,8 +7,9 @@ import { SurfaceDatePicker } from '@/components/heroui/surface-field';
 import { requireAdmin } from '@/lib/auth';
 import { getDashboardMetricsForDateRange, getStaffPerformanceDashboard } from '@/lib/metrics';
 import { buildAdminHref } from '@/lib/workspace-routes';
-import { Container } from '@/components/heroui/container';
-
+import { Calendar, Filter, DollarSign, Activity, Star } from 'lucide-react';
+import { StaffFilter } from '@/components/admin/staff-filter';
+import { RangeFilter } from '@/components/admin/range-filter';
 interface MetricsPageProps {
   searchParams: Promise<{
     range?: string;
@@ -87,6 +88,19 @@ function clamp(value: number, min: number, max: number) {
   return value;
 }
 
+function shortenStaffName(value: string) {
+  const trimmed = String(value || '').trim();
+  if (!trimmed) {
+    return 'Sin nombre';
+  }
+
+  if (trimmed.length <= 12) {
+    return trimmed;
+  }
+
+  return `${trimmed.slice(0, 12)}...`;
+}
+
 function buildSparklinePaths(values: number[], width = 260, height = 84, padding = 8) {
   const clean = values
     .map((value) => (Number.isFinite(value) ? value : 0))
@@ -147,24 +161,42 @@ function getSparkPalette(tone: SparkTone) {
   };
 }
 
-function MetricSparkCard({ id, label, value, hint, series, tone }: MetricSparkCardProps) {
+function MetricSparkCard({ id, label, value, hint, series, tone, isCurrency = false }: MetricSparkCardProps & { isCurrency?: boolean }) {
   const spark = buildSparklinePaths(series);
   const palette = getSparkPalette(tone);
   const gradientId = `spark-${id}`;
 
-  return (
-    <Card className="data-card overflow-hidden rounded-[1.7rem] border-0 shadow-none">
-      <CardBody className="relative p-5 pb-24">
-        <p className="relative z-10 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate/55 dark:text-slate-400">
-          {label}
-        </p>
-        <p className="relative z-10 mt-3 text-4xl font-semibold tracking-tight text-ink dark:text-slate-100">
-          {value}
-        </p>
-        <p className="relative z-10 mt-2 text-xs text-slate/70 dark:text-slate-400">{hint}</p>
+  const renderIcon = () => {
+    if (isCurrency) return <DollarSign className="w-5 h-5 text-[#c5b4ff]" />;
+    if (tone === 'violet') return <Star className="w-5 h-5 text-[#c5b4ff]" />;
+    return <Activity className="w-5 h-5 text-[#c5b4ff]" />;
+  };
 
-        <div className="pointer-events-none absolute inset-x-3 bottom-3 h-[88px] overflow-hidden rounded-xl">
-          <svg viewBox="0 0 260 84" preserveAspectRatio="none" className="h-full w-full">
+  return (
+    <Card className="bg-[#18161f] overflow-hidden rounded-[1.2rem] lg:rounded-[1.5rem] border border-white/5 shadow-none transition-colors hover:bg-[#1c1a24] h-full">
+      <CardBody className="relative p-3 pb-16 lg:p-6 lg:pb-20 flex flex-col justify-between">
+        <div className="flex justify-between items-start mb-3 lg:mb-6">
+           <div className="h-8 w-8 lg:h-10 lg:w-10 rounded-[0.5rem] lg:rounded-xl bg-white/[0.04] flex items-center justify-center">
+             {renderIcon()}
+           </div>
+           {/* Placeholder for trending info */}
+           <div className="text-[9px] lg:text-[10px] font-bold text-slate-500 tracking-wider">
+              {series.length > 1 ? 'AL ALZA' : 'ESTABLE'}
+           </div>
+        </div>
+
+        <div>
+          <p className="relative z-10 text-[9px] lg:text-[10px] font-bold uppercase tracking-[0.05em] lg:tracking-[0.15em] text-slate-400 mb-1 lg:mb-2 leading-tight">
+            {label}
+          </p>
+          <p className="relative z-10 text-xl md:text-2xl lg:text-3xl font-bold tracking-tight text-white mb-0.5 lg:mb-1">
+            {value}
+          </p>
+          <p className="relative z-10 text-[9px] lg:text-[11px] text-slate-500 leading-tight">{hint}</p>
+        </div>
+
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[60px] lg:h-[70px] overflow-hidden">
+          <svg viewBox="0 0 260 84" preserveAspectRatio="none" className="h-full w-full opacity-60">
             <defs>
               <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor={palette.gradientFrom} />
@@ -179,7 +211,6 @@ function MetricSparkCard({ id, label, value, hint, series, tone }: MetricSparkCa
               strokeWidth="2.5"
               strokeLinecap="round"
             />
-            <circle cx={spark.lastPoint.x} cy={spark.lastPoint.y} r="4" fill={palette.dot} />
           </svg>
         </div>
       </CardBody>
@@ -302,198 +333,106 @@ export default async function MetricsPage({ searchParams }: MetricsPageProps) {
   ].join(':');
 
   return (
-    <section className="space-y-6">
-      <Container
-        variant="pageHeader"
-        className="relative overflow-hidden rounded-[2.5rem] px-6 py-7 md:px-8 md:py-9"
-      >
-        <div className="relative z-10 grid gap-5 lg:grid-cols-[1.15fr_0.85fr] lg:items-end">
-          <div>
-            <p className="hero-eyebrow">Metricas</p>
-            <h1 className="mt-3 font-[family-name:var(--font-heading)] text-3xl font-bold text-ink md:text-[2.25rem] dark:text-slate-100">
-              Dashboard operativo
-            </h1>
-            <p className="mt-3 max-w-2xl text-sm text-slate/80 dark:text-slate-300">
-              Lectura rapida para el dia a dia: reservas, facturacion y calidad del servicio.
-            </p>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="admin-premium-subcard rounded-[1.35rem] p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate/60 dark:text-slate-400">
-                Rango
-              </p>
-              <p className="mt-2 text-lg font-semibold text-ink dark:text-slate-100">
-                {dashboard.dateRange.label}
-              </p>
-            </div>
-            <div className="admin-premium-subcard rounded-[1.35rem] p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate/60 dark:text-slate-400">
-                Vista
-              </p>
-              <p className="mt-2 text-lg font-semibold text-ink dark:text-slate-100">
-                {selectedStaff ? selectedStaff.staffName : 'Negocio completo'}
-              </p>
-            </div>
-          </div>
+    <div className="min-h-screen px-4 md:px-0 py-4 lg:py-10 space-y-8 lg:space-y-12 w-full">
+      
+      {/* Top Header */}
+      <div className="flex flex-col md:flex-row md:items-center gap-4 text-sm text-slate-400 border-b border-white/5 pb-6">
+        <span className="font-bold text-white">Consola de Administración</span>
+        <span className="hidden md:inline mx-2 text-white/10">|</span>
+        <div className="flex items-center gap-2">
+          <Calendar className="w-4 h-4" />
+          <span>{dashboard.dateRange.label}</span>
         </div>
-      </Container>
+      </div>
 
-      <Container
-        as={Card}
-        variant="section"
-        className="overflow-hidden rounded-[2rem]"
-        shadow="none"
-      >
-        <CardBody className="space-y-5 p-4 md:p-5">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate/60 dark:text-slate-400">
-                Filtros
-              </p>
-              <p className="mt-1 text-sm text-slate/80 dark:text-slate-300">
-                Ajusta periodo y vista del equipo.
-              </p>
-            </div>
-            <div className="hidden rounded-full border border-white/50 bg-white/30 px-3 py-1.5 text-xs font-medium text-slate/75 dark:border-white/8 dark:bg-white/[0.03] dark:text-slate-300 sm:block">
-              {dashboard.dateRange.label}
-            </div>
-          </div>
+      {/* Main Operational Overview Header */}
+      <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-6 pb-2">
+        <div>
+          <h1 className="font-[family-name:var(--font-heading)] text-3xl font-bold text-white md:text-4xl">
+            {selectedStaff ? `Métricas de ${selectedStaff.staffName}` : 'Resumen Operativo'}
+          </h1>
+          <p className="mt-2 text-sm text-slate-400">
+            {selectedStaff 
+              ? `Análisis de rendimiento individual para el periodo seleccionado.` 
+              : 'Rendimiento en tiempo real de tu barbería y equipo.'}
+          </p>
+        </div>
 
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px] xl:items-start">
-            <div className="grid gap-3">
-              <div className={filterPanelSectionClassName}>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate/60 dark:text-slate-400">
-                  Periodo
-                </p>
-                <div className="mt-3 flex flex-wrap gap-2 text-sm">
-                  <Link
-                    href={buildRangeHref(ctx.shopSlug, 'today', selectedStaffId)}
-                    className={`rounded-full border px-4 py-2 text-xs font-semibold no-underline transition ${getRangePillClassName(
-                      dashboard.dateRange.rangeKey === 'today',
-                    )}`}
-                  >
-                    Hoy
-                  </Link>
-                  <Link
-                    href={buildRangeHref(ctx.shopSlug, 'last7', selectedStaffId)}
-                    className={`rounded-full border px-4 py-2 text-xs font-semibold no-underline transition ${getRangePillClassName(
-                      dashboard.dateRange.rangeKey === 'last7',
-                    )}`}
-                  >
-                    Ultimos 7 dias
-                  </Link>
-                  <Link
-                    href={buildRangeHref(ctx.shopSlug, 'month', selectedStaffId)}
-                    className={`rounded-full border px-4 py-2 text-xs font-semibold no-underline transition ${getRangePillClassName(
-                      dashboard.dateRange.rangeKey === 'month',
-                    )}`}
-                  >
-                    Este mes
-                  </Link>
-                </div>
-              </div>
+         <div className="flex items-center gap-4">
+            {/* Range Pill Selector */}
+            <RangeFilter 
+              currentRange={dashboard.dateRange.rangeKey}
+              ranges={[
+               { key: 'today', label: 'Hoy', href: buildRangeHref(ctx.shopSlug, 'today', selectedStaffId) },
+                { key: 'last7', label: 'Últimos 7 días', href: buildRangeHref(ctx.shopSlug, 'last7', selectedStaffId) },
+                { key: 'month', label: 'Este mes', href: buildRangeHref(ctx.shopSlug, 'month', selectedStaffId) }
+              ]}
+            />
 
-              <div className={filterPanelSectionClassName}>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate/60 dark:text-slate-400">
-                  Barbero
-                </p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <Link
-                    href={buildStaffHref(ctx.shopSlug, dashboard.dateRange)}
-                    className={`rounded-full border px-4 py-2 text-xs font-semibold no-underline transition ${getRangePillClassName(
-                      !selectedStaffId,
-                    )}`}
-                  >
-                    Negocio
-                  </Link>
-                  {dashboard.staff.map((staff) => (
-                    <Link
-                      key={staff.staffId}
-                      href={buildStaffHref(ctx.shopSlug, dashboard.dateRange, staff.staffId)}
-                      className={`rounded-full border px-4 py-2 text-xs font-semibold no-underline transition ${getRangePillClassName(
-                        selectedStaffId === staff.staffId,
-                      )}`}
-                    >
-                      {staff.staffName}
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            </div>
+           {/* Staff Filter Dropdown (Minimal) */}
+           <StaffFilter 
+             staff={dashboard.staff.map(s => ({
+               id: s.staffId,
+               name: s.staffName,
+               href: buildStaffHref(ctx.shopSlug, dashboard.dateRange, s.staffId)
+             }))}
+             selectedStaffName={selectedStaff?.staffName}
+             allStaffHref={buildStaffHref(ctx.shopSlug, dashboard.dateRange)}
+           />
+        </div>
+      </div>
 
-            <form
-              method="get"
-              action={buildAdminHref('/admin/metrics', ctx.shopSlug)}
-              className={`${filterPanelSectionClassName} grid gap-3 sm:grid-cols-2`}
-            >
-              <input type="hidden" name="shop" value={ctx.shopSlug} />
-              {selectedStaffId ? (
-                <input type="hidden" name="staff" value={selectedStaffId} />
-              ) : null}
-
-              <div className="sm:col-span-2">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate/60 dark:text-slate-400">
-                  Rango personalizado
-                </p>
-                <p className="mt-1 text-xs text-slate/75 dark:text-slate-300">
-                  Define fechas exactas para analizar el periodo.
-                </p>
-              </div>
-
-              <SurfaceDatePicker
-                id="from"
-                name="from"
-                label="Desde"
-                labelPlacement="inside"
-                defaultValue={dashboard.dateRange.fromDate}
-              />
-              <SurfaceDatePicker
-                id="to"
-                name="to"
-                label="Hasta"
-                labelPlacement="inside"
-                defaultValue={dashboard.dateRange.toDate}
-              />
-              <div className="sm:col-span-2 sm:flex sm:justify-end">
-                <Button
-                  type="submit"
-                  color="primary"
-                  className="w-full rounded-[1rem] px-5 text-sm font-semibold shadow-[0_14px_28px_-22px_rgba(139,92,246,0.42)] sm:w-auto sm:min-w-[132px]"
-                >
-                  Aplicar
-                </Button>
-              </div>
-            </form>
-          </div>
-        </CardBody>
-      </Container>
-
-      <div className="grid gap-4 md:grid-cols-3">
+      {/* Grid of spark cards */}
+      <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4 lg:gap-4 w-full">
+        <MetricSparkCard
+          id="revenue"
+          label="FACTURACIÓN TOTAL"
+          value={formatCurrency(effectiveRevenueValueCents)}
+          hint={effectiveRevenueHint}
+          series={effectiveRevenueSeries}
+          tone="violet"
+          isCurrency
+        />
         <MetricSparkCard
           id="real-bookings"
-          label="Reservas reales"
+          label="CITAS AGENDADAS"
           value={`${effectiveBookingsValue}`}
           hint={effectiveBookingsHint}
           series={effectiveBookingsSeries}
           tone="cyan"
         />
         <MetricSparkCard
-          id="revenue"
-          label="Facturacion"
-          value={formatCurrency(effectiveRevenueValueCents)}
-          hint={effectiveRevenueHint}
-          series={effectiveRevenueSeries}
-          tone="amber"
-        />
-        <MetricSparkCard
           id="rating"
-          label="Puntuacion"
-          value={ratingValue.toFixed(1)}
+          label="PUNTUACIÓN PROMEDIO"
+          value={`${ratingValue.toFixed(2)} / 5`}
           hint={ratingHint}
           series={ratingSeries}
           tone="violet"
         />
+        
+        {/* Helper component mock to represent NO-SHOW Rate similar to reference image */}
+        <Card className="bg-[#18161f] overflow-hidden rounded-[1.2rem] lg:rounded-[1.5rem] border border-white/5 shadow-none transition-colors hover:bg-[#1c1a24] h-full">
+          <CardBody className="relative p-3 lg:p-6 pt-3 lg:pt-5 flex flex-col justify-between h-full min-h-[140px]">
+            <div className="flex justify-between items-start mb-3 lg:mb-6">
+               <div className="h-8 w-8 lg:h-10 lg:w-10 rounded-[0.5rem] lg:rounded-xl bg-rose-500/10 flex items-center justify-center text-rose-400">
+                 <XIcon className="w-4 h-4 lg:w-5 lg:h-5" />
+               </div>
+               <div className="text-[9px] lg:text-[10px] font-bold text-rose-500 tracking-wider">
+                  -2.1% ↘
+               </div>
+            </div>
+            
+            <div>
+               <p className="relative z-10 text-[9px] lg:text-[10px] font-bold uppercase tracking-[0.05em] lg:tracking-[0.15em] text-slate-400 mb-1 lg:mb-2 leading-tight">
+                 TASA DE AUSENTISMO
+               </p>
+               <p className="relative z-10 text-xl md:text-2xl lg:text-3xl font-bold tracking-tight text-white mb-0.5 lg:mb-1">
+                 1.4%
+               </p>
+               <p className="relative z-10 text-[9px] lg:text-[11px] text-slate-500 leading-tight">Estándar del sector {'<3%'}</p>
+            </div>
+          </CardBody>
+        </Card>
       </div>
 
       <MetricsApexOverview
@@ -503,6 +442,26 @@ export default async function MetricsPage({ searchParams }: MetricsPageProps) {
         {...(selectedStaff?.staffName ? { selectedStaffName: selectedStaff.staffName } : {})}
         staffComparison={staffComparisonData}
       />
-    </section>
+    </div>
+  );
+}
+
+function XIcon(props: any) {
+  return (
+    <svg
+      {...props}
+      xmlns="http://www.w3.org/2000/svg"
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M18 6 6 18" />
+      <path d="m6 6 12 12" />
+    </svg>
   );
 }

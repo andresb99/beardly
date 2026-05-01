@@ -116,33 +116,97 @@ export function MarketplaceJobsForm({ shops }: MarketplaceJobsFormProps) {
   }
 
   return (
-    <form className="soft-panel space-y-5 rounded-[1.9rem] border-0 p-4 sm:p-6" onSubmit={onSubmit}>
-      <div className="grid gap-3 md:grid-cols-[1.1fr_0.9fr]">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate/60 dark:text-slate-400">
-            Empleo marketplace
-          </p>
-          <h2 className="mt-2 font-[family-name:var(--font-heading)] text-2xl font-semibold text-ink dark:text-slate-100">
-            Postulate una vez o apunta a una barberia especifica
-          </h2>
-          <p className="mt-2 text-sm text-slate/80 dark:text-slate-300">
-            Puedes dejar tu CV en la bolsa general o enviarlo directo a una barberia activa.
-          </p>
-        </div>
+    <form className="bg-[#141218] space-y-6 rounded-[2rem] border border-white/5 p-6 sm:p-8" onSubmit={onSubmit}>
+      <div>
+        <h3 className="font-[family-name:var(--font-heading)] text-xl font-bold uppercase text-white tracking-widest">
+          SOLICITUD DE INGRESO
+        </h3>
+      </div>
 
-        <div className="surface-card">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate/60 dark:text-slate-400">
-            Destino actual
-          </p>
-          <p className="mt-2 text-sm text-slate/80 dark:text-slate-300">{selectedTargetLabel}</p>
-        </div>
+      <div className="grid gap-4 md:grid-cols-2">
+        <Input
+          id="name"
+          label="NOMBRE COMPLETO"
+          labelPlacement="inside"
+          classNames={{ inputWrapper: "bg-white/[0.04] border border-white/5 h-14", label: "text-slate-400 text-[9px] font-bold uppercase tracking-widest", input: "text-white text-sm" }}
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          required
+          className="md:col-span-2"
+        />
+        <Select
+          id="availability"
+          label="ESPECIALIDAD"
+          labelPlacement="inside"
+          classNames={{ trigger: "bg-white/[0.04] border border-white/5 h-14", label: "text-slate-400 text-[9px] font-bold uppercase tracking-widest", value: "text-white text-sm" }}
+          selectedKeys={availability ? [availability] : []}
+          onChange={(event) => setAvailability(event.target.value)}
+          required
+        >
+          <SelectItem key="Taper Fade y Texturizado">Taper Fade y Texturizado</SelectItem>
+          <SelectItem key="Cortes clásicos">Cortes clásicos</SelectItem>
+          <SelectItem key="Colorimetría">Colorimetría</SelectItem>
+          <SelectItem key="Diseño urbano">Diseño urbano</SelectItem>
+          <SelectItem key="Otro">Otro</SelectItem>
+        </Select>
+        <Input
+          id="experience"
+          type="number"
+          min={0}
+          max={60}
+          label="EXPERIENCIA (AÑOS)"
+          labelPlacement="inside"
+          classNames={{ inputWrapper: "bg-white/[0.04] border border-white/5 h-14", label: "text-slate-400 text-[9px] font-bold uppercase tracking-widest", input: "text-white text-sm" }}
+          value={experienceYears}
+          onChange={(event) => setExperienceYears(event.target.value)}
+          required
+        />
+        <Input
+          id="phone"
+          label="TELÉFONO"
+          labelPlacement="inside"
+          classNames={{ inputWrapper: "bg-white/[0.04] border border-white/5 h-14", label: "text-slate-400 text-[9px] font-bold uppercase tracking-widest", input: "text-white text-sm" }}
+          value={phone}
+          onChange={(event) => setPhone(event.target.value)}
+          required
+        />
+        <Input
+          id="email"
+          type="email"
+          label="EMAIL"
+          labelPlacement="inside"
+          classNames={{ inputWrapper: "bg-white/[0.04] border border-white/5 h-14", label: "text-slate-400 text-[9px] font-bold uppercase tracking-widest", input: "text-white text-sm" }}
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+          required
+        />
+        <Input
+          id="instagram"
+          label="PORTAFOLIO / INSTAGRAM"
+          labelPlacement="inside"
+          classNames={{ inputWrapper: "bg-white/[0.04] border border-white/5 h-14", label: "text-slate-400 text-[9px] font-bold uppercase tracking-widest", input: "text-white text-sm" }}
+          value={instagram}
+          onChange={(event) => setInstagram(event.target.value)}
+          className="md:col-span-2"
+        />
+        <Input
+          id="cv"
+          type="file"
+          label="CV (PDF/DOC HASTA 5MB)"
+          labelPlacement="inside"
+          classNames={{ inputWrapper: "bg-white/[0.04] border border-white/5 h-14", label: "text-slate-400 text-[9px] font-bold uppercase tracking-widest", input: "text-white text-sm" }}
+          accept=".pdf,.doc,.docx"
+          onChange={(event) => setFile(event.target.files?.[0] || null)}
+          className="md:col-span-2"
+        />
       </div>
 
       <Select
         id="job-target"
         aria-label="Destino de la postulacion"
-        label="Enviar mi CV a"
+        label="DESTINO / BOLSA GENERAL"
         labelPlacement="inside"
+        classNames={{ trigger: "bg-white/[0.04] border border-white/5 h-14", label: "text-slate-400 text-[9px] font-bold uppercase tracking-widest", value: "text-white text-sm" }}
         selectedKeys={target ? [target] : []}
         onChange={(event) => setTarget(event.target.value)}
       >
@@ -151,78 +215,15 @@ export function MarketplaceJobsForm({ shops }: MarketplaceJobsFormProps) {
         ))}
       </Select>
 
-      <div className="grid gap-3 md:grid-cols-2">
-        <Input
-          id="name"
-          label="Nombre y apellido"
-          labelPlacement="inside"
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          required
-        />
-        <Input
-          id="phone"
-          label="Telefono"
-          labelPlacement="inside"
-          value={phone}
-          onChange={(event) => setPhone(event.target.value)}
-          required
-        />
-        <Input
-          id="email"
-          type="email"
-          label="Email"
-          labelPlacement="inside"
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
-          required
-        />
-        <Input
-          id="instagram"
-          label="Instagram (opcional)"
-          labelPlacement="inside"
-          value={instagram}
-          onChange={(event) => setInstagram(event.target.value)}
-        />
-        <Input
-          id="experience"
-          type="number"
-          min={0}
-          max={60}
-          label="Experiencia (anios)"
-          labelPlacement="inside"
-          value={experienceYears}
-          onChange={(event) => setExperienceYears(event.target.value)}
-          required
-        />
-        <Input
-          id="cv"
-          type="file"
-          label="CV (PDF/DOC hasta 5MB)"
-          accept=".pdf,.doc,.docx"
-          onChange={(event) => setFile(event.target.files?.[0] || null)}
-        />
-        <Textarea
-          id="availability"
-          className="md:col-span-2"
-          rows={4}
-          label="Disponibilidad"
-          labelPlacement="inside"
-          value={availability}
-          onChange={(event) => setAvailability(event.target.value)}
-          required
-        />
-      </div>
-
-      {error ? <p className="status-banner error">{error}</p> : null}
-      {message ? <p className="status-banner success">{message}</p> : null}
+      {error ? <p className="text-sm text-rose-400 px-4 py-3 bg-rose-400/10 rounded-xl">{error}</p> : null}
+      {message ? <p className="text-sm text-teal-400 px-4 py-3 bg-teal-400/10 rounded-xl">{message}</p> : null}
 
       <Button
         type="submit"
         disabled={loading}
-        className="action-primary w-full justify-center px-5 text-sm font-semibold sm:w-auto"
+        className="w-full justify-center px-5 h-14 rounded-xl bg-[#c5b4ff] hover:bg-[#b09afa] text-[13px] font-bold tracking-widest text-[#23005c] uppercase transition-colors"
       >
-        {loading ? 'Enviando...' : 'Enviar postulacion'}
+        {loading ? 'Enviando...' : 'Enviar candidatura'}
       </Button>
     </form>
   );

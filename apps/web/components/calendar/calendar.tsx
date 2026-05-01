@@ -39,6 +39,10 @@ interface CalendarProps {
   availableRangeStart?: Date | undefined;
   availableRangeEndExclusive?: Date | undefined;
   onEventClick?: (event: CalendarEvent) => void;
+  onEventClose?: () => void;
+  onSlotClick?: (date: Date) => void;
+  selectedEventId?: string | null;
+  renderEventPopover?: (event: CalendarEvent, onClose: () => void) => ReactNode;
 }
 
 interface CalendarWindow {
@@ -228,6 +232,10 @@ export function Calendar({
   availableRangeStart,
   availableRangeEndExclusive,
   onEventClick,
+  onEventClose,
+  onSlotClick,
+  selectedEventId,
+  renderEventPopover,
 }: CalendarProps) {
   const [referenceDate, setReferenceDate] = useState<Date>(() => resolveInitialReference(initialDate));
   const [view, setView] = useState<CalendarView>(initialView);
@@ -287,11 +295,11 @@ export function Calendar({
       shadow="none"
       data-calendar-view={view}
       className={cn(
-        "soft-panel relative overflow-hidden rounded-[2.15rem] border-0 shadow-none",
+        "relative overflow-hidden rounded-none border-0 shadow-none bg-transparent",
         className,
       )}
     >
-      <CardBody className="relative z-10 gap-0 p-0">
+      <CardBody className="relative z-10 gap-0 p-0 bg-transparent">
         <CalendarHeader
           title={title}
           description={description}
@@ -326,6 +334,10 @@ export function Calendar({
               locale={locale}
               isMobile={isMobile}
               onEventClick={onEventClick}
+              onEventClose={onEventClose}
+              onSlotClick={onSlotClick}
+              selectedEventId={selectedEventId}
+              renderEventPopover={renderEventPopover}
             />
           )}
         </div>

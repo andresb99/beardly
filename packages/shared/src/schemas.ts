@@ -134,6 +134,14 @@ export const serviceSchema = z.object({
   created_at: isoDateTimeSchema.optional(),
 });
 
+export const staffServiceSchema = z.object({
+  id: uuidSchema,
+  staff_id: uuidSchema,
+  service_id: uuidSchema,
+  shop_id: uuidSchema,
+  created_at: isoDateTimeSchema.optional(),
+});
+
 export const customerSchema = z.object({
   id: uuidSchema,
   shop_id: uuidSchema,
@@ -592,6 +600,7 @@ export type ShopLocation = z.infer<typeof shopLocationSchema>;
 export type Subscription = z.infer<typeof subscriptionSchema>;
 export type Staff = z.infer<typeof staffSchema>;
 export type Service = z.infer<typeof serviceSchema>;
+export type StaffService = z.infer<typeof staffServiceSchema>;
 export type Customer = z.infer<typeof customerSchema>;
 export type Appointment = z.infer<typeof appointmentSchema>;
 export type AppointmentReview = z.infer<typeof appointmentReviewSchema>;

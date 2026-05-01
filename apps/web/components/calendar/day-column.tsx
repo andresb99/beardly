@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { cn } from '@/lib/cn';
+import { Popover, PopoverTrigger, PopoverContent } from '@heroui/react';
 import type { CalendarEvent } from './calendar';
 import { EventCard } from './event-card';
 
@@ -15,6 +16,10 @@ interface DayColumnProps {
   locale: string;
   isToday?: boolean;
   onEventClick?: ((event: CalendarEvent) => void) | undefined;
+  onEventClose?: () => void;
+  onSlotClick?: ((date: Date) => void) | undefined;
+  selectedEventId?: string | null;
+  renderEventPopover?: (event: CalendarEvent, onClose: () => void) => React.ReactNode;
 }
 
 interface DayEventSegment {
@@ -44,6 +49,10 @@ export function DayColumn({
   locale,
   isToday = false,
   onEventClick,
+  onEventClose,
+  onSlotClick,
+  selectedEventId,
+  renderEventPopover,
 }: DayColumnProps) {
   const totalMinutes = (endHour - startHour) * 60;
   const gridHeight = totalMinutes * pixelsPerMinute;
@@ -166,8 +175,23 @@ export function DayColumn({
   }, [calendarEnd, calendarStart, isToday, liveNow, pixelsPerMinute]);
 
   return (
-    <div className="relative border-r border-white/10 last:border-r-0 dark:border-white/[0.04]">
-      <div className="relative" style={{ height: gridHeight }}>
+    <div
+      className="relative border-r border-white/10 last:border-r-0 dark:border-white/[0.04]"
+      onClick={(e) => {
+        if (!onSlotClick || e.target !== e.currentTarget) return;
+        
+        const rect = e.currentTarget.getBoundingClientRect();
+        const y = e.clientY - rect.top;
+        const totalMinutesFromStart = y / pixelsPerMinute;
+        const hour = startHour + Math.floor(totalMinutesFromStart / 60);
+        const minute = Math.floor((totalMinutesFromStart % 60) / slotMinutes) * slotMinutes;
+        
+        const slotDate = new Date(date);
+        slotDate.setHours(hour, minute, 0, 0);
+        onSlotClick(slotDate);
+      }}
+    >
+      <div className="relative pointer-events-none" style={{ height: gridHeight }}>
         {isToday ? (
           <div className="pointer-events-none absolute inset-0 bg-violet-500/[0.02] dark:bg-violet-500/[0.06]" />
         ) : null}
@@ -218,31 +242,68 @@ export function DayColumn({
           const height =
             ((segment.renderEnd.getTime() - segment.renderStart.getTime()) / 60000) *
             pixelsPerMinute;
+          
+          // Consistent spacing: 4px from each side (0.25rem)
+          const gap = 0.25; // rem
+          const leftPadding = 0.25; // rem
+          
           const width =
             segment.columnCount > 1
-              ? `calc(${100 / segment.columnCount}% - 0.28rem)`
-              : 'calc(100% - 0.7rem)';
+              ? `calc(${100 / segment.columnCount}% - ${gap * 2}rem)`
+              : `calc(100% - ${gap * 2}rem)`;
+          
           const left =
             segment.columnCount > 1
-              ? `calc(${(segment.columnIndex * 100) / segment.columnCount}% + 0.16rem)`
-              : '0.35rem';
+              ? `calc(${(segment.columnIndex * 100) / segment.columnCount}% + ${leftPadding}rem)`
+              : `${leftPadding}rem`;
+
+          const isSelected = selectedEventId === segment.event.id;
 
           return (
             <div
               key={`${segment.event.id}-${segment.renderStart.toISOString()}`}
-              className="absolute z-10"
-              data-event-id={segment.event.id}
-              data-overlap-column={segment.columnIndex}
-              data-overlap-columns={segment.columnCount}
-              style={{ top, height, left, width }}
+              className="absolute pointer-events-auto"
+              style={{ 
+                top: `${top}px`, 
+                height: `${height}px`, 
+                left, 
+                width,
+                zIndex: isSelected ? 40 : 10 
+              }}
             >
-              <EventCard
-                event={segment.event}
-                locale={locale}
-                height={height}
-                compact={segment.columnCount > 1}
-                onClick={onEventClick}
-              />
+              {renderEventPopover ? (
+                <Popover 
+                  isOpen={isSelected} 
+                  placement="right-start"
+                  offset={10}
+                  onOpenChange={(isOpen) => {
+                     if (!isOpen) onEventClose?.();
+                  }}
+                >
+                  <PopoverTrigger>
+                    <div className="h-full w-full outline-none">
+                      <EventCard
+                        event={segment.event}
+                        locale={locale}
+                        height={height}
+                        compact={segment.columnCount > 1}
+                        onClick={onEventClick}
+                      />
+                    </div>
+                  </PopoverTrigger>
+                  <PopoverContent className="p-0 bg-transparent border-0 shadow-none outline-none">
+                    {renderEventPopover(segment.event, () => onEventClose?.())}
+                  </PopoverContent>
+                </Popover>
+              ) : (
+                <EventCard
+                  event={segment.event}
+                  locale={locale}
+                  height={height}
+                  compact={segment.columnCount > 1}
+                  onClick={onEventClick}
+                />
+              )}
             </div>
           );
         })}

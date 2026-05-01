@@ -43,12 +43,12 @@ export default async function ShopJobsPage({ params }: ShopJobsPageProps) {
           <div className="space-y-10">
             <div>
               <h1 className="font-[family-name:var(--font-heading)] text-5xl sm:text-6xl md:text-7xl lg:text-[4.8rem] xl:text-[5.5rem] font-black uppercase tracking-tighter text-at-heading leading-[0.9]">
-                INICIA TU
+                <span className="text-at-accent-light">ÚNETE A</span>
                 <br />
-                <span className="text-at-accent-light">LEGADO</span> AQUÍ.
+                {shop.name}
               </h1>
               <p className="mt-8 text-lg text-at-muted font-medium leading-relaxed max-w-lg">
-                Estamos constantemente en la búsqueda de visionarios. Si crees que tienes la precisión y la pasión necesaria, queremos conocerte.
+                Buscamos talento de primer nivel. Completa el formulario y compártenos tu portafolio de cortes para postularte a las vacantes de nuestro estudio.
               </p>
             </div>
 

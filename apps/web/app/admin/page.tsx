@@ -111,7 +111,7 @@ export default async function AdminHomePage({ searchParams }: AdminHomePageProps
   ]);
   const supabase = await createSupabaseServerClient();
   const nowIso = new Date().toISOString();
-  const [nextAppointmentResult, lastCompletedAppointmentResult, latestReviewResult] =
+  const [nextAppointmentResult, lastCompletedAppointmentResult, latestReviewResult, servicesResult] =
     await Promise.all([
     supabase
       .from('appointments')
@@ -135,6 +135,12 @@ export default async function AdminHomePage({ searchParams }: AdminHomePageProps
       .eq('status', 'published')
       .order('submitted_at', { ascending: false })
       .limit(1),
+    supabase
+      .from('services')
+      .select('id, name, duration_minutes, price_cents')
+      .eq('shop_id', ctx.shopId)
+      .eq('is_active', true)
+      .order('name'),
     ]);
 
   const activeAppointments =
@@ -271,25 +277,23 @@ export default async function AdminHomePage({ searchParams }: AdminHomePageProps
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
         <div className="lg:col-span-8">
-          <div className="h-full rounded-[1.25rem] border border-white/5 bg-[#141218] p-5 lg:p-6">
-            <div className="mb-6 flex items-center justify-between">
-              <div>
-                <h3 className="text-base font-semibold text-white">Agenda de hoy</h3>
-                <p className="mt-1 text-xs text-slate-400 capitalize">
-                  {new Intl.DateTimeFormat('es-UY', { weekday: 'long', day: 'numeric', month: 'short' }).format(scheduleStart)}
-                </p>
-              </div>
-            </div>
+          <div className="h-full rounded-[1.25rem] border border-white/5 bg-[#0f0e13] overflow-hidden">
             
-            <AdminHomeSchedule
-              staff={scheduleOverview.staff}
-              events={ownerCalendarEvents}
-              startHour={ownerCalendarHours.startHour}
-              endHour={ownerCalendarHours.endHour}
-              initialDate={scheduleStart}
-              availableRangeStart={scheduleRangeStart}
-              availableRangeEndExclusive={scheduleRangeEndExclusive}
-            />
+    <AdminHomeSchedule
+      staff={scheduleOverview.staff}
+      services={(servicesResult.data || []).map(s => ({
+        id: s.id,
+        name: s.name,
+        durationMinutes: s.duration_minutes,
+        priceCents: s.price_cents
+      }))}
+      events={ownerCalendarEvents}
+      startHour={ownerCalendarHours.startHour}
+      endHour={ownerCalendarHours.endHour}
+      initialDate={scheduleStart}
+      availableRangeStart={scheduleRangeStart}
+      availableRangeEndExclusive={scheduleRangeEndExclusive}
+    />
           </div>
         </div>
 

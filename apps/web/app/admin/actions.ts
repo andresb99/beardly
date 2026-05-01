@@ -1126,6 +1126,48 @@ export async function createTimeOffAction(formData: FormData) {
   revalidatePath('/admin/staff');
 }
 
+export async function upsertStaffServicesAction(formData: FormData) {
+  const shopId = requireFormShopId(formData);
+  await requireAdmin({ shopId });
+
+  const staffId = formValue(formData, 'staff_id');
+  const serviceIds = formStringArray(formData, 'service_ids');
+
+  if (!staffId) {
+    throw new Error('Selecciona un miembro del staff.');
+  }
+
+  const supabase = await createSupabaseServerClient();
+  await ensureStaffBelongsToShop(supabase, staffId, shopId);
+
+  const { error: deleteError } = await supabase
+    .from('staff_services')
+    .delete()
+    .eq('staff_id', staffId)
+    .eq('shop_id', shopId);
+
+  if (deleteError) {
+    throw new Error(deleteError.message);
+  }
+
+  if (serviceIds.length > 0) {
+    const rows = serviceIds.map((serviceId) => ({
+      staff_id: staffId,
+      service_id: serviceId,
+      shop_id: shopId,
+    }));
+
+    const { error: insertError } = await supabase.from('staff_services').insert(rows);
+
+    if (insertError) {
+      throw new Error(insertError.message);
+    }
+  }
+
+  revalidatePath('/admin/staff');
+  revalidatePath('/book');
+}
+
 export async function createStaffTimeOffRequestAction(formData: FormData) {
   const shopId = requireFormShopId(formData);
   const ctx = await requireStaff({ shopId });

@@ -107,77 +107,57 @@ export function EventCard({ event, locale, height, compact = false, onClick }: E
         aria-label={buildAriaLabel(event, locale)}
         data-event-tone={resolvedTone}
         className={cn(
-          'group relative flex h-full w-full flex-col justify-between overflow-hidden rounded-[1.2rem] border px-3 py-2.5 text-left transition duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--primary))]/25',
+          'group relative flex h-full w-full flex-col justify-between overflow-hidden rounded-xl text-left transition duration-150',
+          isTiny ? 'px-2 py-1' : isDense ? 'px-3 py-2' : 'px-4 py-3',
           CALENDAR_EVENT_TONE_SURFACE_CLASSNAME[resolvedTone],
-          onClick
-            ? 'cursor-pointer md:hover:-translate-y-0.5 md:hover:shadow-[0_20px_34px_-24px_rgba(15,23,42,0.18)] dark:md:hover:shadow-[0_20px_34px_-18px_rgba(0,0,0,0.54)]'
-            : 'cursor-default',
+          onClick ? 'cursor-pointer hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0f0e13]' : 'cursor-default',
         )}
         onClick={() => onClick?.(event)}
       >
-        <div className="relative flex h-full flex-col">
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0 flex-1 pr-1">
-              {resourceLabel && !isDense ? (
-                <p className="truncate text-[9px] font-semibold uppercase tracking-[0.16em] opacity-70">
-                  {resourceLabel}
-                </p>
-              ) : null}
-              <p
-                className={cn(
-                  'truncate font-semibold',
-                  isTiny ? 'text-[10px] leading-4' : 'text-[11px] leading-4',
-                  resourceLabel && !isDense && 'mt-1',
-                )}
-              >
-                {clientLabel}
-              </p>
-            </div>
-
-            <Chip
-              size="sm"
-              radius="full"
-              variant="solid"
-              className={cn(
-                'h-5 shrink-0 border px-1.5 text-[9px] font-semibold uppercase tracking-[0.08em]',
-                CALENDAR_EVENT_TONE_CHIP_CLASSNAME[resolvedTone],
-              )}
-            >
-              {statusLabel}
-            </Chip>
+        {resolvedTone === 'absence' ? (
+          <div className="flex h-full items-center justify-center opacity-40">
+             <div className="flex items-center gap-2">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg>
+                <span className={cn('font-bold uppercase tracking-[0.1em]', isTiny ? 'text-[9px]' : 'text-[11px]')}>{event.title}</span>
+             </div>
           </div>
+        ) : (
+          <div className="relative flex h-full flex-col">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0 flex-1 pr-1">
+                <p className={cn('truncate font-bold text-white', isTiny ? 'text-[11px] leading-tight' : 'text-sm')}>
+                  {event.title}
+                </p>
+                {clientLabel !== event.title && !isDense ? (
+                  <p className="truncate text-xs font-medium text-slate-400 mt-0.5">
+                    {clientLabel}
+                  </p>
+                ) : null}
+              </div>
 
-          <div className={cn('mt-auto', isCompact ? 'space-y-1.5' : 'space-y-2')}>
-            <p
-              className={cn(
-                'inline-flex w-fit items-center rounded-full border border-black/10 bg-white px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-800 dark:border-white/10 dark:bg-slate-950 dark:text-slate-100',
-                isDense && 'px-1.5 py-0.5 text-[8px]',
-              )}
-            >
-              {timeRange}
-            </p>
-
-            <div className="space-y-1">
-              <p
-                className={cn(
-                  isDense ? 'text-[10px] font-semibold leading-4' : 'text-[11px] font-semibold leading-5',
-                )}
-              >
-                {event.title}
-              </p>
-              {!isTiny && detailLabel ? (
-                <p
+              {!isTiny && (
+                <Chip
+                  size="sm"
+                  radius="full"
+                  variant="solid"
                   className={cn(
-                    'opacity-78',
-                    isDense ? 'text-[9px] leading-4' : 'text-[10px] leading-4',
+                    'h-6 shrink-0 border-0 px-2 text-[9px] font-bold uppercase tracking-[0.08em]',
+                    CALENDAR_EVENT_TONE_CHIP_CLASSNAME[resolvedTone],
                   )}
                 >
-                  {detailLabel}
-                </p>
-              ) : null}
+                  {statusLabel}
+                </Chip>
+              )}
+            </div>
+
+            <div className={cn('mt-auto flex items-center gap-3', isTiny ? 'mt-0' : 'mt-auto')}>
+              <p className={cn('flex items-center font-medium text-slate-400', isTiny ? 'text-[9px]' : 'text-xs')}>
+                <svg className={cn('mr-1 h-3 w-3', isTiny ? 'h-2.5 w-2.5' : 'h-3 w-3')} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                {timeRange}
+              </p>
             </div>
           </div>
-        </div>
+        )}
       </button>
     </Tooltip>
   );

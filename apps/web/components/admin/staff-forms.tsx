@@ -8,6 +8,7 @@ import {
   createStaffInvitationsAction,
   createTimeOffAction,
   searchStaffInviteeAction,
+  upsertStaffServicesAction,
   upsertWorkingHoursRangeAction,
 } from '@/app/admin/actions';
 import { AdminSelect } from '@/components/heroui/admin-select';
@@ -27,6 +28,8 @@ interface AdminStaffFormsProps {
   shopSlug: string;
   staff: StaffOption[];
   weekdays: string[];
+  services: Array<{ id: string; name: string }>;
+  staffServices: Array<{ staff_id: string; service_id: string }>;
 }
 
 type InviteRole = 'staff' | 'admin';
@@ -59,7 +62,14 @@ function getInviteeInitials(name: string, email: string) {
   return `${parts[0]!.charAt(0)}${parts[1]!.charAt(0)}`.toUpperCase();
 }
 
-export function AdminStaffForms({ shopId, shopSlug, staff, weekdays }: AdminStaffFormsProps) {
+export function AdminStaffForms({
+  shopId,
+  shopSlug,
+  staff,
+  weekdays,
+  services,
+  staffServices,
+}: AdminStaffFormsProps) {
   const router = useRouter();
   const hasStaff = staff.length > 0;
   const defaultStaffKeys = staff[0]?.id ? [staff[0].id] : [];
@@ -562,6 +572,79 @@ export function AdminStaffForms({ shopId, shopSlug, staff, weekdays }: AdminStaf
                   Agregar bloqueo
                 </Button>
               </div>
+            </form>
+          </section>
+ 
+          <section className="surface-card rounded-[1.9rem] p-5 md:p-6">
+            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate/60 dark:text-slate-400">
+                  Especialidades
+                </p>
+                <h2 className="mt-2 text-xl font-semibold text-ink dark:text-slate-100">
+                  Asignar servicios
+                </h2>
+                <p className="mt-2 text-sm text-slate/80 dark:text-slate-300">
+                  Controla que servicios puede realizar cada barbero.
+                </p>
+              </div>
+            </div>
+ 
+            {!hasStaff ? (
+              <p className="mt-4 rounded-[1.25rem] border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+                Primero crea staff para asignar servicios.
+              </p>
+            ) : null}
+ 
+            <form action={upsertStaffServicesAction} className="mt-5 space-y-4">
+              <input type="hidden" name="shop_id" value={shopId} />
+              <input type="hidden" name="shop_slug" value={shopSlug} />
+ 
+              <AdminSelect
+                name="staff_id"
+                aria-label="Seleccion de staff para servicios"
+                label="Staff"
+                labelPlacement="inside"
+                placeholder="Selecciona staff"
+                defaultSelectedKeys={defaultStaffKeys}
+                disallowEmptySelection
+                isDisabled={!hasStaff}
+                isRequired
+                options={staffOptions}
+              />
+ 
+              <div className="rounded-[1.4rem] border border-white/65 bg-white/50 px-4 py-4 dark:border-white/10 dark:bg-white/[0.03]">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate/60 dark:text-slate-400">
+                  Servicios habilitados
+                </p>
+                <div className="mt-4 grid gap-x-6 gap-y-3 sm:grid-cols-2">
+                  {services.map((service) => (
+                    <div key={service.id} className="flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        name="service_ids"
+                        value={service.id}
+                        id={`service-${service.id}`}
+                        className="h-4 w-4 rounded border-slate/30 text-ink focus:ring-ink dark:border-slate-700 dark:bg-slate-900"
+                      />
+                      <label
+                        htmlFor={`service-${service.id}`}
+                        className="text-sm font-medium text-slate/85 dark:text-slate-300"
+                      >
+                        {service.name}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+ 
+              <Button
+                type="submit"
+                isDisabled={!hasStaff}
+                className="action-primary h-12 w-full px-5 text-sm font-semibold sm:w-auto"
+              >
+                Actualizar servicios
+              </Button>
             </form>
           </section>
         </div>

@@ -19,31 +19,31 @@ export const CALENDAR_EVENT_TONE_LABELS: Record<CalendarEventTone, string> = {
 
 export const CALENDAR_EVENT_TONE_CHIP_CLASSNAME: Record<CalendarEventTone, string> = {
   confirmed:
-    'border-emerald-700 bg-emerald-700 text-white dark:border-emerald-400 dark:bg-emerald-400 dark:text-emerald-950',
+    'border-white/10 bg-white/5 text-white dark:border-white/10 dark:bg-white/5 dark:text-white',
   pending:
-    'border-amber-400 bg-amber-400 text-amber-950 dark:border-amber-400 dark:bg-amber-400 dark:text-amber-950',
+    'border-white/10 bg-white/5 text-white dark:border-white/10 dark:bg-white/5 dark:text-white',
   cancelled:
-    'border-rose-700 bg-rose-700 text-white dark:border-rose-400 dark:bg-rose-400 dark:text-rose-950',
+    'border-white/10 bg-white/5 text-white dark:border-white/10 dark:bg-white/5 dark:text-white',
   absence:
-    'border-violet-700 bg-violet-700 text-white dark:border-violet-400 dark:bg-violet-400 dark:text-violet-950',
+    'border-white/10 bg-white/5 text-white dark:border-white/10 dark:bg-white/5 dark:text-white',
 };
 
 export const CALENDAR_EVENT_TONE_SURFACE_CLASSNAME: Record<CalendarEventTone, string> = {
   confirmed:
-    'border-emerald-200 bg-emerald-100 text-emerald-950 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-50',
+    'border-l-4 border-l-[#a855f7] border-y-transparent border-r-transparent bg-[#1e1a24] text-white dark:bg-[#1e1a24]',
   pending:
-    'border-amber-200 bg-amber-100 text-amber-950 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-50',
+    'border-l-4 border-l-[#a855f7] border-y-transparent border-r-transparent bg-[#1e1a24] text-white dark:bg-[#1e1a24]',
   cancelled:
-    'border-rose-200 bg-rose-100 text-rose-950 dark:border-rose-800 dark:bg-rose-950 dark:text-rose-50',
+    'border-l-4 border-l-rose-500 border-y-transparent border-r-transparent bg-[#1e1a24] text-white dark:bg-[#1e1a24]',
   absence:
-    'border-violet-200 bg-violet-100 text-violet-950 dark:border-violet-800 dark:bg-violet-950 dark:text-violet-50',
+    'border-transparent bg-transparent text-slate-400 dark:bg-transparent dark:text-slate-400',
 };
 
 export const CALENDAR_EVENT_TONE_MONTH_CLASSNAME: Record<CalendarEventTone, string> = {
-  confirmed: 'border-transparent bg-emerald-100 text-emerald-950 dark:bg-emerald-900 dark:text-emerald-50',
-  pending: 'border-transparent bg-amber-100 text-amber-950 dark:bg-amber-900 dark:text-amber-50',
-  cancelled: 'border-transparent bg-rose-100 text-rose-950 dark:bg-rose-900 dark:text-rose-50',
-  absence: 'border-transparent bg-violet-100 text-violet-950 dark:bg-violet-900 dark:text-violet-50',
+  confirmed: 'border-transparent bg-[#a855f7]/20 text-[#a855f7] dark:bg-[#a855f7]/20 dark:text-[#a855f7]',
+  pending: 'border-transparent bg-[#a855f7]/20 text-[#a855f7] dark:bg-[#a855f7]/20 dark:text-[#a855f7]',
+  cancelled: 'border-transparent bg-rose-500/20 text-rose-400 dark:bg-rose-500/20 dark:text-rose-400',
+  absence: 'border-transparent bg-transparent text-slate-400 dark:bg-transparent dark:text-slate-400',
 };
 
 export const CALENDAR_EVENT_TONE_LEGEND = [

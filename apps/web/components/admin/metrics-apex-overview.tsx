@@ -7,6 +7,7 @@ import { Card, CardBody } from '@heroui/card';
 import { formatCurrency } from '@navaja/shared';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { DashboardMetrics } from '@/lib/metrics';
+import { Star, CheckCircle2, Clock, XCircle, UserX, Globe } from 'lucide-react';
 
 const ApexChart = dynamic(() => import('react-apexcharts'), {
   ssr: false,
@@ -55,12 +56,12 @@ const AREA_VIEW_OPTIONS_STAFF_FOCUS: Array<{ key: AreaViewKey; label: string }> 
   { key: 'WALK_IN_BOOKINGS', label: 'Solo presencial' },
 ];
 
-const STATUS_DEFINITIONS: Array<{ key: string; label: string; color: string }> = [
-  { key: 'done', label: 'Realizadas', color: '#22c55e' },
-  { key: 'confirmed', label: 'Confirmadas', color: '#8b5cf6' },
-  { key: 'pending', label: 'Pendientes', color: '#6366f1' },
-  { key: 'cancelled', label: 'Canceladas', color: '#f43f5e' },
-  { key: 'no_show', label: 'No show', color: '#f59e0b' },
+const STATUS_DEFINITIONS: Array<{ key: string; label: string; color: string; icon: any; subtitle: string }> = [
+  { key: 'done', label: 'Realizadas', color: '#22c55e', icon: CheckCircle2, subtitle: 'reservas completadas' },
+  { key: 'confirmed', label: 'Confirmadas', color: '#8b5cf6', icon: CheckCircle2, subtitle: 'reservas confirmadas' },
+  { key: 'pending', label: 'Pendientes', color: '#6366f1', icon: Clock, subtitle: 'reservas en espera' },
+  { key: 'cancelled', label: 'Canceladas', color: '#f43f5e', icon: XCircle, subtitle: 'reservas anuladas' },
+  { key: 'no_show', label: 'No asistió', color: '#f59e0b', icon: UserX, subtitle: 'ausencias registradas' },
 ];
 
 const CHANNEL_COLORS = ['#8b5cf6', '#22c55e', '#f59e0b', '#f43f5e', '#6366f1', '#d946ef'];
@@ -535,6 +536,8 @@ export function MetricsApexOverview({
     const real = STATUS_DEFINITIONS.map((item) => ({
       label: item.label,
       color: item.color,
+      icon: item.icon,
+      subtitle: item.subtitle,
       value: sanitizePositiveNumber(metrics.countsByStatus[item.key]),
     })).filter((item) => item.value > 0);
     return {
@@ -547,6 +550,8 @@ export function MetricsApexOverview({
       .map((item, index) => ({
         label: String(item.label || '').trim() || `Canal ${index + 1}`,
         color: CHANNEL_COLORS[index % CHANNEL_COLORS.length] || '#8b5cf6',
+        icon: Globe,
+        subtitle: 'reservas en este canal',
         value: sanitizePositiveNumber(item.appointments),
       }))
       .filter((item) => item.value > 0);
@@ -647,8 +652,8 @@ export function MetricsApexOverview({
 
   return (
     <div className="grid gap-4 xl:grid-cols-2">
-      <Card className="spotlight-card soft-panel rounded-[1.9rem] border-0 shadow-none">
-        <CardBody className="space-y-4 p-5">
+      <Card className="bg-[#18161f] rounded-[1.5rem] border border-white/5 shadow-none overflow-hidden transition-colors hover:bg-[#1c1a24]">
+        <CardBody className="space-y-4 p-6">
           <div className="space-y-2">
             <h2 className="font-[family-name:var(--font-heading)] text-xl font-semibold text-ink dark:text-slate-100">
               {areaDefinition.title}
@@ -696,91 +701,180 @@ export function MetricsApexOverview({
         </CardBody>
       </Card>
 
-      <Card className="spotlight-card soft-panel rounded-[1.9rem] border-0 shadow-none">
-        <CardBody className="space-y-4 p-5">
-          <div className="space-y-2">
-            <h2 className="font-[family-name:var(--font-heading)] text-xl font-semibold text-ink dark:text-slate-100">
-              Distribucion
-            </h2>
-            <p className="text-sm text-slate/80 dark:text-slate-300">
-              Estados y origen de reservas dentro del periodo seleccionado.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              size="sm"
-              radius="lg"
-              variant="light"
-              className={`rounded-2xl border px-4 py-2 text-xs font-semibold transition ${getPillClassName(
-                pieView === 'STATUS',
-              )}`}
-              onClick={() => handlePieViewChange('STATUS')}
-            >
-              Estados
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              radius="lg"
-              variant="light"
-              className={`rounded-2xl border px-4 py-2 text-xs font-semibold transition ${getPillClassName(
-                pieView === 'CHANNEL',
-              )}`}
-              onClick={() => handlePieViewChange('CHANNEL')}
-            >
-              Canales
-            </Button>
-          </div>
-
-          <div className="grid gap-4 lg:grid-cols-[220px_1fr] lg:items-center">
+      <Card className="bg-[#18161f] rounded-[1.5rem] border border-white/5 shadow-none overflow-hidden transition-colors hover:bg-[#1c1a24]">
+        <CardBody className="space-y-6 p-6">
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
             <div className="space-y-2">
-              {pieWithShare.map((item) => (
-                <div key={`legend-${item.label}`} className="flex items-center gap-2">
-                  <span
-                    className="h-3 w-3 shrink-0 rounded-full"
-                    style={{
-                      backgroundColor: item.color,
-                    }}
-                  />
-                  <p className="text-sm text-slate/85 dark:text-slate-200">{item.label}</p>
-                </div>
-              ))}
+              <h2 className="font-[family-name:var(--font-heading)] text-xl font-semibold text-ink dark:text-slate-100">
+                Distribución
+              </h2>
+              <p className="text-sm text-slate/80 dark:text-slate-300">
+                Estados y origen de reservas dentro del periodo seleccionado.
+              </p>
             </div>
-            {shouldShowPieEmptyState ? (
-              <div className="flex h-[320px] items-center justify-center rounded-[1.3rem] border border-dashed border-white/20 bg-white/[0.01] text-center">
-                <div className="px-6">
-                  <p className="text-sm font-semibold text-slate-200">Sin datos en este periodo</p>
-                  <p className="mt-2 text-xs text-slate/70 dark:text-slate-400">
-                    Ajusta canal, barbero o rango para ver la distribucion.
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <ApexChart options={pieOptions} series={pieSeries} type="donut" height={320} />
-            )}
+
+            <div className="flex items-center bg-white/[0.03] p-1 rounded-xl border border-white/5 shrink-0">
+              <button
+                type="button"
+                className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-colors ${
+                  pieView === 'STATUS' ? 'bg-[#c5b4ff]/10 text-[#c5b4ff] shadow-sm' : 'text-slate-400 hover:text-white'
+                }`}
+                onClick={() => handlePieViewChange('STATUS')}
+              >
+                ESTADOS
+              </button>
+              <button
+                type="button"
+                className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-colors ${
+                  pieView === 'CHANNEL' ? 'bg-[#c5b4ff]/10 text-[#c5b4ff] shadow-sm' : 'text-slate-400 hover:text-white'
+                }`}
+                onClick={() => handlePieViewChange('CHANNEL')}
+              >
+                CANALES
+              </button>
+            </div>
           </div>
 
-          <div className="grid gap-2 sm:grid-cols-2">
-            {pieWithShare.map((item) => (
-              <div key={item.label} className="data-card rounded-2xl p-3">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate/60 dark:text-slate-400">
-                    {item.label}
-                  </p>
-                  <p className="text-sm font-semibold text-ink dark:text-slate-100">
-                    {formatPercent(item.share)}
-                  </p>
-                </div>
-                <p className="mt-1 text-xs text-slate/75 dark:text-slate-300">
-                  {item.value} reservas
-                </p>
-              </div>
-            ))}
+          <div className="grid gap-6 lg:grid-cols-[1fr_1.5fr] items-center">
+            
+            <div className="flex justify-center relative">
+               {shouldShowPieEmptyState ? (
+                  <div className="flex h-[280px] w-full items-center justify-center text-center">
+                    <div className="px-6">
+                      <p className="text-sm font-semibold text-slate-200">Sin datos en este periodo</p>
+                      <p className="mt-2 text-xs text-slate/70 dark:text-slate-400">
+                        Ajusta canal, barbero o rango de fechas.
+                      </p>
+                    </div>
+                  </div>
+               ) : (
+                  <div className="w-full max-w-[260px] md:max-w-[320px] flex items-center justify-center -my-4 md:my-0">
+                    <ApexChart options={pieOptions} series={pieSeries} type="donut" width="100%" height={260} /> 
+                  </div>
+               )}
+            </div>
+            
+            <div className="grid grid-cols-2 md:flex md:flex-col gap-2 md:gap-3 w-full pb-4 md:pb-0">
+               {pieWithShare.map((item) => {
+                 const Icon = item.icon || CheckCircle2;
+                 return (
+                   <div key={`card-${item.label}`} className="bg-white/[0.02] rounded-[1rem] md:rounded-[1.2rem] border border-white/5 p-3 md:p-4 transition-all hover:bg-white/[0.04] group relative flex flex-col md:flex-row justify-between h-full min-h-[90px] md:min-h-0">
+                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 md:gap-0 w-full">
+                         
+                         {/* Mobile Top Row | Desktop Left Wrapper */}
+                         <div className="flex items-start md:items-center justify-between w-full md:w-auto">
+                            <div className="shrink-0 w-8 h-8 md:w-12 md:h-12 rounded-[0.6rem] md:rounded-[1rem] flex items-center justify-center bg-white/5 transition-transform group-hover:scale-105" style={{boxShadow: `inset 0 0 0 1px ${item.color}40`, color: item.color}}>
+                               <Icon className="w-4 h-4 md:w-5 md:h-5 shrink-0" />
+                            </div>
+                            {/* Mobile Percentage */}
+                            <div className="text-xl font-black tracking-tight text-white block md:hidden">
+                              {formatPercent(item.share)}
+                            </div>
+                         </div>
+                         
+                         {/* Text Section */}
+                         <div className="flex-1 md:ml-4 flex flex-col justify-end md:justify-center">
+                           <p className="text-[10px] md:text-[11px] font-bold uppercase tracking-[0.12em] md:tracking-[0.16em] text-slate-300 line-clamp-1">{item.label}</p>
+                           <p className="text-[9px] md:text-[11px] text-slate-500 mt-0.5 leading-tight">{item.value} <span className="hidden md:inline">{item.subtitle}</span><span className="md:hidden">rsrv.</span></p>
+                         </div>
+                         
+                         {/* Desktop Percentage */}
+                         <div className="text-2xl font-black tracking-tight text-white pr-2 hidden md:block">
+                           {formatPercent(item.share)}
+                         </div>
+                         
+                      </div>
+                   </div>
+                 );
+               })}
+            </div>
+            
           </div>
         </CardBody>
       </Card>
+
+      <div className="xl:col-span-2 mt-8">
+        <div className="flex items-center justify-between xl:items-end mb-6">
+          <div>
+            <h2 className="font-[family-name:var(--font-heading)] text-2xl font-bold text-white tracking-tight">
+              Ranking de Barberos
+            </h2>
+            <p className="mt-1 text-sm text-slate-400">Rendimiento individual y aportes al negocio del equipo.</p>
+          </div>
+          <Button 
+            radius="full"
+            variant="flat" 
+            className="bg-white/5 text-xs text-white font-bold tracking-wide hover:bg-white/10 transition-colors"
+          >
+            VER INFORMES COMPLETOS
+          </Button>
+        </div>
+        
+        <div className="relative rounded-[1.5rem] bg-[#18161f]/60 backdrop-blur-md border border-white/5 overflow-hidden p-2">
+          {/* Header row */}
+          <div className="hidden lg:grid grid-cols-[2.5fr_1fr_1.5fr_1.5fr_1fr] gap-4 px-6 py-4 text-[10px] font-bold uppercase tracking-[0.15em] text-slate-500">
+             <div>Barbero</div>
+             <div>Estado</div>
+             <div>Facturación</div>
+             <div>Reservas</div>
+             <div className="text-right">Puntaje</div>
+          </div>
+          
+          <div className="flex flex-col gap-1">
+             {effectiveStaffRevenueComparison.slice(0, 5).map((staff, index) => {
+                const isTop = index === 0;
+                return (
+                  <div 
+                    key={staff.staffId} 
+                    className={`relative grid grid-cols-[1fr] lg:grid-cols-[2.5fr_1fr_1.5fr_1.5fr_1fr] gap-4 lg:gap-4 p-4 lg:px-6 items-center rounded-2xl transition-all duration-300 hover:bg-white/[0.04] border border-transparent ${isTop ? 'bg-gradient-to-r from-[#c5b4ff]/[0.08] to-transparent border-[#c5b4ff]/10 scale-[1.01] shadow-lg shadow-[#c5b4ff]/5 my-1 lg:my-0' : 'bg-white/[0.01]'}`}
+                  >
+                     <div className="flex items-center gap-4">
+                        <div className="relative">
+                          {isTop && (
+                            <div className="absolute -top-2 -right-1 z-10 bg-gradient-to-r from-amber-200 to-yellow-400 text-yellow-900 shadow-sm rounded-full w-5 h-5 flex items-center justify-center border border-white/20">
+                              <span className="text-[10px] font-extrabold leading-none">1</span>
+                            </div>
+                          )}
+                          <div className={`h-12 w-12 rounded-full overflow-hidden shrink-0 border-2 ${isTop ? 'border-[#c5b4ff]/40' : 'border-white/5'}`}>
+                             <img src={`https://ui-avatars.com/api/?name=${encodeURIComponent(staff.staffName)}&background=2a2638&color=fff&size=120`} alt={staff.staffName} className="w-full h-full object-cover" />
+                          </div>
+                        </div>
+                        <div>
+                           <p className="text-base font-bold text-white group-hover:text-[#c5b4ff] transition-colors">{shortenStaffName(staff.staffName)}</p>
+                           <p className="text-[11px] text-slate-400 font-medium">Senior Master</p>
+                        </div>
+                     </div>
+                     <div className="hidden lg:block">
+                         <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${staff.completedAppointments > 0 ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-white/5 text-slate-400 border border-white/5'}`}>
+                           <span className={`w-1.5 h-1.5 rounded-full ${staff.completedAppointments > 0 ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]' : 'bg-slate-500'}`} />
+                           {staff.completedAppointments > 0 ? 'Activo' : 'Inactivo'}
+                         </span>
+                     </div>
+                     <div className="hidden lg:block text-sm font-bold text-white">
+                        {formatCurrency(staff.totalRevenueCents)}
+                     </div>
+                     <div className="hidden lg:block text-sm font-medium text-slate-300">
+                        {staff.completedAppointments} citas
+                     </div>
+                     <div className="hidden lg:flex text-right items-center justify-end gap-1.5 text-sm font-bold text-[#c5b4ff]">
+                        {staff.trustedRating.toFixed(1)} 
+                        <Star className={`w-4 h-4 ${isTop ? 'fill-[#c5b4ff]' : 'fill-[#c5b4ff]/40'}`} />
+                     </div>
+                  </div>
+                );
+             })}
+             {effectiveStaffRevenueComparison.length === 0 && (
+                 <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
+                    <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-4">
+                      <Star className="w-6 h-6 text-slate-600" />
+                    </div>
+                    <h3 className="text-white font-bold mb-1">Sin datos del equipo</h3>
+                    <p className="text-sm text-slate-500 max-w-sm">No hay información de rendimiento para el rango de fechas seleccionado actualmente.</p>
+                 </div>
+             )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

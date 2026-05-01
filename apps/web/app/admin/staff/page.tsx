@@ -1,4 +1,4 @@
-﻿import { CalendarRange, Clock3, ShieldCheck, UserRoundPlus, type LucideIcon } from 'lucide-react';
+import { Briefcase, CalendarRange, Clock3, ExternalLink, Scissors, ShieldCheck, UserRoundPlus, Zap, type LucideIcon } from 'lucide-react';
 import { AdminStaffForms } from '@/components/admin/staff-forms';
 import { requireAdmin } from '@/lib/auth';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
@@ -42,6 +42,7 @@ interface StaffMemberCardData {
     endTime: string;
   }>;
   recentTimeOffCount: number;
+  assignedServices: Array<{ id: string; name: string }>;
 }
 
 function formatStaffDateTime(value: string, timeZone: string) {
@@ -111,6 +112,18 @@ function SummaryCard({ icon: Icon, label, value, detail }: SummaryCardProps) {
   );
 }
 
+function StaffQuickAction({ icon: Icon, label, href }: { icon: LucideIcon; label: string; href: string }) {
+  return (
+    <a
+      href={href}
+      className="flex items-center gap-2 rounded-xl border border-white/60 bg-white/40 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-slate/70 transition hover:bg-white/80 hover:text-ink dark:border-white/5 dark:bg-white/[0.02] dark:text-slate-400 dark:hover:bg-white/[0.08] dark:hover:text-slate-100"
+    >
+      <Icon className="h-3.5 w-3.5" />
+      {label}
+    </a>
+  );
+}
+
 function StaffMemberCard({
   name,
   role,
@@ -118,6 +131,7 @@ function StaffMemberCard({
   isActive,
   scheduleItems,
   recentTimeOffCount,
+  assignedServices,
 }: StaffMemberCardData) {
   const visibleScheduleItems = scheduleItems.slice(0, 4);
   const remainingScheduleItems = Math.max(scheduleItems.length - visibleScheduleItems.length, 0);
@@ -184,6 +198,38 @@ function StaffMemberCard({
           </p>
         )}
       </div>
+
+      <div className="mt-4 rounded-[1.35rem] border border-white/65 bg-white/50 px-4 py-4 dark:border-white/10 dark:bg-white/[0.03]">
+        <div className="flex items-center justify-between">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate/60 dark:text-slate-400">
+            Servicios asignados
+          </p>
+          <Scissors className="h-3.5 w-3.5 text-slate/40" />
+        </div>
+
+        {assignedServices.length ? (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {assignedServices.map((service) => (
+              <span
+                key={service.id}
+                className="rounded-full border border-white/65 bg-white/80 px-2.5 py-1 text-[10px] font-semibold text-slate/80 dark:border-white/10 dark:bg-white/[0.05] dark:text-slate-300"
+              >
+                {service.name}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-3 text-xs text-slate/75 dark:text-slate-400 italic">
+            Sin servicios asignados. No aparecera en el gestor de reservas.
+          </p>
+        )}
+      </div>
+
+      <div className="mt-5 pt-4 border-t border-slate/10 dark:border-white/5 flex flex-wrap gap-2">
+        <StaffQuickAction icon={Clock3} label="Horarios" href="#manage-hours" />
+        <StaffQuickAction icon={Scissors} label="Servicios" href="#manage-services" />
+        <StaffQuickAction icon={CalendarRange} label="Bloqueos" href="#manage-timeoff" />
+      </div>
     </article>
   );
 }
@@ -192,31 +238,47 @@ export default async function StaffPage({ searchParams }: StaffPageProps) {
   const params = await searchParams;
   const ctx = await requireAdmin({ shopSlug: params.shop });
   const supabase = await createSupabaseServerClient();
-  const [{ data: staff }, { data: workingHours }, { data: timeOff }, { data: memberships }] =
-    await Promise.all([
-      supabase
-        .from('staff')
-        .select('id, name, role, phone, is_active')
-        .eq('shop_id', ctx.shopId)
-        .order('name'),
-      supabase
-        .from('working_hours')
-        .select('id, staff_id, day_of_week, start_time, end_time, staff(name)')
-        .eq('shop_id', ctx.shopId)
-        .order('day_of_week'),
-      supabase
-        .from('time_off')
-        .select('id, staff_id, start_at, end_at, reason, staff(name)')
-        .eq('shop_id', ctx.shopId)
-        .order('start_at', { ascending: false })
-        .limit(20),
-      supabase
-        .from('shop_memberships')
-        .select('id, user_id, role, membership_status, created_at')
-        .eq('shop_id', ctx.shopId)
-        .in('role', ['admin', 'staff'])
-        .order('created_at', { ascending: false }),
-    ]);
+  const [
+    { data: staff },
+    { data: workingHours },
+    { data: timeOff },
+    { data: memberships },
+    { data: services },
+    { data: staffServices },
+  ] = await Promise.all([
+    supabase
+      .from('staff')
+      .select('id, name, role, phone, is_active')
+      .eq('shop_id', ctx.shopId)
+      .order('name'),
+    supabase
+      .from('working_hours')
+      .select('id, staff_id, day_of_week, start_time, end_time, staff(name)')
+      .eq('shop_id', ctx.shopId)
+      .order('day_of_week'),
+    supabase
+      .from('time_off')
+      .select('id, staff_id, start_at, end_at, reason, staff(name)')
+      .eq('shop_id', ctx.shopId)
+      .order('start_at', { ascending: false })
+      .limit(20),
+    supabase
+      .from('shop_memberships')
+      .select('id, user_id, role, membership_status, created_at')
+      .eq('shop_id', ctx.shopId)
+      .in('role', ['admin', 'staff'])
+      .order('created_at', { ascending: false }),
+    supabase
+      .from('services')
+      .select('id, name, is_active')
+      .eq('shop_id', ctx.shopId)
+      .eq('is_active', true)
+      .order('name'),
+    supabase
+      .from('staff_services')
+      .select('id, staff_id, service_id')
+      .eq('shop_id', ctx.shopId),
+  ]);
 
   const membershipUserIds = Array.from(
     new Set((memberships || []).map((item) => String(item.user_id || '')).filter(Boolean)),
@@ -278,10 +340,15 @@ export default async function StaffPage({ searchParams }: StaffPageProps) {
     const staffId = String(entry.staff_id || 'unknown');
     timeOffCountByStaffId.set(staffId, (timeOffCountByStaffId.get(staffId) || 0) + 1);
   }
-
   const staffCards: StaffMemberCardData[] = (staff || []).map((item) => {
     const staffId = String(item.id);
     const scheduleGroup = groupedWorkingHours.get(staffId);
+    const staffAssignedServices = (staffServices || [])
+      .filter((ss) => String(ss.staff_id) === staffId)
+      .map((ss) => {
+        const service = (services || []).find((s) => String(s.id) === String(ss.service_id));
+        return { id: String(ss.service_id), name: service?.name || 'Servicio desconocido' };
+      });
 
     return {
       id: staffId,
@@ -291,6 +358,7 @@ export default async function StaffPage({ searchParams }: StaffPageProps) {
       isActive: Boolean(item.is_active),
       scheduleItems: scheduleGroup?.items || [],
       recentTimeOffCount: timeOffCountByStaffId.get(staffId) || 0,
+      assignedServices: staffAssignedServices,
     };
   });
 
@@ -298,48 +366,54 @@ export default async function StaffPage({ searchParams }: StaffPageProps) {
     <section className="space-y-6">
       <Container variant="pageHeader" className="px-6 py-7 md:px-8 md:py-9">
         <div className="relative z-10 space-y-6">
-          <div className="grid gap-6 xl:grid-cols-[1.08fr_0.92fr] xl:items-end">
+          <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr] xl:items-end">
             <div>
-              <p className="hero-eyebrow">Equipo</p>
-              <h1 className="mt-3 font-[family-name:var(--font-heading)] text-3xl font-bold text-ink md:text-[2.35rem] dark:text-slate-100">
-                Gestion del staff con foco en personas y cobertura
+              <p className="hero-eyebrow uppercase tracking-[0.2em] text-[10px] opacity-60">
+                Operations / Team
+              </p>
+              <h1 className="mt-4 font-[family-name:var(--font-heading)] text-3xl font-bold text-ink md:text-[2.75rem] leading-[1.1] dark:text-slate-100">
+                Staff Management & <br />
+                <span className="text-brand-primary">Operational Roster</span>
               </h1>
-              <p className="mt-3 max-w-2xl text-sm leading-7 text-slate/80 dark:text-slate-300">
-                La ruta ahora separa operacion, roster y disponibilidad para que invitar personal,
-                revisar cobertura y detectar bloqueos sea mas rapido de leer.
+              <p className="mt-4 max-w-2xl text-sm leading-7 text-slate/70 dark:text-slate-400">
+                Controla la capacidad operativa de tu barbería. Gestiona horarios rotativos, 
+                asigna especialidades por barbero y supervisa la disponibilidad en tiempo real.
               </p>
 
-              <div className="mt-5 flex flex-wrap gap-2">
-                <span className="meta-chip">{(staff || []).length} personas registradas</span>
-                <span className="meta-chip">{groupedWorkingHours.size} con horarios cargados</span>
-                <span className="meta-chip">{(timeOff || []).length} bloqueos recientes</span>
+              <div className="mt-6 flex flex-wrap gap-2">
+                <span className="meta-chip border-slate/20 bg-slate/5 text-slate/80 dark:border-white/10 dark:bg-white/5 dark:text-slate-300">
+                  {staffCards.length} Profesionales
+                </span>
+                <span className="meta-chip border-slate/20 bg-slate/5 text-slate/80 dark:border-white/10 dark:bg-white/5 dark:text-slate-300">
+                  {groupedWorkingHours.size} Con Horario Causal
+                </span>
               </div>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-2">
               <SummaryCard
                 icon={ShieldCheck}
-                label="Equipo activo"
+                label="Staff Activo"
                 value={String(activeStaffCount)}
-                detail={`${inactiveStaffCount} inactivos en este momento`}
+                detail={`${inactiveStaffCount} perfiles en pausa`}
               />
               <SummaryCard
                 icon={UserRoundPlus}
                 label="Invitaciones"
                 value={String((memberships || []).length)}
-                detail={`${pendingInvitesCount} pendientes de aceptar`}
+                detail={`${pendingInvitesCount} esperando acción`}
               />
               <SummaryCard
                 icon={Clock3}
-                label="Cobertura"
+                label="Cobertura Semanal"
                 value={String((workingHours || []).length)}
-                detail={`${groupedWorkingHours.size} perfiles con bloques semanales`}
+                detail="Bloques operativos totales"
               />
               <SummaryCard
                 icon={CalendarRange}
                 label="Bloqueos"
                 value={String((timeOff || []).length)}
-                detail="Historial reciente de indisponibilidad"
+                detail="Excepciones recientes"
               />
             </div>
           </div>
@@ -354,31 +428,37 @@ export default async function StaffPage({ searchParams }: StaffPageProps) {
           id: String(item.id),
           name: String(item.name),
         }))}
+        services={(services || []).map((s) => ({ id: String(s.id), name: String(s.name) }))}
+        staffServices={(staffServices || []).map((ss) => ({
+          staff_id: String(ss.staff_id),
+          service_id: String(ss.service_id),
+        }))}
       />
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
-        <section className="surface-card rounded-[1.9rem] p-5 md:p-6">
-          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)]">
+        <section className="surface-card rounded-[2rem] p-6 md:p-8 shadow-sm border border-slate/5 dark:border-white/5">
+          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between border-b border-slate/10 dark:border-white/5 pb-6">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate/60 dark:text-slate-400">
-                Staff
+              <p className="hero-eyebrow uppercase tracking-[0.2em] text-[10px] opacity-60">
+                Staff Registry
               </p>
-              <h2 className="mt-2 text-xl font-semibold text-ink dark:text-slate-100">
-                Fichas del equipo
+              <h2 className="mt-2 text-2xl font-bold tracking-tight text-ink dark:text-slate-100 italic">
+                Equipo de Trabajo
               </h2>
-              <p className="mt-2 text-sm text-slate/80 dark:text-slate-300">
-                Cada card muestra identidad, estado y una lectura corta de su cobertura semanal.
+              <p className="mt-2 text-sm text-slate/60 dark:text-slate-400">
+                Resumen ejecutivo por barbero, especialidades y bloques semanales.
               </p>
             </div>
-            <span className="meta-chip">{staffCards.length} perfiles</span>
           </div>
 
           {!staffCards.length ? (
-            <div className="mt-5 rounded-[1.5rem] border border-white/65 bg-white/55 px-4 py-4 text-sm text-slate/75 dark:border-white/10 dark:bg-white/[0.03] dark:text-slate-300">
-              Todavia no hay personal creado para este workspace.
+            <div className="mt-10 rounded-[2rem] border border-dashed border-slate/20 bg-slate/5 py-16 text-center dark:border-white/10 dark:bg-white/5">
+              <p className="text-sm text-slate/50 dark:text-slate-500">
+                Todavía no has registrado personal para esta barbería.
+              </p>
             </div>
           ) : (
-            <div className="mt-5 grid gap-4 md:grid-cols-2">
+            <div className="mt-8 grid gap-6 md:grid-cols-2">
               {staffCards.map((item) => (
                 <StaffMemberCard key={item.id} {...item} />
               ))}
@@ -386,167 +466,156 @@ export default async function StaffPage({ searchParams }: StaffPageProps) {
           )}
         </section>
 
-        <div className="space-y-5">
-          <section className="surface-card rounded-[1.9rem] p-5 md:p-6">
-            <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="space-y-6">
+          <section className="surface-card rounded-[2rem] p-6 md:p-8 border border-slate/5 dark:border-white/5">
+            <div className="flex items-start justify-between mb-6">
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate/60 dark:text-slate-400">
-                  Invitaciones
+                <p className="hero-eyebrow uppercase tracking-[0.2em] text-[10px] opacity-60">
+                  Access Control
                 </p>
-                <h2 className="mt-2 text-xl font-semibold text-ink dark:text-slate-100">
-                  Estado de accesos
-                </h2>
-                <p className="mt-2 text-sm text-slate/80 dark:text-slate-300">
-                  Aqui ves rapidamente si cada invitacion fue aceptada o sigue pendiente.
-                </p>
+                <h3 className="mt-1 text-lg font-bold text-ink dark:text-slate-100">Invitaciones</h3>
               </div>
-              <span
-                className="meta-chip"
-                data-tone={pendingInvitesCount > 0 ? 'warning' : undefined}
-              >
-                {pendingInvitesCount} pendientes
+              <span className="meta-chip text-[10px] uppercase font-bold tracking-widest bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20">
+                {pendingInvitesCount} Pendientes
               </span>
             </div>
 
-            <div className="mt-5 grid gap-3">
+            <div className="space-y-3">
               {(memberships || []).length === 0 ? (
-                <div className="rounded-[1.45rem] border border-white/65 bg-white/55 px-4 py-4 text-sm text-slate/75 dark:border-white/10 dark:bg-white/[0.03] dark:text-slate-300">
-                  Todavia no hay invitaciones creadas para este workspace.
-                </div>
-              ) : null}
+                <p className="text-sm text-slate/50 dark:text-slate-500 py-4 italic">
+                  No hay invitaciones activas.
+                </p>
+              ) : (
+                (memberships || []).map((item) => {
+                  const membershipStatus = String(item.membership_status || 'invited');
+                  const profileName =
+                    membershipProfilesByUserId.get(String(item.user_id || '')) ||
+                    `User ${String(item.user_id || '').slice(0, 8)}`;
 
-              {(memberships || []).map((item) => {
-                const membershipStatus = String(item.membership_status || 'invited');
-                const profileName =
-                  membershipProfilesByUserId.get(String(item.user_id || '')) ||
-                  `Usuario ${String(item.user_id || '').slice(0, 8)}`;
-
-                return (
-                  <article
-                    key={String(item.id)}
-                    className="rounded-[1.45rem] border border-white/65 bg-white/55 p-4 dark:border-white/10 dark:bg-white/[0.03]"
-                  >
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-semibold text-ink dark:text-slate-100">
+                  return (
+                    <article
+                      key={String(item.id)}
+                      className="rounded-[1.5rem] border border-slate/5 bg-slate/5 p-4 dark:border-white/5 dark:bg-white/[0.02] flex items-center justify-between gap-4"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-bold text-ink dark:text-slate-100 truncate">
                           {profileName}
                         </p>
-                        <p className="mt-1 text-xs text-slate/70 dark:text-slate-400">
+                        <p className="text-[10px] text-slate/50 uppercase font-bold tracking-tight mt-0.5">
                           {formatMembershipRoleLabel(String(item.role))}
                         </p>
-                        <p className="mt-1 text-xs text-slate/70 dark:text-slate-400">
-                          {formatStaffDateTime(String(item.created_at), ctx.shopTimezone)}
-                        </p>
                       </div>
-                      <span className="meta-chip" data-tone={inviteStatusTone[membershipStatus]}>
+                      <span className="meta-chip text-[9px] px-2 py-0.5" data-tone={inviteStatusTone[membershipStatus]}>
                         {inviteStatusLabel[membershipStatus] || membershipStatus}
                       </span>
-                    </div>
-                  </article>
-                );
-              })}
+                    </article>
+                  );
+                })
+              )}
             </div>
           </section>
 
-          <section className="surface-card rounded-[1.9rem] p-5 md:p-6">
-            <div className="flex flex-wrap items-start justify-between gap-3">
+          <section className="surface-card rounded-[2rem] p-6 md:p-8 border border-slate/5 dark:border-white/5">
+            <div className="flex items-start justify-between mb-6">
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate/60 dark:text-slate-400">
-                  Bloqueos
+                <p className="hero-eyebrow uppercase tracking-[0.2em] text-[10px] opacity-60">
+                  Agenda Logs
                 </p>
-                <h2 className="mt-2 text-xl font-semibold text-ink dark:text-slate-100">
-                  Indisponibilidad reciente
-                </h2>
-                <p className="mt-2 text-sm text-slate/80 dark:text-slate-300">
-                  Historial compacto de ausencias, pausas y excepciones cargadas desde el panel.
-                </p>
+                <h3 className="mt-1 text-lg font-bold text-ink dark:text-slate-100">Ausencias Recientes</h3>
               </div>
-              <span className="meta-chip" data-tone={(timeOff || []).length ? 'danger' : undefined}>
-                {(timeOff || []).length} registros
-              </span>
             </div>
 
-            <div className="mt-5 grid gap-3">
+            <div className="space-y-4">
               {(timeOff || []).length === 0 ? (
-                <div className="rounded-[1.45rem] border border-white/65 bg-white/55 px-4 py-4 text-sm text-slate/75 dark:border-white/10 dark:bg-white/[0.03] dark:text-slate-300">
-                  No hay bloqueos recientes registrados.
-                </div>
-              ) : null}
-
-              {(timeOff || []).map((item) => (
-                <article
-                  key={String(item.id)}
-                  className="rounded-[1.45rem] border border-white/65 bg-white/55 p-4 dark:border-white/10 dark:bg-white/[0.03]"
-                >
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-semibold text-ink dark:text-slate-100">
-                        {String((item.staff as { name?: string } | null)?.name || 'Personal')}
-                      </p>
-                      <p className="mt-2 text-xs text-slate/70 dark:text-slate-400">
-                        Inicio: {formatStaffDateTime(String(item.start_at), ctx.shopTimezone)}
-                      </p>
-                      <p className="mt-1 text-xs text-slate/70 dark:text-slate-400">
-                        Fin: {formatStaffDateTime(String(item.end_at), ctx.shopTimezone)}
-                      </p>
+                <p className="text-sm text-slate/50 dark:text-slate-500 py-4 italic">
+                  Sin bloqueos registrados.
+                </p>
+              ) : (
+                (timeOff || []).map((item) => (
+                  <article
+                    key={String(item.id)}
+                    className="group rounded-[1.5rem] border border-slate/5 bg-slate/5 p-4 dark:border-white/5 dark:bg-white/[0.02]"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-bold text-ink dark:text-slate-100">
+                          {String((item.staff as { name?: string } | null)?.name || 'Personal')}
+                        </p>
+                        <div className="mt-2 space-y-1">
+                          <p className="text-[10px] text-slate/50 flex items-center gap-1.5">
+                            <span className="h-1.5 w-1.5 rounded-full bg-rose-500/50" />
+                            {formatStaffDateTime(String(item.start_at), ctx.shopTimezone)}
+                          </p>
+                          <p className="text-[10px] text-slate/50 flex items-center gap-1.5">
+                            <span className="h-1.5 w-1.5 rounded-full bg-slate-500/30" />
+                            {formatStaffDateTime(String(item.end_at), ctx.shopTimezone)}
+                          </p>
+                        </div>
+                      </div>
+                      <span className="shrink-0 rounded-full bg-rose-500/10 px-2 py-0.5 text-[9px] font-bold text-rose-600 uppercase tracking-widest dark:text-rose-400">
+                        Off
+                      </span>
                     </div>
-                    <span className="meta-chip" data-tone="danger">
-                      Bloqueado
-                    </span>
-                  </div>
-                  <p className="mt-3 text-sm text-slate/75 dark:text-slate-300">
-                    {String(item.reason || 'Sin motivo')}
-                  </p>
-                </article>
-              ))}
+                    {item.reason && (
+                      <p className="mt-3 text-xs leading-relaxed text-slate/60 dark:text-slate-400 italic">
+                        "{item.reason}"
+                      </p>
+                    )}
+                  </article>
+                ))
+              )}
             </div>
           </section>
         </div>
       </div>
 
-      <section className="surface-card rounded-[1.9rem] p-5 md:p-6">
-        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+      <section className="surface-card rounded-[2rem] p-6 md:p-8 border border-slate/5 dark:border-white/5">
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between mb-8">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate/60 dark:text-slate-400">
-              Cobertura
+            <p className="hero-eyebrow uppercase tracking-[0.2em] text-[10px] opacity-60">
+              Coverage Mapping
             </p>
-            <h2 className="mt-2 text-xl font-semibold text-ink dark:text-slate-100">
-              Horarios configurados por persona
+            <h2 className="mt-2 text-2xl font-bold tracking-tight text-ink dark:text-slate-100">
+              Disponibilidad Agrupada
             </h2>
-            <p className="mt-2 text-sm text-slate/80 dark:text-slate-300">
-              Lectura agrupada para validar rapidamente que dias y franjas tiene cada miembro.
+            <p className="mt-2 text-sm text-slate/60 dark:text-slate-400">
+              Vista rápida de la fuerza laboral disponible por franjas horarias.
             </p>
           </div>
-          <span className="meta-chip">{groupedWorkingHours.size} con disponibilidad</span>
         </div>
 
         {groupedWorkingHours.size === 0 ? (
-          <div className="mt-5 rounded-[1.5rem] border border-white/65 bg-white/55 px-4 py-4 text-sm text-slate/75 dark:border-white/10 dark:bg-white/[0.03] dark:text-slate-300">
-            Aun no se cargaron horarios laborales para el equipo.
+          <div className="rounded-[1.5rem] border border-dashed border-slate/20 bg-slate/5 py-12 text-center dark:border-white/10 dark:bg-white/5">
+            <p className="text-sm text-slate/50 dark:text-slate-500 text-center">
+              Sin bloques horarios configurados.
+            </p>
           </div>
         ) : (
-          <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
             {Array.from(groupedWorkingHours.values()).map((group) => (
-              <article key={group.staffId} className="data-card rounded-[1.6rem] p-4">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[1.1rem] border border-white/65 bg-white/72 text-sm font-semibold text-ink dark:border-white/10 dark:bg-white/[0.05] dark:text-slate-100">
+              <article 
+                key={group.staffId} 
+                className="data-card rounded-[1.8rem] p-5 border border-slate/5 dark:border-white/5 flex flex-col"
+              >
+                <div className="flex items-center gap-4 mb-5">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[1.1rem] border border-white/60 bg-white/72 text-sm font-bold text-ink dark:border-white/10 dark:bg-white/[0.05] dark:text-slate-100 shadow-sm transition group-hover:scale-105">
                     {getInitials(group.staffName)}
                   </div>
-                  <div>
-                    <p className="text-base font-semibold text-ink dark:text-slate-100">
+                  <div className="min-w-0">
+                    <p className="text-base font-bold text-ink dark:text-slate-100 truncate">
                       {group.staffName}
                     </p>
-                    <p className="mt-1 text-xs text-slate/70 dark:text-slate-400">
-                      {group.items.length} bloques semanales
+                    <p className="text-[10px] text-slate/50 uppercase font-bold tracking-widest mt-1">
+                      {group.items.length} Bloques / Semana
                     </p>
                   </div>
                 </div>
 
-                <div className="mt-4 flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2 mt-auto">
                   {group.items.map((entry) => (
                     <span
                       key={entry.id}
-                      className="rounded-full border border-white/65 bg-white/80 px-3 py-1.5 text-[11px] font-semibold text-slate/85 dark:border-white/10 dark:bg-white/[0.05] dark:text-slate-200"
+                      className="rounded-full border border-slate/5 bg-slate/5 px-3 py-1.5 text-[10px] font-bold text-slate/70 dark:border-white/5 dark:bg-white/[0.04] dark:text-slate-300"
                     >
                       {formatScheduleChip(entry.dayLabel, entry.startTime, entry.endTime)}
                     </span>
