@@ -340,7 +340,7 @@ export function AdminHomeSchedule({
           resourceId,
           resourceName: staff.find(s => s.id === resourceId)?.name,
           status: 'pending',
-          tone: 'neutral',
+          tone: 'pending',
         };
         
         setDraftEvent(newDraft);
