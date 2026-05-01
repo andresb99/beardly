@@ -625,7 +625,7 @@ export function SiteHeader({ initialState = DEFAULT_SITE_HEADER_STATE }: SiteHea
           }
           setIsMenuOpen(open);
         }}
-        className="bg-transparent px-0 pt-0"
+        className={cn("bg-transparent px-0 pt-0", navigationContext === 'admin' && "lg:hidden")}
         classNames={{
           wrapper: cn(
             'glass-nav mx-auto w-full max-w-none px-4 md:px-6 lg:px-8',
