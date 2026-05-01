@@ -100,6 +100,10 @@ export function WeekGrid({
         endHour={endHour}
         locale={locale}
         onEventClick={onEventClick}
+        onEventClose={onEventClose}
+        onSlotClick={onSlotClick}
+        selectedEventId={selectedEventId}
+        renderEventPopover={renderEventPopover}
       />
     );
   }

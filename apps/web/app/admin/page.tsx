@@ -301,15 +301,14 @@ export default async function AdminHomePage({ searchParams }: AdminHomePageProps
           <div className="rounded-[1.25rem] border border-white/5 bg-[#141218] p-5 lg:p-6">
             <h3 className="text-base font-semibold text-white">Inbox</h3>
             <p className="mt-1 mb-5 text-xs text-slate-400">Mensajes y avisos</p>
-            <div className="[&>section]:p-0 [&>section]:bg-transparent [&>section]:border-none [&>section_.meta-chip]:hidden [&>section_p.text-[11px]]:hidden [&>section_h2]:hidden [&>section_p.text-sm]:hidden">
-               <AdminNotificationsDigest
-                  shopSlug={ctx.shopSlug}
-                  totalCount={notifications.totalCount}
-                  pendingTimeOffCount={notifications.pendingTimeOffCount}
-                  pendingMembershipCount={notifications.pendingMembershipCount}
-                  stalePendingIntents={notifications.stalePendingIntents}
-               />
-            </div>
+            <AdminNotificationsDigest
+              shopSlug={ctx.shopSlug}
+              totalCount={notifications.totalCount}
+              pendingTimeOffCount={notifications.pendingTimeOffCount}
+              pendingMembershipCount={notifications.pendingMembershipCount}
+              stalePendingIntents={notifications.stalePendingIntents}
+              isCompact
+            />
           </div>
           
           <div className="rounded-[1.25rem] border border-white/5 bg-[#141218] p-5 lg:p-6 flex-1">

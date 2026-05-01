@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { PRIVATE_SECTION_METADATA } from '@/lib/site-metadata';
 import { requireAdmin } from '@/lib/auth';
 import { AdminSidebar } from '@/components/admin/admin-sidebar';
+import { AdminMobileHeader } from '@/components/admin/admin-mobile-header';
 import { getSiteHeaderInitialState } from '@/lib/site-header-state.server';
 
 export const metadata: Metadata = PRIVATE_SECTION_METADATA;
@@ -12,34 +13,28 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     getSiteHeaderInitialState(),
   ]);
 
+  const commonProps = {
+    workspaceName: ctx.shopName,
+    workspacePlan: "Plan Pro - Centro",
+    userProfileName: headerState.profileName,
+    userEmail: headerState.userEmail,
+    userAvatarUrl: headerState.profileAvatarUrl,
+    unreadNotifications: headerState.pendingNotificationCount,
+    role: headerState.role,
+    activeWorkspaceSlug: headerState.selectedWorkspaceSlug,
+    isPlatformAdmin: headerState.isPlatformAdmin,
+  };
+
   return (
-    <>
-      <style dangerouslySetInnerHTML={{ __html: `
-        @media (min-width: 1024px) {
-          .glass-nav { display: none !important; }
-          .main-shell { padding: 0 !important; }
-          .admin-desktop-wrapper { height: 100vh; display: flex; overflow: hidden; }
-          .admin-desktop-main { flex: 1; overflow-y: auto; }
-        }
-      ` }} />
-      <div className="admin-desktop-wrapper w-full bg-[#121016] text-white">
-        <AdminSidebar
-          workspaceName={ctx.shopName}
-          workspacePlan="Plan Pro - Centro"
-          userProfileName={headerState.profileName}
-          userEmail={headerState.userEmail}
-          userAvatarUrl={headerState.profileAvatarUrl}
-          unreadNotifications={headerState.pendingNotificationCount}
-          role={headerState.role}
-          activeWorkspaceSlug={headerState.selectedWorkspaceSlug}
-          isPlatformAdmin={headerState.isPlatformAdmin}
-        />
-        <main className="admin-desktop-main w-full bg-[#121016]">
-          <div className="mx-auto max-w-[1440px] px-0 md:px-6 lg:px-10 py-4 md:py-6 lg:py-10 text-white min-h-screen">
-            {children}
-          </div>
-        </main>
-      </div>
-    </>
+    <div className="flex h-screen w-full flex-col overflow-hidden bg-[#121016] lg:flex-row">
+      <AdminMobileHeader {...commonProps} />
+      <AdminSidebar {...commonProps} />
+      
+      <main className="flex-1 overflow-y-auto bg-[#121016]">
+        <div className="mx-auto max-w-[1440px] px-4 py-6 md:px-8 md:py-8 lg:px-10 lg:py-10">
+          {children}
+        </div>
+      </main>
+    </div>
   );
 }

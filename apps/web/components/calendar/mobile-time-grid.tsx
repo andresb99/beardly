@@ -1,6 +1,7 @@
 'use client';
 
 import { Button } from '@heroui/button';
+import { Popover, PopoverTrigger, PopoverContent } from '@heroui/react';
 import { useEffect, useMemo, useState } from 'react';
 import { cn } from '@/lib/cn';
 import type { CalendarEvent } from './calendar';
@@ -13,6 +14,10 @@ interface MobileTimeGridProps {
   endHour: number;
   locale: string;
   onEventClick?: ((event: CalendarEvent) => void) | undefined;
+  onEventClose?: () => void;
+  onSlotClick?: ((date: Date) => void) | undefined;
+  selectedEventId?: string | null;
+  renderEventPopover?: (event: CalendarEvent, onClose: () => void) => React.ReactNode;
 }
 
 interface DayEventSegment {
@@ -99,6 +104,10 @@ export function MobileTimeGrid({
   endHour,
   locale,
   onEventClick,
+  onEventClose,
+  onSlotClick,
+  selectedEventId,
+  renderEventPopover,
 }: MobileTimeGridProps) {
   const totalMinutes = (endHour - startHour) * 60;
   const gridHeight = totalMinutes * PIXELS_PER_MINUTE;
@@ -343,7 +352,20 @@ export function MobileTimeGrid({
                 </div>
               </div>
 
-              <div className="relative border-l border-white/10 dark:border-white/[0.05]">
+              <div 
+                className="relative border-l border-white/10 dark:border-white/[0.05]"
+                onClick={(e) => {
+                  if (!onSlotClick || e.target !== e.currentTarget) return;
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const y = e.clientY - rect.top;
+                  const totalMinutesFromStart = y / PIXELS_PER_MINUTE;
+                  const hour = startHour + Math.floor(totalMinutesFromStart / 60);
+                  const minute = Math.floor((totalMinutesFromStart % 60) / SLOT_MINUTES) * SLOT_MINUTES;
+                  const slotDate = new Date(selectedDate);
+                  slotDate.setHours(hour, minute, 0, 0);
+                  onSlotClick(slotDate);
+                }}
+              >
                 <div className="relative" style={{ height: gridHeight }}>
                   {hourOffsets.map((offset, index) => (
                     <div
@@ -400,19 +422,47 @@ export function MobileTimeGrid({
                         ? `calc(${(segment.columnIndex * 100) / segment.columnCount}% + 0.18rem)`
                         : '0.4rem';
 
+                    const isSelected = selectedEventId === segment.event.id;
+
                     return (
                       <div
                         key={`${segment.event.id}-${segment.renderStart.toISOString()}`}
-                        className="absolute z-10"
-                        style={{ top, height, left, width }}
+                        className="absolute pointer-events-auto"
+                        style={{ top, height, left, width, zIndex: isSelected ? 40 : 10 }}
                       >
-                        <EventCard
-                          event={segment.event}
-                          locale={locale}
-                          height={height}
-                          compact={segment.columnCount > 1 || height < 112}
-                          onClick={onEventClick}
-                        />
+                        {renderEventPopover ? (
+                          <Popover 
+                            isOpen={isSelected} 
+                            placement="bottom"
+                            offset={10}
+                            onOpenChange={(isOpen) => {
+                               if (!isOpen) onEventClose?.();
+                            }}
+                          >
+                            <PopoverTrigger>
+                              <div className="h-full w-full outline-none">
+                                <EventCard
+                                  event={segment.event}
+                                  locale={locale}
+                                  height={height}
+                                  compact={segment.columnCount > 1 || height < 112}
+                                  onClick={onEventClick}
+                                />
+                              </div>
+                            </PopoverTrigger>
+                            <PopoverContent className="p-0 bg-transparent border-0 shadow-none outline-none">
+                              {renderEventPopover(segment.event, () => onEventClose?.())}
+                            </PopoverContent>
+                          </Popover>
+                        ) : (
+                          <EventCard
+                            event={segment.event}
+                            locale={locale}
+                            height={height}
+                            compact={segment.columnCount > 1 || height < 112}
+                            onClick={onEventClick}
+                          />
+                        )}
                       </div>
                     );
                   })}

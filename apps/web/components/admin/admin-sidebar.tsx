@@ -28,6 +28,7 @@ import {
   Avatar 
 } from '@heroui/react';
 import { HeaderBrand } from '@/components/public/header-brand';
+import { cn } from '@/lib/cn';
 import { buildAdminHref } from '@/lib/workspace-routes';
 import { buildPlatformUrl } from '@/lib/shop-links';
 
@@ -41,6 +42,8 @@ interface AdminSidebarProps {
   role: 'admin' | 'staff' | 'user';
   activeWorkspaceSlug: string | null;
   isPlatformAdmin: boolean;
+  isMobile?: boolean;
+  onMobileClose?: () => void;
 }
 
 export function AdminSidebar({
@@ -53,6 +56,8 @@ export function AdminSidebar({
   role,
   activeWorkspaceSlug,
   isPlatformAdmin,
+  isMobile = false,
+  onMobileClose,
 }: AdminSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -69,6 +74,12 @@ export function AdminSidebar({
     { label: 'Notificaciones', href: '/admin/notifications', icon: Bell, badge: unreadNotifications },
     { label: 'Barbería', href: '/admin/barbershop', icon: Settings },
   ];
+
+  const handleLinkClick = (href: string) => {
+    if (isMobile && onMobileClose) {
+      onMobileClose();
+    }
+  };
 
   const adminNotificationsHref = useMemo(
     () => buildAdminHref('/admin/notifications', activeWorkspaceSlug),
@@ -87,6 +98,7 @@ export function AdminSidebar({
   const handleAvatarAction = useCallback(
     (key: Key) => {
       const action = String(key);
+      if (isMobile && onMobileClose) onMobileClose();
 
       if (action === 'account') {
         router.push('/cuenta');
@@ -122,21 +134,29 @@ export function AdminSidebar({
         void handleSignOut();
       }
     },
-    [adminNotificationsHref, handleSignOut, router, subscriptionHref],
+    [adminNotificationsHref, handleSignOut, router, subscriptionHref, isMobile, onMobileClose],
   );
 
   return (
-    <aside className="hidden h-screen w-64 flex-col border-r border-white/5 bg-[#0f0d14] py-8 lg:flex shrink-0">
+    <aside className={cn(
+      "flex flex-col border-r border-white/5 bg-[#0f0d14] py-8 shrink-0 overflow-y-auto",
+      isMobile ? "w-full h-full" : "hidden h-screen w-64 lg:flex"
+    )}>
       <div className="px-6 pb-6">
-        <NextLink href="/" className="mb-10 block max-w-28 text-white">
-          <HeaderBrand />
-        </NextLink>
+        {!isMobile && (
+          <NextLink href="/" className="mb-10 block max-w-28 text-white">
+            <HeaderBrand />
+          </NextLink>
+        )}
 
         <div className="mb-3 text-[10px] font-semibold tracking-[0.2em] text-slate-500 uppercase">
           WORKSPACE
         </div>
         <button 
-          onClick={() => window.location.assign(buildPlatformUrl('/mis-barberias'))}
+          onClick={() => {
+            if (isMobile && onMobileClose) onMobileClose();
+            window.location.assign(buildPlatformUrl('/mis-barberias'));
+          }}
           className="flex w-full items-center justify-between rounded-[1rem] bg-white/[0.04] p-3 text-left transition hover:bg-white/[0.06] border border-white/[0.05]"
         >
           <div className="flex items-center gap-3">
@@ -150,7 +170,7 @@ export function AdminSidebar({
         </button>
       </div>
 
-      <nav className="flex-1 space-y-1.5 px-4 overflow-y-auto">
+      <nav className="flex-1 space-y-1.5 px-4">
         {navItems.map((item) => {
           const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
           const Icon = item.icon;
@@ -158,6 +178,7 @@ export function AdminSidebar({
             <NextLink
               key={item.href}
               href={item.href}
+              onClick={() => handleLinkClick(item.href)}
               className={`group flex items-center justify-between rounded-xl px-3 py-2.5 text-[13px] font-medium transition ${
                 isActive
                   ? 'bg-white/5 text-[#d0bcff] border border-white/5 shadow-sm'

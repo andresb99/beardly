@@ -141,21 +141,21 @@ export function CalendarHeader({
           </div>
         </div>
 
-        <div className="flex w-full flex-col items-start gap-3 xl:w-auto xl:min-w-[21rem] xl:flex-none xl:items-end">
-          <div className="flex items-center gap-3">
+        <div className="flex w-full flex-col items-start gap-4 lg:w-auto lg:items-end lg:flex-none">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
              <div className="hidden items-center gap-2 rounded-full bg-white/5 px-4 py-1.5 md:flex">
                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Sync with device</span>
                <div className="h-4 w-7 rounded-full bg-white/10 p-0.5">
                   <div className="h-3 w-3 rounded-full bg-violet-400 translate-x-3"></div>
                </div>
              </div>
-
+ 
              <Button
                 radius="sm"
-                className="h-9 bg-white/5 px-4 text-xs font-semibold text-slate-200 hover:bg-white/10"
+                className="h-9 bg-white/5 px-3 sm:px-4 text-xs font-semibold text-slate-200 hover:bg-white/10"
                 startContent={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line><path d="M8 14h.01"></path><path d="M12 14h.01"></path><path d="M16 14h.01"></path><path d="M8 18h.01"></path><path d="M12 18h.01"></path><path d="M16 18h.01"></path></svg>}
              >
-                Add Blockout Time
+                <span className="hidden sm:inline">Add Blockout Time</span>
              </Button>
 
             <div className="inline-flex items-center gap-1 rounded-sm bg-white/5 p-1">

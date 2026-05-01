@@ -8,6 +8,7 @@ interface AdminNotificationsDigestProps {
   pendingTimeOffCount: number;
   pendingMembershipCount: number;
   stalePendingIntents: number;
+  isCompact?: boolean;
 }
 
 export function AdminNotificationsDigest({
@@ -16,7 +17,35 @@ export function AdminNotificationsDigest({
   pendingTimeOffCount,
   pendingMembershipCount,
   stalePendingIntents,
+  isCompact = false,
 }: AdminNotificationsDigestProps) {
+  if (isCompact) {
+    return (
+      <div className="space-y-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 lg:grid-cols-1">
+          <div className="rounded-xl border border-white/5 bg-white/[0.02] p-3">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Ausencias</p>
+            <p className="mt-1 text-lg font-semibold text-white">{pendingTimeOffCount}</p>
+          </div>
+          <div className="rounded-xl border border-white/5 bg-white/[0.02] p-3">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Invitaciones</p>
+            <p className="mt-1 text-lg font-semibold text-white">{pendingMembershipCount}</p>
+          </div>
+          <div className="rounded-xl border border-white/5 bg-white/[0.02] p-3">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Pagos</p>
+            <p className="mt-1 text-lg font-semibold text-white">{stalePendingIntents}</p>
+          </div>
+        </div>
+        <Link
+          href={`/admin/notifications?shop=${encodeURIComponent(shopSlug)}`}
+          className="text-xs font-bold text-violet-400 hover:text-violet-300 uppercase tracking-wider"
+        >
+          Ver todo el inbox →
+        </Link>
+      </div>
+    );
+  }
+
   return (
     <Container as={Card} variant="section" className="rounded-[1.9rem]" shadow="none">
       <CardBody className="p-5 md:p-6">

@@ -96,10 +96,10 @@ export function AdminHomeSchedule({
     const adminEvent = finalVisibleEvents.find(e => e.id === event.id);
 
     return (
-      <div className="bg-[#1f1f23] border border-white/10 shadow-2xl rounded-2xl w-[420px] overflow-hidden">
-        <div className="px-5 py-6 space-y-5">
+      <div className="bg-[#1f1f23] border border-white/10 shadow-2xl rounded-2xl w-[calc(100vw-2rem)] md:w-[420px] overflow-hidden">
+        <div className="px-4 py-5 md:px-5 md:py-6 space-y-4 md:space-y-5">
           {/* Header with status types */}
-          <div className="flex items-center gap-2 mb-2">
+          <div className="flex flex-wrap items-center gap-2 mb-2">
             <Button size="sm" radius="full" className="bg-violet-500/20 text-violet-300 px-4 h-7 text-[11px] font-bold border border-violet-500/20">TURNO</Button>
             <Button size="sm" radius="full" variant="light" className="text-slate-400 hover:bg-white/5 px-4 h-7 text-[11px] font-medium">AUSENCIA</Button>
             <Button size="sm" radius="full" variant="light" className="text-slate-400 hover:bg-white/5 px-4 h-7 text-[11px] font-medium">BLOQUEO</Button>
@@ -125,7 +125,7 @@ export function AdminHomeSchedule({
           </div>
 
           {/* Service and Staff Grid */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 px-1">Servicio</label>
               <Select
