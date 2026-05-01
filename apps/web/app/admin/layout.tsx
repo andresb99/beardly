@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { PRIVATE_SECTION_METADATA } from '@/lib/site-metadata';
 import { requireAdmin } from '@/lib/auth';
 import { AdminSidebar } from '@/components/admin/admin-sidebar';
-import { AdminMobileHeader } from '@/components/admin/admin-mobile-header';
+import { AdminMobileNavController } from '@/components/admin/admin-mobile-nav-controller';
 import { getSiteHeaderInitialState } from '@/lib/site-header-state.server';
 
 export const metadata: Metadata = PRIVATE_SECTION_METADATA;
@@ -27,7 +27,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   return (
     <div className="flex h-screen w-full flex-col overflow-hidden bg-[#121016] lg:flex-row">
-      <AdminMobileHeader {...commonProps} />
+      <AdminMobileNavController {...commonProps} />
       <AdminSidebar {...commonProps} />
       
       <main className="flex-1 overflow-y-auto bg-[#121016]">

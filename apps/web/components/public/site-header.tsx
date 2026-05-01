@@ -618,7 +618,13 @@ export function SiteHeader({ initialState = DEFAULT_SITE_HEADER_STATE }: SiteHea
         maxWidth="full"
         height="76px"
         isMenuOpen={isMenuOpen}
-        onMenuOpenChange={setIsMenuOpen}
+        onMenuOpenChange={(open) => {
+          if (navigationContext === 'admin' && open) {
+            window.dispatchEvent(new CustomEvent('toggle-admin-drawer'));
+            return;
+          }
+          setIsMenuOpen(open);
+        }}
         className="bg-transparent px-0 pt-0"
         classNames={{
           wrapper: cn(
@@ -630,7 +636,7 @@ export function SiteHeader({ initialState = DEFAULT_SITE_HEADER_STATE }: SiteHea
             'mobile-nav-menu',
             '![background:linear-gradient(155deg,rgb(255_255_255/0.94),rgb(250_248_245/0.88)),var(--brand-panel-aura-strong)] ![backdrop-filter:blur(16px)] ![-webkit-backdrop-filter:blur(16px)]',
             'dark:![background:rgba(9,9,11,0.92)] dark:![backdrop-filter:blur(20px)] dark:![-webkit-backdrop-filter:blur(20px)]',
-            usesCondensedAdminNavigation && 'admin-nav-menu-hidden'
+            navigationContext === 'admin' && 'hidden lg:hidden'
           ),
         }}
       >

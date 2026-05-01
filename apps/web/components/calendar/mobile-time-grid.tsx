@@ -109,6 +109,8 @@ export function MobileTimeGrid({
   selectedEventId,
   renderEventPopover,
 }: MobileTimeGridProps) {
+  const PIXELS_PER_MINUTE = 1.45; // Sincronizado para mostrar mas detalle
+  const SLOT_MINUTES = 30;
   const totalMinutes = (endHour - startHour) * 60;
   const gridHeight = totalMinutes * PIXELS_PER_MINUTE;
   const initialSelectedDate = useMemo(() => resolveInitialSelectedDate(days), [days]);
@@ -123,10 +125,8 @@ export function MobileTimeGrid({
 
   useEffect(() => {
     const updateNow = () => setLiveNow(new Date());
-
     updateNow();
     const intervalId = window.setInterval(updateNow, 60_000);
-
     return () => window.clearInterval(intervalId);
   }, []);
 
@@ -220,7 +220,6 @@ export function MobileTimeGrid({
 
       const occupiedColumns = new Set(active.map((activeSegment) => activeSegment.columnIndex));
       let nextColumnIndex = 0;
-
       while (occupiedColumns.has(nextColumnIndex)) {
         nextColumnIndex += 1;
       }
@@ -239,245 +238,199 @@ export function MobileTimeGrid({
   }, [visibleSegments]);
 
   const nowPosition = useMemo(() => {
-    if (!liveNow) {
-      return null;
-    }
-
-    if (!isSameDay(selectedDate, liveNow)) {
-      return null;
-    }
-
-    if (liveNow.getTime() <= calendarStart.getTime() || liveNow.getTime() >= calendarEnd.getTime()) {
-      return null;
-    }
-
+    if (!liveNow) return null;
+    if (!isSameDay(selectedDate, liveNow)) return null;
+    if (liveNow.getTime() <= calendarStart.getTime() || liveNow.getTime() >= calendarEnd.getTime()) return null;
     return ((liveNow.getTime() - calendarStart.getTime()) / 60000) * PIXELS_PER_MINUTE;
-  }, [calendarEnd, calendarStart, liveNow, selectedDate]);
+  }, [calendarEnd, calendarStart, liveNow, selectedDate, PIXELS_PER_MINUTE]);
 
   return (
     <div
       data-mobile-time-grid={isWeekly ? 'week' : 'day'}
-      className="relative overflow-hidden rounded-[1.7rem] bg-white/35 p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.3),0_1px_3px_rgba(15,23,42,0.06),0_8px_24px_-12px_rgba(15,23,42,0.1)] dark:bg-[rgba(16,10,28,0.96)] dark:shadow-[0_1px_3px_rgba(0,0,0,0.3),0_8px_24px_-12px_rgba(0,0,0,0.5)] md:hidden"
+      className="relative flex flex-col gap-4 md:hidden"
     >
-      <div className="relative space-y-3 rounded-[1.45rem] bg-white/30 p-3 dark:bg-[rgba(12,7,22,0.94)]">
-        {isWeekly ? (
-          <div className="space-y-3">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate/56 dark:text-slate-300/56">
-                  Semana en foco
-                </p>
-                <p className="mt-1 text-sm font-semibold capitalize text-ink dark:text-slate-50">
-                  {formatSelectedDay(selectedDate, locale)}
-                </p>
-              </div>
-              <span className="meta-chip border-transparent bg-white/10 text-slate/76 dark:bg-white/[0.04] dark:text-violet-100/82">
-                {visibleSegments.length} bloques
-              </span>
-            </div>
+      {/* Selector de dias solo si es vista semanal */}
+      {isWeekly && (
+        <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 scrollbar-hide">
+          {days.map((day) => {
+            const normalizedDay = startOfDay(day);
+            const isActive = isSameDay(day, selectedDate);
+            const eventCount = eventCountByDay.get(normalizedDay.toISOString()) ?? 0;
 
-            <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
-              {days.map((day) => {
-                const normalizedDay = startOfDay(day);
-                const isActive = isSameDay(day, selectedDate);
-                const eventCount = eventCountByDay.get(normalizedDay.toISOString()) ?? 0;
-
-                return (
-                  <Button
-                    key={normalizedDay.toISOString()}
-                    radius="lg"
-                    variant="flat"
-                    aria-label={`${formatSelectedDay(day, locale)}${eventCount ? `, ${eventCount} bloques` : ''}`}
-                    className={cn(
-                      'h-auto min-w-[4.75rem] shrink-0 flex-col items-start gap-1 rounded-[1.25rem] px-3 py-2.5 text-left shadow-none',
-                      isActive
-                        ? 'bg-white/18 text-ink shadow-[0_18px_30px_-24px_rgba(15,23,42,0.2)] dark:bg-violet-500/[0.18] dark:text-violet-50'
-                        : 'bg-white/8 text-slate/82 dark:bg-white/[0.03] dark:text-slate-200/78',
-                    )}
-                    onPress={() => setSelectedDate(normalizedDay)}
-                  >
-                    <span className="text-[9px] font-semibold uppercase tracking-[0.16em] opacity-70">
-                      {formatWeekday(day, locale)}
-                    </span>
-                    <span className="text-lg font-semibold leading-none">{formatDayNumber(day, locale)}</span>
-                    <span className="text-[10px] font-medium opacity-65">
-                      {eventCount > 0 ? `${eventCount} act.` : 'Libre'}
-                    </span>
-                  </Button>
-                );
-              })}
-            </div>
-          </div>
-        ) : (
-          <div className="flex items-center justify-between gap-3 rounded-[1.3rem] bg-white/12 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] dark:bg-white/[0.03] dark:shadow-none">
-            <div className="flex items-center gap-3">
-              <div className="flex h-14 w-14 items-center justify-center rounded-[1.2rem] bg-white/18 text-xl font-semibold text-ink shadow-[0_14px_24px_-20px_rgba(15,23,42,0.18)] dark:bg-violet-500/[0.16] dark:text-violet-50 dark:shadow-none">
-                {formatDayNumber(selectedDate, locale)}
-              </div>
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate/56 dark:text-slate-300/56">
-                  Vista diaria
-                </p>
-                <p className="mt-1 text-sm font-semibold capitalize text-ink dark:text-slate-50">
-                  {formatSelectedDay(selectedDate, locale)}
-                </p>
-              </div>
-            </div>
-            <span className="meta-chip border-transparent bg-white/10 text-slate/76 dark:bg-white/[0.04] dark:text-violet-100/82">
-              {visibleSegments.length} bloques
-            </span>
-          </div>
-        )}
-
-        <div className="relative overflow-hidden rounded-[1.35rem] bg-white/16 dark:bg-[rgba(13,8,24,0.96)]">
-          <div className="max-h-[32rem] overflow-auto">
-            <div className="grid grid-cols-[3.25rem_minmax(0,1fr)]">
-              <div className="relative bg-white/6 dark:bg-white/[0.015]">
-                <div className="relative" style={{ height: gridHeight }}>
-                  {hourOffsets.map((offset) => {
-                    const top = offset * PIXELS_PER_MINUTE;
-
-                    return (
-                      <div
-                        key={`mobile-time-${offset}`}
-                        className="pointer-events-none absolute inset-x-0 px-2.5"
-                        style={{ top: Math.min(gridHeight - 18, Math.max(top - 7, 0)) }}
-                      >
-                        <span className="block text-right text-[10px] font-semibold uppercase tracking-[0.12em] text-slate/42 dark:text-slate-300/42">
-                          {formatTimeLabel(startHour * 60 + offset, locale)}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div 
-                className="relative border-l border-white/10 dark:border-white/[0.05]"
-                onClick={(e) => {
-                  if (!onSlotClick || e.target !== e.currentTarget) return;
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  const y = e.clientY - rect.top;
-                  const totalMinutesFromStart = y / PIXELS_PER_MINUTE;
-                  const hour = startHour + Math.floor(totalMinutesFromStart / 60);
-                  const minute = Math.floor((totalMinutesFromStart % 60) / SLOT_MINUTES) * SLOT_MINUTES;
-                  const slotDate = new Date(selectedDate);
-                  slotDate.setHours(hour, minute, 0, 0);
-                  onSlotClick(slotDate);
-                }}
+            return (
+              <Button
+                key={normalizedDay.toISOString()}
+                radius="lg"
+                variant="flat"
+                className={cn(
+                  'h-auto min-w-[4.4rem] shrink-0 flex-col items-center gap-0.5 rounded-xl px-2 py-2 text-center transition-all',
+                  isActive
+                    ? 'bg-violet-500/[0.18] text-violet-50 shadow-[0_8px_16px_-6px_rgba(139,92,246,0.3)]'
+                    : 'bg-white/[0.03] text-slate-400',
+                )}
+                onPress={() => setSelectedDate(normalizedDay)}
               >
-                <div className="relative" style={{ height: gridHeight }}>
-                  {hourOffsets.map((offset, index) => (
-                    <div
-                      key={`mobile-hour-band-${offset}`}
-                      className={cn(
-                        'pointer-events-none absolute inset-x-0',
-                        index % 2 === 0
-                          ? 'bg-slate-900/[0.008] dark:bg-violet-400/[0.016]'
-                          : 'bg-transparent',
-                      )}
-                      style={{
-                        top: offset * PIXELS_PER_MINUTE,
-                        height: 60 * PIXELS_PER_MINUTE,
-                      }}
-                    />
-                  ))}
+                <span className="text-[8px] font-bold uppercase tracking-wider opacity-60">
+                  {formatWeekday(day, locale)}
+                </span>
+                <span className="text-base font-bold leading-none">{formatDayNumber(day, locale)}</span>
+                <div className={cn("mt-1.5 h-1 w-1 rounded-full", eventCount > 0 ? "bg-violet-400" : "bg-transparent")} />
+              </Button>
+            );
+          })}
+        </div>
+      )}
 
-                  {slotOffsets.map((offset) => (
+      {/* Grid de tiempo limpio */}
+      <div className="relative overflow-hidden rounded-2xl bg-white/[0.015] border border-white/5 dark:bg-[rgba(13,8,24,0.4)]">
+        <div className="max-h-[36rem] overflow-auto scrollbar-hide">
+          <div className="grid grid-cols-[3.4rem_minmax(0,1fr)]">
+            {/* Columna de horas */}
+            <div className="relative border-r border-white/5 bg-white/[0.02]">
+              <div className="relative" style={{ height: gridHeight }}>
+                {hourOffsets.map((offset) => {
+                  const top = offset * PIXELS_PER_MINUTE;
+                  return (
                     <div
-                      key={`mobile-slot-line-${offset}`}
-                      className={cn(
-                        'pointer-events-none absolute inset-x-0 border-t',
-                        offset % 60 === 0
-                          ? 'border-slate-900/[0.05] dark:border-white/[0.05]'
-                          : 'border-slate-900/[0.024] dark:border-white/[0.025]',
-                      )}
-                      style={{ top: offset * PIXELS_PER_MINUTE }}
-                    />
-                  ))}
-
-                  {nowPosition !== null ? (
-                    <div
-                      className="pointer-events-none absolute inset-x-0 z-20"
-                      style={{ top: nowPosition }}
+                      key={`mobile-time-${offset}`}
+                      className="pointer-events-none absolute inset-x-0 px-2 text-right"
+                      style={{ top: Math.max(top - 7, 0) }}
                     >
-                      <div className="absolute inset-x-2 top-1/2 h-px -translate-y-1/2 bg-violet-400/20 dark:bg-violet-400/30" />
-                      <div className="absolute left-0 top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-violet-500 shadow-[0_0_0_6px_rgba(139,92,246,0.14)] dark:border-[rgba(12,7,22,0.96)] dark:bg-violet-300" />
-                      <div className="h-px bg-violet-400/72 dark:bg-violet-200/88" />
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500/60">
+                        {formatTimeLabel(startHour * 60 + offset, locale)}
+                      </span>
                     </div>
-                  ) : null}
+                  );
+                })}
+              </div>
+            </div>
 
-                  {positionedSegments.map((segment) => {
-                    const top =
-                      ((segment.renderStart.getTime() - calendarStart.getTime()) / 60000) * PIXELS_PER_MINUTE;
-                    const height =
-                      ((segment.renderEnd.getTime() - segment.renderStart.getTime()) / 60000) *
-                      PIXELS_PER_MINUTE;
-                    const width =
-                      segment.columnCount > 1
-                        ? `calc(${100 / segment.columnCount}% - 0.32rem)`
-                        : 'calc(100% - 0.8rem)';
-                    const left =
-                      segment.columnCount > 1
-                        ? `calc(${(segment.columnIndex * 100) / segment.columnCount}% + 0.18rem)`
-                        : '0.4rem';
+            {/* Columna de slots y eventos */}
+            <div 
+              className="relative"
+              onClick={(e) => {
+                if (!onSlotClick || e.target !== e.currentTarget) return;
+                const rect = e.currentTarget.getBoundingClientRect();
+                const y = e.clientY - rect.top;
+                const totalMinutesFromStart = y / PIXELS_PER_MINUTE;
+                const hour = startHour + Math.floor(totalMinutesFromStart / 60);
+                const minute = Math.floor((totalMinutesFromStart % 60) / SLOT_MINUTES) * SLOT_MINUTES;
+                const slotDate = new Date(selectedDate);
+                slotDate.setHours(hour, minute, 0, 0);
+                onSlotClick(slotDate);
+              }}
+            >
+              <div className="relative" style={{ height: gridHeight }}>
+                {/* Bandas de horas */}
+                {hourOffsets.map((offset, index) => (
+                  <div
+                    key={`mobile-hour-band-${offset}`}
+                    className={cn(
+                      'pointer-events-none absolute inset-x-0',
+                      index % 2 === 0 ? 'bg-white/[0.015]' : 'bg-transparent',
+                    )}
+                    style={{
+                      top: offset * PIXELS_PER_MINUTE,
+                      height: 60 * PIXELS_PER_MINUTE,
+                    }}
+                  />
+                ))}
 
-                    const isSelected = selectedEventId === segment.event.id;
+                {/* Lineas de slots */}
+                {slotOffsets.map((offset) => (
+                  <div
+                    key={`mobile-slot-line-${offset}`}
+                    className={cn(
+                      'pointer-events-none absolute inset-x-0 border-t',
+                      offset % 60 === 0 ? 'border-white/10' : 'border-white/[0.03]',
+                    )}
+                    style={{ top: offset * PIXELS_PER_MINUTE }}
+                  />
+                ))}
 
-                    return (
-                      <div
-                        key={`${segment.event.id}-${segment.renderStart.toISOString()}`}
-                        className="absolute pointer-events-auto"
-                        style={{ top, height, left, width, zIndex: isSelected ? 40 : 10 }}
-                      >
-                        {renderEventPopover ? (
-                          <Popover 
-                            isOpen={isSelected} 
-                            placement="bottom"
-                            offset={10}
-                            onOpenChange={(isOpen) => {
-                               if (!isOpen) onEventClose?.();
-                            }}
-                          >
-                            <PopoverTrigger>
-                              <div className="h-full w-full outline-none">
-                                <EventCard
-                                  event={segment.event}
-                                  locale={locale}
-                                  height={height}
-                                  compact={segment.columnCount > 1 || height < 112}
-                                  onClick={onEventClick}
-                                />
-                              </div>
-                            </PopoverTrigger>
-                            <PopoverContent className="p-0 bg-transparent border-0 shadow-none outline-none">
-                              {renderEventPopover(segment.event, () => onEventClose?.())}
-                            </PopoverContent>
-                          </Popover>
-                        ) : (
-                          <EventCard
-                            event={segment.event}
-                            locale={locale}
-                            height={height}
-                            compact={segment.columnCount > 1 || height < 112}
-                            onClick={onEventClick}
-                          />
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
+                {/* Indicador de "Ahora" */}
+                {nowPosition !== null ? (
+                  <div
+                    className="pointer-events-none absolute inset-x-0 z-20"
+                    style={{ top: nowPosition }}
+                  >
+                    <div className="absolute inset-x-3 h-px bg-violet-400/30" />
+                    <div className="absolute left-0 top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[#121016] bg-violet-400 shadow-[0_0_0_4px_rgba(139,92,246,0.15)]" />
+                  </div>
+                ) : null}
+
+                {/* Segmentos de eventos */}
+                {positionedSegments.map((segment) => {
+                  const top = ((segment.renderStart.getTime() - calendarStart.getTime()) / 60000) * PIXELS_PER_MINUTE;
+                  const height = ((segment.renderEnd.getTime() - segment.renderStart.getTime()) / 60000) * PIXELS_PER_MINUTE;
+                  
+                  // Sincronizado con DayColumn: 0.25rem gap
+                  const gap = 0.25; // rem
+                  const leftPadding = 0.25; // rem
+                  
+                  const width = segment.columnCount > 1
+                    ? `calc(${100 / segment.columnCount}% - ${gap * 2}rem)`
+                    : `calc(100% - ${gap * 2}rem)`;
+                  
+                  const left = segment.columnCount > 1
+                    ? `calc(${(segment.columnIndex * 100) / segment.columnCount}% + ${leftPadding}rem)`
+                    : `${leftPadding}rem`;
+
+                  const isSelected = selectedEventId === segment.event.id;
+
+                  return (
+                    <div
+                      key={`${segment.event.id}-${segment.renderStart.toISOString()}`}
+                      className="absolute pointer-events-auto"
+                      style={{ top, height, left, width, zIndex: isSelected ? 40 : 10 }}
+                    >
+                      {renderEventPopover ? (
+                        <Popover 
+                          isOpen={isSelected} 
+                          placement="bottom"
+                          offset={10}
+                          onOpenChange={(isOpen) => {
+                             if (!isOpen) onEventClose?.();
+                          }}
+                        >
+                          <PopoverTrigger>
+                            <div className="h-full w-full outline-none">
+                              <EventCard
+                                event={segment.event}
+                                locale={locale}
+                                height={height}
+                                compact={segment.columnCount > 1}
+                                onClick={onEventClick}
+                              />
+                            </div>
+                          </PopoverTrigger>
+                          <PopoverContent className="p-0 bg-transparent border-0 shadow-none outline-none">
+                            {renderEventPopover(segment.event, () => onEventClose?.())}
+                          </PopoverContent>
+                        </Popover>
+                      ) : (
+                        <EventCard
+                          event={segment.event}
+                          locale={locale}
+                          height={height}
+                          compact={segment.columnCount > 1}
+                          onClick={onEventClick}
+                        />
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>
         </div>
-
-        {visibleSegments.length === 0 ? (
-          <div className="rounded-[1.15rem] bg-white/8 px-3 py-3 text-sm text-slate/74 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] dark:bg-white/[0.025] dark:text-slate-300/78 dark:shadow-none">
-            No hay bloques para este dia en el rango visible.
-          </div>
-        ) : null}
       </div>
+
+      {visibleSegments.length === 0 && (
+        <div className="rounded-xl bg-white/[0.02] border border-white/5 px-4 py-3 text-xs text-slate-500 text-center">
+          No hay reservas para este día.
+        </div>
+      )}
     </div>
   );
 }
