@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { PRIVATE_SECTION_METADATA } from '@/lib/site-metadata';
+import { cn } from '@/lib/cn';
 import { requireAdmin } from '@/lib/auth';
 import { AdminSidebar } from '@/components/admin/admin-sidebar';
 import { AdminMobileNavController } from '@/components/admin/admin-mobile-nav-controller';
