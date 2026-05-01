@@ -159,7 +159,7 @@ export function AdminHomeSchedule({
                   value: "text-[14px] text-white",
                   popoverContent: "bg-[#1f1f23] border border-white/10",
                 }}
-                defaultSelectedKeys={adminEvent?.resourceId ? [adminEvent.resourceId] : [staff[0].id]}
+                defaultSelectedKeys={adminEvent?.resourceId ? [adminEvent.resourceId] : (staff[0] ? [staff[0].id] : [])}
               >
                 {staff.map((s) => (
                   <SelectItem key={s.id} textValue={s.name}>
@@ -329,7 +329,7 @@ export function AdminHomeSchedule({
         setDraftEvent(null);
       }}
       onSlotClick={(date) => {
-        const resourceId = selectedStaffId === ALL_STAFF_ID ? staff[0].id : selectedStaffId;
+        const resourceId = selectedStaffId === ALL_STAFF_ID ? (staff[0]?.id || '') : selectedStaffId;
         const newDraftId = `draft-${Date.now()}`;
         
         const newDraft: AdminHomeScheduleEvent = {
