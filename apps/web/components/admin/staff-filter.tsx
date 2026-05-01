@@ -13,7 +13,7 @@ interface StaffItem {
 
 interface StaffFilterProps {
   staff: StaffItem[];
-  selectedStaffName?: string;
+  selectedStaffName?: string | undefined;
   allStaffHref: string;
 }
 
