@@ -41,7 +41,7 @@ interface AdminSidebarProps {
   userAvatarUrl?: string | null;
   unreadNotifications?: number;
   role: HeaderRole;
-  activeWorkspaceSlug: string | null;
+  activeWorkspaceSlug: string | null | undefined;
   isPlatformAdmin: boolean;
   isMobile?: boolean;
   onMobileClose?: () => void;
