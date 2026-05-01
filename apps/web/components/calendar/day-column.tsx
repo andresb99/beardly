@@ -16,10 +16,10 @@ interface DayColumnProps {
   locale: string;
   isToday?: boolean;
   onEventClick?: ((event: CalendarEvent) => void) | undefined;
-  onEventClose?: () => void;
+  onEventClose?: (() => void) | undefined;
   onSlotClick?: ((date: Date) => void) | undefined;
-  selectedEventId?: string | null;
-  renderEventPopover?: (event: CalendarEvent, onClose: () => void) => React.ReactNode;
+  selectedEventId?: string | null | undefined;
+  renderEventPopover?: ((event: CalendarEvent, onClose: () => void) => React.ReactNode) | undefined;
 }
 
 interface DayEventSegment {

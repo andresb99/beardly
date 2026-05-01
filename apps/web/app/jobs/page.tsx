@@ -3,17 +3,22 @@ import { MarketplaceJobsForm } from '@/components/public/marketplace-jobs-form';
 import { PublicSectionEmptyState } from '@/components/public/public-section-empty-state';
 import { getPublicTenantRouteContext } from '@/lib/public-tenant-context';
 import { buildSitePageMetadata } from '@/lib/site-metadata';
-import { listMarketplaceShops } from '@/lib/shops';
-import ShopJobsPage, { generateMetadata as generateShopJobsMetadata } from '@/app/jobs/[slug]/page';
-import { Avatar, AvatarGroup } from '@heroui/react';
+import { listMarketplaceShops, getMarketplaceShopBySlug } from '@/lib/shops';
+import { ShopJobsView } from '@/components/public/shop-jobs-view';
 import { MarketplaceJobsList } from '@/components/public/marketplace-jobs-list';
+import { JobsHeroAvatars } from '@/components/public/jobs-hero-avatars';
 
 export async function generateMetadata(): Promise<Metadata> {
   const routeContext = await getPublicTenantRouteContext();
   if (routeContext.mode !== 'path' && routeContext.shopSlug) {
-    return generateShopJobsMetadata({
-      params: Promise.resolve({ slug: routeContext.shopSlug }),
-    });
+    const shop = await getMarketplaceShopBySlug(routeContext.shopSlug);
+    if (shop) {
+      return buildSitePageMetadata({
+        title: `Empleo | ${shop.name}`,
+        description: `Postulaciones y vacantes abiertas en ${shop.name}. Inicia tu legado aquí.`,
+        path: `/jobs`,
+      });
+    }
   }
 
   return buildSitePageMetadata({
@@ -27,9 +32,10 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function JobsPage() {
   const routeContext = await getPublicTenantRouteContext();
   if (routeContext.mode !== 'path' && routeContext.shopSlug) {
-    return ShopJobsPage({
-      params: Promise.resolve({ slug: routeContext.shopSlug }),
-    });
+    const shop = await getMarketplaceShopBySlug(routeContext.shopSlug);
+    if (shop) {
+      return <ShopJobsView shop={shop} />;
+    }
   }
 
   const shops = await listMarketplaceShops();
@@ -64,16 +70,7 @@ export default async function JobsPage() {
               Estamos redefiniendo el estándar del grooming masculino. Si eres un artista del corte, el escenario está listo para tu maestría.
             </p>
 
-            <div className="mt-10 flex items-center gap-4">
-              <AvatarGroup isBordered max={3} className="justify-start">
-                <Avatar src="https://i.pravatar.cc/150?u=a042581f4e29026024d" className="border-[#0b090c]" />
-                <Avatar src="https://i.pravatar.cc/150?u=a04258a2462d826712d" className="border-[#0b090c]" />
-                <Avatar src="https://i.pravatar.cc/150?u=a042581f4e29026704d" className="border-[#0b090c]" />
-              </AvatarGroup>
-              <span className="text-[10px] font-bold tracking-[0.15em] text-slate-500 max-w-[120px] leading-tight">
-                +40 BARBEROS YA SE UNIERON ESTE MES
-              </span>
-            </div>
+            <JobsHeroAvatars />
           </div>
 
           <div>

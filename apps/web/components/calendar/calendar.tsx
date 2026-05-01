@@ -39,7 +39,7 @@ interface CalendarProps {
   availableRangeStart?: Date | undefined;
   availableRangeEndExclusive?: Date | undefined;
   onEventClick?: (event: CalendarEvent) => void;
-  onEventClose?: () => void;
+  onEventClose?: (() => void) | undefined;
   onSlotClick?: (date: Date) => void;
   selectedEventId?: string | null;
   renderEventPopover?: (event: CalendarEvent, onClose: () => void) => ReactNode;
