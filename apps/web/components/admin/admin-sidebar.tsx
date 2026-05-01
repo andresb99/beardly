@@ -209,8 +209,8 @@ export function AdminSidebar({
           <DropdownTrigger>
             <button className="flex w-full items-center gap-3 rounded-[1rem] border border-white/5 bg-white/[0.02] p-3 text-left transition hover:bg-white/[0.04] outline-none overflow-hidden">
               <Avatar 
-                src={userAvatarUrl || undefined} 
-                name={userProfileName || undefined}
+                src={userAvatarUrl || ""} 
+                name={userProfileName || "User"}
                 className="h-9 w-9 shrink-0 text-xs font-bold"
                 classNames={{ base: 'bg-gradient-to-tr from-rose-400 to-amber-300 shadow-inner' }}
               />
