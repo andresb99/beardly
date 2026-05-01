@@ -158,16 +158,16 @@ export function AdminSidebar({
             if (isMobile && onMobileClose) onMobileClose();
             window.location.assign(buildPlatformUrl('/mis-barberias'));
           }}
-          className="flex w-full items-center justify-between rounded-[1rem] bg-white/[0.04] p-3 text-left transition hover:bg-white/[0.06] border border-white/[0.05]"
+          className="flex w-full items-center justify-between rounded-[1rem] bg-white/[0.04] p-3 text-left transition hover:bg-white/[0.06] border border-white/[0.05] overflow-hidden"
         >
-          <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-[10px] bg-gradient-to-tr from-[#9974ff] to-[#d8c5ff]" />
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            <div className="h-9 w-9 shrink-0 rounded-[10px] bg-gradient-to-tr from-[#9974ff] to-[#d8c5ff]" />
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-semibold text-slate-200">{workspaceName}</div>
               <div className="truncate text-[11px] font-medium text-slate-500">{workspacePlan}</div>
             </div>
           </div>
-          <ChevronRight className="h-4 w-4 text-slate-500" />
+          <ChevronRight className="h-4 w-4 shrink-0 text-slate-500 ml-1" />
         </button>
       </div>
 
@@ -207,11 +207,11 @@ export function AdminSidebar({
       <div className="mt-auto px-4 pt-4">
         <Dropdown placement="top-start" classNames={{ content: 'bg-[#1a1820] border border-white/10 text-white min-w-[220px]' }}>
           <DropdownTrigger>
-            <button className="flex w-full items-center gap-3 rounded-[1rem] border border-white/5 bg-white/[0.02] p-3 text-left transition hover:bg-white/[0.04] outline-none">
+            <button className="flex w-full items-center gap-3 rounded-[1rem] border border-white/5 bg-white/[0.02] p-3 text-left transition hover:bg-white/[0.04] outline-none overflow-hidden">
               <Avatar 
                 src={userAvatarUrl || undefined} 
                 name={userProfileName || undefined}
-                className="h-9 w-9 text-xs font-bold"
+                className="h-9 w-9 shrink-0 text-xs font-bold"
                 classNames={{ base: 'bg-gradient-to-tr from-rose-400 to-amber-300 shadow-inner' }}
               />
               <div className="min-w-0 flex-1 text-white">
