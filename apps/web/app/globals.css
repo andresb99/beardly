@@ -973,9 +973,11 @@ html.dark .list-check input[type='checkbox'] {
   }
 }
 
-/* Tenant pages are edge-to-edge — no shell padding */
-.main-shell:has(> .tenant-atelier) {
+/* Tenant and Admin pages are edge-to-edge — no shell padding */
+.main-shell:has(> .tenant-atelier),
+.main-shell:has(> .admin-layout-root) {
   padding: 0;
+  max-width: none;
 }
 
 .glass-nav {

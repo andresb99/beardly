@@ -28,7 +28,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   };
 
   return (
-    <div className={cn("flex h-screen w-full flex-col overflow-hidden bg-[#121016] lg:flex-row")}>
+    <div className={cn("admin-layout-root flex h-screen w-full flex-col overflow-hidden bg-[#121016] lg:flex-row")}>
       <AdminLayoutEffects />
       <AdminMobileNavController {...commonProps} />
       <AdminSidebar {...commonProps} />
