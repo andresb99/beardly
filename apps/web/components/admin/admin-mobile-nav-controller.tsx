@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Drawer, DrawerContent } from '@heroui/react';
 import { AdminSidebar } from './admin-sidebar';
+import { HeaderRole } from '@/lib/site-header-state';
 
 interface AdminMobileNavControllerProps {
   workspaceName?: string | null;
@@ -11,7 +12,7 @@ interface AdminMobileNavControllerProps {
   userEmail?: string | null;
   userAvatarUrl?: string | null;
   unreadNotifications?: number;
-  role: 'admin' | 'staff' | 'user';
+  role: HeaderRole;
   activeWorkspaceSlug: string | null;
   isPlatformAdmin: boolean;
 }

@@ -29,6 +29,7 @@ import {
 } from '@heroui/react';
 import { HeaderBrand } from '@/components/public/header-brand';
 import { cn } from '@/lib/cn';
+import { HeaderRole } from '@/lib/site-header-state';
 import { buildAdminHref } from '@/lib/workspace-routes';
 import { buildPlatformUrl } from '@/lib/shop-links';
 
@@ -39,7 +40,7 @@ interface AdminSidebarProps {
   userEmail?: string | null;
   userAvatarUrl?: string | null;
   unreadNotifications?: number;
-  role: 'admin' | 'staff' | 'user';
+  role: HeaderRole;
   activeWorkspaceSlug: string | null;
   isPlatformAdmin: boolean;
   isMobile?: boolean;
