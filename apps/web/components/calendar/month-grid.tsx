@@ -174,8 +174,6 @@ export function MonthGrid({
                     isCurrentMonth
                       ? 'bg-white/35 dark:bg-white/[0.02]'
                       : 'bg-white/14 opacity-78 dark:bg-white/[0.01] dark:opacity-70',
-                    isToday &&
-                      'bg-white/50 dark:bg-violet-500/[0.06]',
                   )}
                 >
                   <div className="flex items-start justify-between gap-2">
@@ -213,7 +211,6 @@ export function MonthGrid({
                           key={event.id}
                           type="button"
                           data-event-tone={resolvedTone}
-                          title={event.resourceName ? `${buildMonthEventLabel(event, locale)} - ${event.resourceName}` : buildMonthEventLabel(event, locale)}
                           className={cn(
                             'flex w-full items-center gap-2 rounded-[0.95rem] border px-2.5 py-2 text-left transition duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--primary))]/25',
                             CALENDAR_EVENT_TONE_MONTH_CLASSNAME[resolvedTone],

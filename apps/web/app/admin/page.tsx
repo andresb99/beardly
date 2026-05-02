@@ -176,6 +176,7 @@ export default async function AdminHomePage({ searchParams }: AdminHomePageProps
     typeof latestReview?.rating === 'number' && Number.isFinite(latestReview.rating)
       ? latestReview.rating.toFixed(1)
       : null;
+  const currentStaffName = scheduleOverview.staff.find(s => s.id === ctx.staffId)?.name || 'Admin';
   const ownerCalendarEvents = [
     ...scheduleOverview.appointments.map((appointment) => ({
       id: `appointment:${appointment.id}`,
@@ -221,7 +222,7 @@ export default async function AdminHomePage({ searchParams }: AdminHomePageProps
         <div>
           <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">PANEL</p>
           <h1 className="mt-2 font-[family-name:var(--font-heading)] text-3xl font-medium text-slate-100">
-            Buen día, Lucas.
+            Buen día, {currentStaffName}.
           </h1>
           <p className="mt-2 text-[13px] text-slate-400">
             Hoy tenés <strong className="text-slate-200">{activeAppointments} turnos confirmados</strong> y <strong className="text-slate-200">{urgentItemsCount} pendientes</strong>.

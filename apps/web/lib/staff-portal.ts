@@ -13,6 +13,7 @@ export interface StaffAppointmentRecord {
   status: string;
   paymentStatus: string | null;
   serviceName: string;
+  serviceId: string;
   customerName: string;
   customerPhone: string;
   notes: string | null;
@@ -42,6 +43,7 @@ export interface StaffServiceOption {
 
 interface AppointmentRow {
   id: string | null;
+  service_id: string | null;
   start_at: string | null;
   end_at: string | null;
   status: string | null;
@@ -190,7 +192,7 @@ export async function listStaffAppointments(input: {
   const { data } = await supabase
     .from('appointments')
     .select(
-      'id, start_at, end_at, status, payment_intent_id, customer_name_snapshot, customer_phone_snapshot, services(name), customers(name, phone), notes',
+      'id, service_id, start_at, end_at, status, payment_intent_id, customer_name_snapshot, customer_phone_snapshot, services(name), customers(name, phone), notes',
     )
     .eq('shop_id', input.shopId)
     .eq('staff_id', input.staffId)
@@ -214,6 +216,7 @@ export async function listStaffAppointments(input: {
       paymentStatus:
         paymentStatusByIntentId.get(String(item.payment_intent_id || '').trim()) || null,
       serviceName: String(item.services?.name || 'Servicio'),
+      serviceId: String(item.service_id || ''),
       customerName: String(
         item.customer_name_snapshot || item.customers?.name || 'Cliente sin nombre',
       ),

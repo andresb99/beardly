@@ -248,6 +248,22 @@ export function Calendar({
   );
 
   const calendarWindow = useMemo(() => buildCalendarWindow(view, referenceDate), [referenceDate, view]);
+
+  const isCurrentPeriod = useMemo(() => {
+    const now = new Date();
+    if (view === 'day') {
+      return (
+        now.getFullYear() === referenceDate.getFullYear() &&
+        now.getMonth() === referenceDate.getMonth() &&
+        now.getDate() === referenceDate.getDate()
+      );
+    }
+    if (view === 'month') {
+      return now.getFullYear() === referenceDate.getFullYear() && now.getMonth() === referenceDate.getMonth();
+    }
+    return now.getTime() >= calendarWindow.rangeStart.getTime() && now.getTime() < calendarWindow.rangeEndExclusive.getTime();
+  }, [calendarWindow.rangeEndExclusive, calendarWindow.rangeStart, referenceDate, view]);
+
   const rangeLabel = useMemo(
     () => formatRangeLabel(view, calendarWindow.rangeStart, calendarWindow.rangeEnd, locale),
     [calendarWindow.rangeEnd, calendarWindow.rangeStart, locale, view],
@@ -310,6 +326,7 @@ export function Calendar({
           supplementaryContent={headerAddon}
           canNavigatePrevious={canNavigatePrevious}
           canNavigateNext={canNavigateNext}
+          isCurrentPeriod={isCurrentPeriod}
           onViewChange={setView}
           onPreviousPeriod={() => setReferenceDate((current) => shiftReferenceDate(current, view, -1))}
           onCurrentPeriod={() => setReferenceDate(new Date())}

@@ -31,6 +31,30 @@ const themeScript = `
   })();
 `;
 
+const authLoopFixerScript = `
+  (() => {
+    try {
+      if (window.location.pathname.includes('/login')) {
+        const cookies = document.cookie.split(';');
+        let found = false;
+        for (let i = 0; i < cookies.length; i++) {
+          const cookie = cookies[i].trim();
+          if (cookie.startsWith('sb-') && cookie.includes('auth-token')) {
+            found = true;
+            document.cookie = cookie.split('=')[0] + '=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+            // Also try with dot domain
+            const domain = window.location.hostname;
+            document.cookie = cookie.split('=')[0] + '=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=.' + domain + ';';
+          }
+        }
+        if (found) {
+          console.log('Auth loop fixer: Cleared corrupted session cookies');
+        }
+      }
+    } catch {}
+  })();
+`;
+
 export const metadata: Metadata = buildRootMetadata();
 export const viewport = {
   width: 'device-width',
@@ -71,6 +95,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     >
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+        <script dangerouslySetInnerHTML={{ __html: authLoopFixerScript }} />
         {structuredData.length > 0 ? (
           <script
             type="application/ld+json"

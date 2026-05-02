@@ -2,7 +2,7 @@ import NextLink from 'next/link';
 import { formatCurrency } from '@navaja/shared';
 import { Card, CardBody } from '@heroui/card';
 import { Chip } from '@heroui/chip';
-import { Calendar, type CalendarEvent } from '@/components/calendar/calendar';
+import { AdminHomeSchedule } from '@/components/admin/admin-home-schedule';
 import { requireStaff } from '@/lib/auth';
 import {
   deriveCalendarHours,
@@ -18,6 +18,7 @@ import {
   splitTimeOffRecords,
 } from '@/lib/staff-portal';
 import { buildStaffHref } from '@/lib/workspace-routes';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 interface StaffPageProps {
   searchParams: Promise<{ shop?: string }>;
@@ -60,6 +61,8 @@ export default async function StaffPage({ searchParams }: StaffPageProps) {
     calendarTimeOffRecords,
     workingHours,
     performance,
+    servicesResult,
+    staffMemberResult,
   ] = await Promise.all([
     listStaffAppointments({
       shopId: ctx.shopId,
@@ -95,18 +98,40 @@ export default async function StaffPage({ searchParams }: StaffPageProps) {
       },
       ctx.shopId,
     ).catch(() => null),
+    createSupabaseServerClient().then((supabase) =>
+      supabase
+        .from('services')
+        .select('id, name, duration_minutes, price_cents')
+        .eq('shop_id', ctx.shopId)
+        .eq('is_active', true)
+        .order('name')
+    ),
+    createSupabaseServerClient().then((supabase) =>
+      supabase
+        .from('staff')
+        .select('id, name')
+        .eq('id', ctx.staffId)
+        .single()
+    ),
   ]);
 
+  const services = servicesResult.data || [];
+  const staffMember = staffMemberResult.data;
+  
   const visibleTimeOffRecords = calendarTimeOffRecords.filter((record) =>
     overlapsRange(record.startAt, record.endAt, calendarRangeStart, calendarRangeEndExclusive),
   );
   const timeOff = splitTimeOffRecords(timeOffRecords);
   const nextAppointments = appointments.slice(0, 4);
-  const calendarEvents: CalendarEvent[] = [
+  const calendarEvents = [
     ...calendarAppointments.map((appointment) => ({
       id: `appointment:${appointment.id}`,
       title: appointment.serviceName,
       clientName: appointment.customerName,
+      resourceId: ctx.staffId,
+      resourceName: staffMember?.name,
+      serviceId: appointment.serviceId,
+      customerName: appointment.customerName,
       start: new Date(appointment.startAt),
       end: resolveAppointmentEnd(appointment.startAt, appointment.endAt),
       status: toCalendarEventStatus(appointment.status),
@@ -116,6 +141,8 @@ export default async function StaffPage({ searchParams }: StaffPageProps) {
       id: `time-off:${record.id}`,
       title: record.reason || 'Bloque no disponible',
       clientName: record.isPending ? 'Ausencia pendiente' : 'Ausencia aprobada',
+      resourceId: ctx.staffId,
+      resourceName: staffMember?.name,
       start: new Date(record.startAt),
       end: new Date(record.endAt),
       tone: record.isPending ? ('pending' as const) : ('absence' as const),
@@ -130,6 +157,18 @@ export default async function StaffPage({ searchParams }: StaffPageProps) {
 
   return (
     <section className="space-y-6">
+      <header className="flex flex-col justify-between border-b border-white/5 pb-6 md:flex-row md:items-end">
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">STAFF PORTAL</p>
+          <h1 className="mt-2 font-[family-name:var(--font-heading)] text-3xl font-medium text-slate-100">
+            Buen día, {staffMember?.name || 'Barbero'}.
+          </h1>
+          <p className="mt-2 text-[13px] text-slate-400">
+            Hoy tienes <strong className="text-slate-200">{calendarAppointments.filter(a => overlapsRange(a.startAt, a.endAt || a.startAt, new Date(new Date().setHours(0,0,0,0)), new Date(new Date().setHours(23,59,59,999)))).length} turnos</strong> programados para hoy.
+          </p>
+        </div>
+      </header>
+
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <Card className="data-card rounded-[1.7rem] border-0 shadow-none">
           <CardBody className="p-5">
@@ -317,16 +356,21 @@ export default async function StaffPage({ searchParams }: StaffPageProps) {
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
-        <Calendar
+        <AdminHomeSchedule
+          staff={staffMember ? [staffMember] : []}
+          services={services.map(s => ({
+            id: s.id,
+            name: s.name,
+            durationMinutes: s.duration_minutes,
+            priceCents: s.price_cents
+          }))}
           events={calendarEvents}
           startHour={calendarHours.startHour}
           endHour={calendarHours.endHour}
           initialDate={start}
-          locale="es-UY"
-          title="Agenda visual de la semana"
-          description="Reservas, huecos y ausencias en un solo plano para arrancar el dia con lectura operativa real."
           availableRangeStart={calendarRangeStart}
           availableRangeEndExclusive={calendarRangeEndExclusive}
+          hideFilters={true}
         />
 
         <Card className="soft-panel rounded-[1.9rem] border-0 shadow-none">

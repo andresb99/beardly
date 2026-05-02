@@ -192,9 +192,6 @@ export function DayColumn({
       }}
     >
       <div className="relative pointer-events-none" style={{ height: gridHeight }}>
-        {isToday ? (
-          <div className="pointer-events-none absolute inset-0 bg-violet-500/[0.02] dark:bg-violet-500/[0.06]" />
-        ) : null}
 
         {hourOffsets.map((offset, index) => (
           <div
@@ -202,7 +199,7 @@ export function DayColumn({
             className={cn(
               'pointer-events-none absolute inset-x-0',
               index % 2 === 0
-                ? 'bg-slate-900/[0.008] dark:bg-violet-400/[0.016]'
+                ? 'bg-slate-900/[0.008] dark:bg-white/[0.02]'
                 : 'bg-transparent',
             )}
             style={{
@@ -230,9 +227,9 @@ export function DayColumn({
             className="pointer-events-none absolute inset-x-0 z-20"
             style={{ top: nowPosition }}
           >
-            <div className="absolute inset-x-3 top-1/2 h-px -translate-y-1/2 bg-violet-400/20 dark:bg-violet-400/30" />
-            <div className="absolute left-0 top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-violet-500 shadow-[0_0_0_6px_rgba(139,92,246,0.14)] dark:border-[rgba(12,7,22,0.96)] dark:bg-violet-300" />
-            <div className="h-px bg-violet-400/72 dark:bg-violet-200/88" />
+            <div className="absolute inset-x-3 top-1/2 h-px -translate-y-1/2 bg-white/10 dark:bg-white/20" />
+            <div className="absolute left-0 top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-slate-400 shadow-[0_0_0_6px_rgba(255,255,255,0.04)] dark:border-[rgba(12,7,22,0.96)] dark:bg-slate-300" />
+            <div className="h-px bg-white/40 dark:bg-white/60" />
           </div>
         ) : null}
 

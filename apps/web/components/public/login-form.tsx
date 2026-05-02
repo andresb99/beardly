@@ -73,6 +73,22 @@ export function mapAuthError(message: string) {
     return 'El provider social no esta habilitado en Supabase para este proyecto. Activalo en Authentication > Providers.';
   }
 
+  if (
+    normalized.includes('user already registered') ||
+    normalized.includes('already registered') ||
+    normalized.includes('already exists')
+  ) {
+    return 'Este email ya esta registrado. Intenta iniciar sesion o recuperar tu contrasena.';
+  }
+
+  if (normalized.includes('request rate limit reached')) {
+    return 'Demasiadas solicitudes. Por favor, espera un momento antes de intentar de nuevo.';
+  }
+
+  if (normalized.includes('refresh token not found') || normalized.includes('invalid refresh token')) {
+    return 'Tu sesion ha expirado o es invalida. Por favor, ingresa tus credenciales de nuevo.';
+  }
+
   return message;
 }
 
@@ -121,6 +137,16 @@ export function LoginForm({
     setMode(initialMode);
     setMessage(initialMessage);
   }, [initialMessage, initialMode]);
+
+  useEffect(() => {
+    // Stop refresh token loops if the current session is invalid
+    void supabase.auth.getSession().then(({ error }) => {
+      if (error?.message?.toLowerCase().includes('refresh token')) {
+        console.warn('Stopping refresh token loop due to invalid session');
+        void supabase.auth.signOut();
+      }
+    });
+  }, [supabase]);
 
   useEffect(() => {
     if (mode !== 'reset') {

@@ -129,12 +129,7 @@ export function WeekGrid({
               return (
                 <div
                   key={day.toISOString()}
-                  className={cn(
-                    'border-r border-white/10 px-4 py-3 last:border-r-0 dark:border-white/[0.04]',
-                    isToday
-                      ? 'bg-white/25 dark:bg-violet-500/[0.08]'
-                      : 'bg-white/14 dark:bg-white/[0.02]',
-                  )}
+                  className="border-r border-white/10 bg-white/14 px-4 py-3 last:border-r-0 dark:border-white/[0.04] dark:bg-white/[0.02]"
                 >
                   <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate/54 dark:text-slate-300/56">
                     {formatWeekday(day, locale)}
@@ -144,14 +139,14 @@ export function WeekGrid({
                       className={cn(
                         'inline-flex h-10 min-w-10 items-center justify-center rounded-full border border-transparent px-3.5 text-sm font-semibold shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]',
                         isToday
-                          ? 'bg-white/14 text-ink shadow-[0_0_0_1px_rgba(139,92,246,0.04)] dark:bg-violet-500/[0.18] dark:text-violet-50 dark:shadow-[0_14px_26px_-22px_rgba(139,92,246,0.36)]'
+                          ? 'bg-white/14 text-ink shadow-[0_0_0_1px_rgba(255,255,255,0.04)] dark:bg-white/[0.08] dark:text-slate-50 dark:shadow-none'
                           : 'bg-white/8 text-ink dark:bg-white/[0.035] dark:text-slate-100 dark:shadow-none',
                       )}
                     >
                       {formatDayDate(day, locale)}
                     </div>
                     {isToday ? (
-                      <span className="rounded-full bg-white/10 px-2.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.16em] text-violet-700 dark:bg-fuchsia-500/[0.12] dark:text-violet-100">
+                      <span className="rounded-full bg-white/10 px-2.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.16em] text-slate-400 dark:bg-white/[0.05] dark:text-slate-300">
                         Hoy
                       </span>
                     ) : null}
