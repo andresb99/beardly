@@ -189,13 +189,10 @@ export function LoginForm({
   }
 
   function getPublicOrigin() {
-    const { origin, protocol, hostname, port } = window.location;
-
-    if (hostname !== '0.0.0.0') {
-      return origin;
+    if (typeof window !== 'undefined') {
+      return window.location.origin;
     }
-
-    return `${protocol}//localhost${port ? `:${port}` : ''}`;
+    return env.NEXT_PUBLIC_APP_URL;
   }
 
   function getPlanOnboardingPath(planId: MarketplacePlanId, mode: SubscriptionBillingMode) {

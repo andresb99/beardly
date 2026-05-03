@@ -31,6 +31,7 @@ const themeScript = `
   })();
 `;
 
+/* 
 const authLoopFixerScript = `
   (() => {
     try {
@@ -41,10 +42,12 @@ const authLoopFixerScript = `
           const cookie = cookies[i].trim();
           if (cookie.startsWith('sb-') && cookie.includes('auth-token')) {
             found = true;
-            document.cookie = cookie.split('=')[0] + '=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
-            // Also try with dot domain
+            const cookieName = cookie.split('=')[0];
+            document.cookie = cookieName + '=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
             const domain = window.location.hostname;
-            document.cookie = cookie.split('=')[0] + '=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=.' + domain + ';';
+            if (domain !== 'localhost') {
+              document.cookie = cookieName + '=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=.' + domain + ';';
+            }
           }
         }
         if (found) {
@@ -54,6 +57,7 @@ const authLoopFixerScript = `
     } catch {}
   })();
 `;
+*/
 
 export const metadata: Metadata = buildRootMetadata();
 export const viewport = {
@@ -95,7 +99,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     >
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
-        <script dangerouslySetInnerHTML={{ __html: authLoopFixerScript }} />
+        {/* <script dangerouslySetInnerHTML={{ __html: authLoopFixerScript }} /> */}
         {structuredData.length > 0 ? (
           <script
             type="application/ld+json"

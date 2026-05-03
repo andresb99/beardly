@@ -116,8 +116,9 @@ export async function proxy(request: NextRequest) {
     );
   }
 
-  const { rootDomain } = getPlatformHostConfig();
-  const cookieDomain = rootDomain ? `.${rootDomain}` : undefined;
+  const host = request.headers.get('host');
+  const { rootDomain } = getPlatformHostConfig(host);
+  const cookieDomain = rootDomain && rootDomain !== 'localhost' ? `.${rootDomain}` : undefined;
 
   const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
     cookies: {
@@ -128,7 +129,7 @@ export async function proxy(request: NextRequest) {
         cookiesToSet.forEach(({ name, value, options }) => {
           response.cookies.set(name, value, {
             ...(options as CookieOptions),
-            ...(cookieDomain ? { domain: cookieDomain } : {}),
+            ...(cookieDomain ? { domain: `.${cookieDomain}` } : {}),
           });
         });
       },
@@ -136,10 +137,10 @@ export async function proxy(request: NextRequest) {
   });
 
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  if (!session) {
+  if (!user) {
     const loginUrl = new URL('/login', getRequestOrigin(request));
     loginUrl.searchParams.set('next', pathname);
     return applyApiRateLimitHeaders(NextResponse.redirect(loginUrl), apiRateLimit?.headers);

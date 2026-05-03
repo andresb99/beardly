@@ -28,9 +28,16 @@ function normalizeExplicitRootDomain(value: string | null | undefined) {
   return normalized.replace(/^www\./, '') || normalized;
 }
 
-export function getPlatformHostConfig(): PlatformHostConfig {
-  const appHost = normalizeHostPattern(getHostFromAppUrl());
+export function getPlatformHostConfig(requestHost?: string | null): PlatformHostConfig {
+  // Priority: 1. Host from arguments (server), 2. Host from window (browser), 3. Host from ENV
+  const currentHost = 
+    requestHost || 
+    (typeof window !== 'undefined' ? window.location.host : null) || 
+    getHostFromAppUrl();
+
+  const appHost = normalizeHostPattern(currentHost);
   const fallbackRootDomain = appHost && isLocalDevelopmentHost(appHost) ? 'localhost' : appHost;
+  
   const rootDomain =
     normalizeExplicitRootDomain(process.env.NEXT_PUBLIC_PLATFORM_ROOT_DOMAIN) ||
     normalizeHostPattern(fallbackRootDomain ? fallbackRootDomain.replace(/^www\./, '') : '');

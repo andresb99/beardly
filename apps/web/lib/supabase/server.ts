@@ -1,5 +1,5 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { env } from '@/lib/env';
 import { getPlatformHostConfig } from '@/lib/platform-host-config';
 
@@ -7,8 +7,9 @@ type CookiePatch = { name: string; value: string; options?: CookieOptions };
 
 export async function createSupabaseServerClient() {
   const cookieStore = await cookies();
-  const { rootDomain } = getPlatformHostConfig();
-  const cookieDomain = rootDomain ? `.${rootDomain}` : undefined;
+  const host = (await headers()).get('host');
+  const { rootDomain } = getPlatformHostConfig(host);
+  const cookieDomain = rootDomain && rootDomain !== 'localhost' ? `.${rootDomain}` : undefined;
 
   return createServerClient(env.NEXT_PUBLIC_SUPABASE_URL, env.NEXT_PUBLIC_SUPABASE_ANON_KEY, {
     cookies: {

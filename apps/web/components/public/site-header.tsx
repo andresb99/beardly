@@ -782,7 +782,7 @@ export function SiteHeader({ initialState = DEFAULT_SITE_HEADER_STATE }: SiteHea
                   >
                     <Bell className="h-4 w-4" />
                     {effectiveNotificationCount > 0 ? (
-                      <span className="pointer-events-none absolute right-0.5 top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-bold leading-none text-black">
+                      <span className="pointer-events-none absolute -right-1 -top-1 z-10 flex h-5 min-w-5 items-center justify-center rounded-full bg-[rgb(var(--brand-primary))] px-1 text-[10px] font-bold leading-none text-[rgb(var(--brand-on-primary))] ring-2 ring-white dark:ring-[#121212]">
                         {effectiveNotificationCount > 9 ? '9+' : effectiveNotificationCount}
                       </span>
                     ) : null}
@@ -907,7 +907,7 @@ export function SiteHeader({ initialState = DEFAULT_SITE_HEADER_STATE }: SiteHea
                       className="h-10 w-10 border border-white/75 bg-white/68 text-ink shadow-[0_16px_24px_-20px_rgba(15,23,42,0.28)] dark:border-white/10 dark:bg-white/[0.06] dark:text-white"
                     />
                     {navigationContext !== 'admin' && effectiveNotificationCount > 0 ? (
-                      <span className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-bold text-black">
+                      <span className="absolute -right-1 -top-1 z-10 flex h-5 min-w-5 items-center justify-center rounded-full bg-[rgb(var(--brand-primary))] px-1 text-[10px] font-bold text-[rgb(var(--brand-on-primary))] ring-2 ring-white dark:ring-[#121212]">
                         {effectiveNotificationCount > 9 ? '9+' : effectiveNotificationCount}
                       </span>
                     ) : null}
