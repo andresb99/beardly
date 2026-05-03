@@ -35,6 +35,7 @@ const VIEW_COPY: Record<
     eyebrow: string;
     previousLabel: string;
     nextLabel: string;
+    todayLabel: string;
   }
 > = {
   day: {
