@@ -58,7 +58,6 @@ describe('AdminHomeSchedule', () => {
     render(
       <AdminHomeSchedule
         staff={staff}
-        services={[]}
         events={events}
         startHour={9}
         endHour={20}
@@ -97,7 +96,6 @@ describe('AdminHomeSchedule', () => {
     render(
       <AdminHomeSchedule
         staff={staff}
-        services={[]}
         events={[absenceEvent]}
         startHour={9}
         endHour={20}

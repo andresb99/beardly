@@ -25,7 +25,6 @@ export default defineConfig({
       NEXT_PUBLIC_SUPABASE_ANON_KEY: 'test-anon-key-1234567890',
       NEXT_PUBLIC_SHOP_ID: '11111111-1111-1111-1111-111111111111',
       NEXT_PUBLIC_APP_URL: 'http://localhost:3000',
-      SUPABASE_SERVICE_ROLE_KEY: 'test-service-role-key-dummy-value-for-tests',
     },
     coverage: {
       provider: 'v8',

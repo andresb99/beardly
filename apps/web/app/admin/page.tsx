@@ -19,6 +19,68 @@ interface AdminHomePageProps {
   searchParams: Promise<{ shop?: string }>;
 }
 
+interface SummaryAppointmentRow {
+  id: string | null;
+  start_at: string | null;
+  customers: { name?: string | null } | null;
+  services: { name?: string | null } | null;
+  staff: { name?: string | null } | null;
+}
+
+interface SummaryReviewRow {
+  id: string | null;
+  rating: number | null;
+  comment: string | null;
+  submitted_at: string | null;
+  customers: { name?: string | null } | null;
+}
+
+function formatAdminShortDateTime(value: string, timeZone: string) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat('es-UY', {
+    timeZone,
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(parsed);
+}
+
+function formatAdminShortDate(value: string, timeZone: string) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat('es-UY', {
+    timeZone,
+    day: 'numeric',
+    month: 'short',
+  }).format(parsed);
+}
+
+function pickRelationName(value: { name?: string | null } | null, fallback: string) {
+  const normalized = String(value?.name || '').trim();
+  return normalized || fallback;
+}
+
+function trimCopy(value: string | null | undefined, maxLength = 84) {
+  const normalized = String(value || '').trim();
+  if (!normalized) {
+    return null;
+  }
+
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, maxLength - 1).trimEnd()}...`;
+}
+
 function startOfMonth(date: Date) {
   const normalized = new Date(date);
   normalized.setDate(1);
@@ -48,18 +110,72 @@ export default async function AdminHomePage({ searchParams }: AdminHomePageProps
     }),
   ]);
   const supabase = await createSupabaseServerClient();
-  const [servicesResult] = await Promise.all([
+  const nowIso = new Date().toISOString();
+  const [nextAppointmentResult, lastCompletedAppointmentResult, latestReviewResult, servicesResult] =
+    await Promise.all([
+    supabase
+      .from('appointments')
+      .select('id, start_at, customers(name), services(name), staff(name)')
+      .eq('shop_id', ctx.shopId)
+      .in('status', ['pending', 'confirmed'])
+      .gte('start_at', nowIso)
+      .order('start_at', { ascending: true })
+      .limit(1),
+    supabase
+      .from('appointments')
+      .select('id, start_at, customers(name), services(name), staff(name)')
+      .eq('shop_id', ctx.shopId)
+      .eq('status', 'done')
+      .order('start_at', { ascending: false })
+      .limit(1),
+    supabase
+      .from('appointment_reviews')
+      .select('id, rating, comment, submitted_at, customers(name)')
+      .eq('shop_id', ctx.shopId)
+      .eq('status', 'published')
+      .order('submitted_at', { ascending: false })
+      .limit(1),
     supabase
       .from('services')
       .select('id, name, duration_minutes, price_cents')
       .eq('shop_id', ctx.shopId)
       .eq('is_active', true)
       .order('name'),
-  ]);
+    ]);
 
   const activeAppointments =
     metrics.statusSummary.pendingAppointments + metrics.statusSummary.confirmedAppointments;
   const urgentItemsCount = notifications.totalCount;
+  const nextAppointment =
+    (((nextAppointmentResult.error ? [] : nextAppointmentResult.data) || [])[0] as
+      | SummaryAppointmentRow
+      | undefined) || null;
+  const lastCompletedAppointment =
+    (((lastCompletedAppointmentResult.error ? [] : lastCompletedAppointmentResult.data) || [])[0] as
+      | SummaryAppointmentRow
+      | undefined) || null;
+  const latestReview =
+    (((latestReviewResult.error ? [] : latestReviewResult.data) || [])[0] as
+      | SummaryReviewRow
+      | undefined) || null;
+  const nextAppointmentService = pickRelationName(nextAppointment?.services || null, 'Servicio sin nombre');
+  const nextAppointmentStaff = pickRelationName(nextAppointment?.staff || null, 'Staff');
+  const nextAppointmentCustomer = pickRelationName(nextAppointment?.customers || null, 'Cliente');
+  const completedAppointmentService = pickRelationName(
+    lastCompletedAppointment?.services || null,
+    'Servicio sin nombre',
+  );
+  const completedAppointmentStaff = pickRelationName(lastCompletedAppointment?.staff || null, 'Staff');
+  const completedAppointmentCustomer = pickRelationName(
+    lastCompletedAppointment?.customers || null,
+    'Cliente',
+  );
+  const latestReviewCustomer = pickRelationName(latestReview?.customers || null, 'Cliente');
+  const latestReviewComment = trimCopy(latestReview?.comment);
+  const latestReviewRating =
+    typeof latestReview?.rating === 'number' && Number.isFinite(latestReview.rating)
+      ? latestReview.rating.toFixed(1)
+      : null;
   const currentStaffName = scheduleOverview.staff.find(s => s.id === ctx.staffId)?.name || 'Admin';
   const ownerCalendarEvents = [
     ...scheduleOverview.appointments.map((appointment) => ({

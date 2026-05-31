@@ -54,6 +54,7 @@ export function AdminSidebar({
   userEmail = 'admin@rivera.uy',
   userAvatarUrl,
   unreadNotifications = 4,
+  role,
   activeWorkspaceSlug,
   isPlatformAdmin,
   isMobile = false,
@@ -75,7 +76,7 @@ export function AdminSidebar({
     { label: 'Barbería', href: '/admin/barbershop', icon: Settings },
   ];
 
-  const handleLinkClick = () => {
+  const handleLinkClick = (href: string) => {
     if (isMobile && onMobileClose) {
       onMobileClose();
     }
@@ -178,7 +179,7 @@ export function AdminSidebar({
             <NextLink
               key={item.href}
               href={item.href}
-              onClick={() => handleLinkClick()}
+              onClick={() => handleLinkClick(item.href)}
               className={`group flex items-center justify-between rounded-xl px-3 py-2.5 text-[13px] font-medium transition ${
                 isActive
                   ? 'bg-white/5 text-[#d0bcff] border border-white/5 shadow-sm'

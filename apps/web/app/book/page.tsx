@@ -44,7 +44,6 @@ export default async function BookPage() {
 
   return (
     <main className="min-h-screen bg-transparent">
-      <h1 className="sr-only">Selecciona una barberia y entra a su agenda</h1>
       <BookPageContent shops={shops} />
     </main>
   );

@@ -31,6 +31,9 @@ interface DayEventLayoutSegment extends DayEventSegment {
   columnCount: number;
 }
 
+const SLOT_MINUTES = 30;
+const PIXELS_PER_MINUTE = 1.1;
+
 function startOfDay(date: Date) {
   const normalized = new Date(date);
   normalized.setHours(0, 0, 0, 0);
@@ -57,6 +60,16 @@ function formatWeekday(date: Date, locale: string) {
 
 function formatDayNumber(date: Date, locale: string) {
   return new Intl.DateTimeFormat(locale, { day: 'numeric' }).format(date);
+}
+
+function formatSelectedDay(date: Date, locale: string) {
+  return new Intl.DateTimeFormat(locale, {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'short',
+  })
+    .format(date)
+    .replace('.', '');
 }
 
 function formatTimeLabel(totalMinutes: number, locale: string) {

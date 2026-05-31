@@ -1,16 +1,14 @@
 'use client';
 
-import { useState, useMemo, useRef, useCallback, useTransition } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback, useTransition } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
-import { Button } from '@heroui/react';
-import { X, ChevronRight, SlidersHorizontal, Loader2, UserPlus } from 'lucide-react';
-import { AnimatePresence } from 'framer-motion';
+import { Button, Slider, Switch, Avatar, Card, CardBody } from '@heroui/react';
+import { X, ChevronRight, SlidersHorizontal, Loader2, ArrowUpRight, UserPlus } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/cn';
-import {
-  MarketplaceEnrollmentModal,
-  type MarketplaceEnrollmentSubmitData,
-} from '@/components/public/marketplace-enrollment-modal';
+import { buildTenantCanonicalHref } from '@/lib/tenant-public-urls';
+import { MarketplaceEnrollmentModal } from '@/components/public/marketplace-enrollment-modal';
 import { MarketplaceItemCard } from '@/components/public/marketplace-item-card';
 import type { MarketplaceOpenModelCall } from '@/lib/modelos';
 import { modelRegistrationInputSchema } from '@navaja/shared';
@@ -30,8 +28,18 @@ interface ModelosMarketplaceListProps {
   calls: MarketplaceOpenModelCall[];
 }
 
-type ModelCallGroup = MarketplaceOpenModelCall & {
-  sessions: MarketplaceOpenModelCall[];
+function normalizeFilterValue(value: string | null | undefined) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+const LEVEL_LABELS: Record<string, string> = {
+  beginner: 'Principiante',
+  intermediate: 'Intermedio',
+  advanced: 'Avanzado',
 };
 
 export function ModelosMarketplaceList({ calls }: ModelosMarketplaceListProps) {
@@ -43,7 +51,7 @@ export function ModelosMarketplaceList({ calls }: ModelosMarketplaceListProps) {
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [isFilterClosing, setIsFilterClosing] = useState(false);
   const closingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [isPending] = useTransition();
+  const [isPending, startTransition] = useTransition();
 
   // Modal state
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -55,6 +63,14 @@ export function ModelosMarketplaceList({ calls }: ModelosMarketplaceListProps) {
     shopId: string;
     sessions: Array<{ id: string; dateLabel: string; seatsLeft: number }>;
   } | null>(null);
+
+  const normalizeValue = useCallback((value: string | null | undefined) => {
+    return String(value || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .trim();
+  }, []);
 
   const closeFilter = useCallback(() => {
     if (isFilterClosing) return;
@@ -71,7 +87,7 @@ export function ModelosMarketplaceList({ calls }: ModelosMarketplaceListProps) {
     setMessage(null);
   };
 
-  const handleModelSubmit = async (formData: MarketplaceEnrollmentSubmitData) => {
+  const handleModelSubmit = async (formData: any) => {
     setError(null);
     setMessage(null);
 
@@ -108,7 +124,7 @@ export function ModelosMarketplaceList({ calls }: ModelosMarketplaceListProps) {
       setTimeout(() => {
         handleModalClose();
       }, 2500);
-    } catch {
+    } catch (err) {
       setError('Error al enviar la postulación. Intenta nuevamente.');
     } finally {
       setIsSubmitting(false);
@@ -135,7 +151,7 @@ export function ModelosMarketplaceList({ calls }: ModelosMarketplaceListProps) {
   }, [calls]);
 
   const filteredGroups = useMemo(() => {
-    const groups = new Map<string, ModelCallGroup>();
+    const groups = new Map<string, any>();
 
     calls.forEach((call) => {
       // Category filter
@@ -162,13 +178,24 @@ export function ModelosMarketplaceList({ calls }: ModelosMarketplaceListProps) {
 
     // Sort logic
     if (sortBy === 'newest') {
-      const getCreatedAt = (group: ModelCallGroup) =>
-        new Date((group as { created_at?: string }).created_at as string).getTime();
-      result.sort((a, b) => getCreatedAt(b) - getCreatedAt(a));
+      result.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     }
 
     return result;
   }, [calls, activeCategory, activeLocation, sortBy]);
+
+  const handleOpenModal = useCallback((course: any) => {
+    setSelectedCourse({
+      title: course.course_title,
+      description: course.notes_public || '',
+      shopId: course.shop_id,
+      sessions: course.sessions.map((s: any) => ({
+        id: s.session_id,
+        dateLabel: new Date(s.start_at).toLocaleString('es-UY', { dateStyle: 'medium', timeStyle: 'short' }),
+        seatsLeft: s.models_needed || 1,
+      })),
+    });
+  }, []);
 
   const resetFilters = () => {
     setActiveCategory('Todas');
@@ -265,6 +292,8 @@ export function ModelosMarketplaceList({ calls }: ModelosMarketplaceListProps) {
           ) : (
             filteredGroups.map((course) => {
               const isAcademic = course.notes_public?.toLowerCase().includes('académica') || !course.model_categories?.length;
+              const levelKey = (course.course_level || '').toLowerCase();
+              const levelLabel = (LEVEL_LABELS[levelKey] ?? course.course_level) || 'General';
 
               return (
                 <div key={`${course.shop_id}-${course.course_title}`} className="will-change-transform">
@@ -278,14 +307,14 @@ export function ModelosMarketplaceList({ calls }: ModelosMarketplaceListProps) {
                     shopName={course.shop_name}
                     date={String(course.location || 'PRÓXIMAMENTE')}
                     location={String(course.location || course.shop_name)}
-                    upcomingSessions={course.sessions.reduce((acc, s) => acc + (s.models_needed || 0), 0)}
+                    upcomingSessions={course.sessions.reduce((acc: number, s: any) => acc + (s.models_needed || 0), 0)}
                     primaryAction={{
                       label: 'POSTULARME',
                       onPress: () => setSelectedCourse({
                         title: course.course_title,
                         description: course.notes_public || '',
                         shopId: course.shop_id,
-                        sessions: course.sessions.map((s) => ({
+                        sessions: course.sessions.map((s: any) => ({
                           id: s.session_id,
                           dateLabel: new Date(s.start_at).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }).toUpperCase(),
                           seatsLeft: s.models_needed

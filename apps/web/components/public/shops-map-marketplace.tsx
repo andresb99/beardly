@@ -728,6 +728,7 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
   const mobileSheetDragOffsetRef = useRef(0);
   const isMobileSheetDraggingRef = useRef(false);
   const activeDragCleanupRef = useRef<(() => void) | null>(null);
+  const [mobileSheetDragSnapshot, setMobileSheetDragSnapshot] = useState<{ dragging: boolean; offset: number }>({ dragging: false, offset: 0 });
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const displayedShops = activeSearchMode === 'name' ? (searchResults ?? []) : viewportShops;
 
@@ -866,6 +867,7 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
     setMobileViewportHeight(null);
     mobileSheetDragOffsetRef.current = 0;
     isMobileSheetDraggingRef.current = false;
+    setMobileSheetDragSnapshot({ dragging: false, offset: 0 });
     setMobileSheetStage('collapsed');
   }, [isMobileViewport]);
 
@@ -1403,6 +1405,7 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
     setMobileSheetStage(nextStage);
     mobileSheetDragOffsetRef.current = 0;
     isMobileSheetDraggingRef.current = false;
+    setMobileSheetDragSnapshot({ dragging: false, offset: 0 });
   }, []);
 
   function resolveVelocitySnap(
@@ -1527,6 +1530,7 @@ export function ShopsMapMarketplace({ initialShops = [] }: ShopsMapMarketplacePr
       // skips re-rendering (e.g. when nextStage equals the current stage).
       const nextTranslate = getMobileSheetStageTranslate(nextStage, sheetHeight);
       sheet.style.transform = `translateY(${nextTranslate}%)`;
+      setMobileSheetDragSnapshot({ dragging: false, offset: 0 });
       setMobileSheetStage(nextStage);
     };
 

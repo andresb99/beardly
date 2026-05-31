@@ -29,6 +29,7 @@ interface AdminStaffFormsProps {
   staff: StaffOption[];
   weekdays: string[];
   services: Array<{ id: string; name: string }>;
+  staffServices: Array<{ staff_id: string; service_id: string }>;
 }
 
 type InviteRole = 'staff' | 'admin';
@@ -67,6 +68,7 @@ export function AdminStaffForms({
   staff,
   weekdays,
   services,
+  staffServices,
 }: AdminStaffFormsProps) {
   const router = useRouter();
   const hasStaff = staff.length > 0;

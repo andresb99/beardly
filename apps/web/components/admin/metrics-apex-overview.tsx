@@ -7,7 +7,7 @@ import { Card, CardBody } from '@heroui/card';
 import { formatCurrency } from '@navaja/shared';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { DashboardMetrics } from '@/lib/metrics';
-import { Star, CheckCircle2, Clock, XCircle, UserX, Globe, type LucideIcon } from 'lucide-react';
+import { Star, CheckCircle2, Clock, XCircle, UserX, Globe } from 'lucide-react';
 
 const ApexChart = dynamic(() => import('react-apexcharts'), {
   ssr: false,
@@ -56,7 +56,7 @@ const AREA_VIEW_OPTIONS_STAFF_FOCUS: Array<{ key: AreaViewKey; label: string }> 
   { key: 'WALK_IN_BOOKINGS', label: 'Solo presencial' },
 ];
 
-const STATUS_DEFINITIONS: Array<{ key: string; label: string; color: string; icon: LucideIcon; subtitle: string }> = [
+const STATUS_DEFINITIONS: Array<{ key: string; label: string; color: string; icon: any; subtitle: string }> = [
   { key: 'done', label: 'Realizadas', color: '#22c55e', icon: CheckCircle2, subtitle: 'reservas completadas' },
   { key: 'confirmed', label: 'Confirmadas', color: '#8b5cf6', icon: CheckCircle2, subtitle: 'reservas confirmadas' },
   { key: 'pending', label: 'Pendientes', color: '#6366f1', icon: Clock, subtitle: 'reservas en espera' },

@@ -97,6 +97,12 @@ export function ModelRegistrationForm({
     }
   }, [sessionId, visibleSessions]);
 
+  function togglePreference(value: string) {
+    setPreferences((current) =>
+      current.includes(value) ? current.filter((item) => item !== value) : [...current, value],
+    );
+  }
+
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);

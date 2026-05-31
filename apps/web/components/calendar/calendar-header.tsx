@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { Button } from '@heroui/button';
 import { cn } from '@/lib/cn';
 import type { CalendarView } from './calendar';
+import { CALENDAR_EVENT_TONE_LEGEND } from './event-tone';
 
 interface CalendarHeaderProps {
   title: string;
@@ -57,6 +58,29 @@ const VIEW_COPY: Record<
   },
 };
 
+function CalendarGlyph() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      className="h-[1.15rem] w-[1.15rem]"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <rect x="3.75" y="5.25" width="16.5" height="14.5" rx="3.2" />
+      <path d="M8 3.75v3" />
+      <path d="M16 3.75v3" />
+      <path d="M3.75 9.5h16.5" />
+      <path d="M8.5 13h.01" />
+      <path d="M12 13h.01" />
+      <path d="M15.5 13h.01" />
+    </svg>
+  );
+}
+
 function ChevronIcon({ direction }: { direction: 'left' | 'right' }) {
   return (
     <svg
@@ -74,11 +98,30 @@ function ChevronIcon({ direction }: { direction: 'left' | 'right' }) {
   );
 }
 
+function LegendPill({
+  label,
+  dotClassName,
+}: {
+  label: string;
+  dotClassName: string;
+}) {
+  return (
+    <div className="inline-flex items-center gap-2 rounded-full bg-white/8 px-3 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] dark:bg-white/[0.03] dark:shadow-none">
+      <span className={cn('h-2 w-2 rounded-full ring-2 ring-white/55 dark:ring-white/10', dotClassName)} />
+      <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate/72 dark:text-slate-200/78">
+        {label}
+      </span>
+    </div>
+  );
+}
+
 export function CalendarHeader({
   title,
   description,
   view,
   rangeLabel,
+  visibleDayLabel,
+  visibleEventCount,
   supplementaryContent,
   canNavigatePrevious,
   canNavigateNext,
@@ -114,27 +157,6 @@ export function CalendarHeader({
              >
                 <span className="hidden sm:inline">Add Blockout Time</span>
              </Button>
-
-            <div className="inline-flex items-center gap-1 rounded-sm bg-white/5 p-1">
-              {VIEW_OPTIONS.map((option) => {
-                const isActiveView = option.id === view;
-                return (
-                  <Button
-                    key={option.id}
-                    size="sm"
-                    radius="sm"
-                    variant={isActiveView ? 'flat' : 'light'}
-                    className={cn(
-                      'h-7 px-3 text-[10px] font-bold uppercase tracking-wider',
-                      isActiveView ? 'bg-white/10 text-slate-100' : 'text-slate-400',
-                    )}
-                    onClick={() => onViewChange(option.id)}
-                  >
-                    {option.label}
-                  </Button>
-                );
-              })}
-            </div>
 
             <div className="inline-flex items-center gap-1 rounded-sm bg-white/5 p-1">
               <Button

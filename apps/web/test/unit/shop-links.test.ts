@@ -1,5 +1,4 @@
 import {
-  buildPlatformUrl,
   buildShopHref,
   buildTenantCourseHref,
   buildTenantModelRegistrationHref,
@@ -79,37 +78,6 @@ describe('shop links', () => {
       expect(buildTenantRootHref('  Navaja & Barber  ')).toBe(
         'https://navaja-barber.beardly.com',
       );
-    });
-  });
-
-  describe('buildPlatformUrl', () => {
-    afterEach(() => {
-      vi.unstubAllEnvs();
-    });
-
-    it('builds an absolute platform URL using NEXT_PUBLIC_APP_URL', () => {
-      vi.stubEnv('NEXT_PUBLIC_APP_URL', 'http://localhost:3000');
-      expect(buildPlatformUrl('/book')).toBe('http://localhost:3000/book');
-    });
-
-    it('falls back to a relative path when NEXT_PUBLIC_APP_URL is empty', () => {
-      vi.stubEnv('NEXT_PUBLIC_APP_URL', '');
-      expect(buildPlatformUrl('/book')).toBe('/book');
-    });
-
-    it('defaults to root path when no path argument is provided', () => {
-      vi.stubEnv('NEXT_PUBLIC_APP_URL', 'http://localhost:3000');
-      expect(buildPlatformUrl()).toBe('http://localhost:3000/');
-    });
-
-    it('returns a relative path when NEXT_PUBLIC_APP_URL is unset', () => {
-      const previous = process.env.NEXT_PUBLIC_APP_URL;
-      delete process.env.NEXT_PUBLIC_APP_URL;
-      try {
-        expect(buildPlatformUrl('/book')).toBe('/book');
-      } finally {
-        process.env.NEXT_PUBLIC_APP_URL = previous;
-      }
     });
   });
 

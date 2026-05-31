@@ -91,6 +91,8 @@ export function AdminHomeSchedule({
     selectedStaffId === ALL_STAFF_ID
       ? 'Equipo completo'
       : selectedStaff?.name || 'Profesional';
+  const visibleStaffCount = selectedStaffId === ALL_STAFF_ID ? staff.length : 1;
+
   const renderPopover = (event: CalendarEvent, onClose: () => void) => {
     const isDraft = event.id.startsWith('draft-');
     const adminEvent = finalVisibleEvents.find(e => e.id === event.id);
@@ -259,7 +261,7 @@ export function AdminHomeSchedule({
       startHour={startHour}
       endHour={endHour}
       initialDate={initialDate}
-      initialView="week"
+      initialView="day"
       locale="es-UY"
       title={activeTitle}
       description={activeDescription}

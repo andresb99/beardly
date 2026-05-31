@@ -259,15 +259,13 @@ export function DayColumn({
           return (
             <div
               key={`${segment.event.id}-${segment.renderStart.toISOString()}`}
-              data-event-id={segment.event.id}
-              data-overlap-columns={String(segment.columnCount)}
               className="absolute pointer-events-auto"
-              style={{
-                top: `${top}px`,
-                height: `${height}px`,
-                left,
+              style={{ 
+                top: `${top}px`, 
+                height: `${height}px`, 
+                left, 
                 width,
-                zIndex: isSelected ? 40 : 10
+                zIndex: isSelected ? 40 : 10 
               }}
             >
               {renderEventPopover ? (

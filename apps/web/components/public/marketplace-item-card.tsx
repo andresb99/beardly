@@ -9,7 +9,8 @@ import {
   Button,
   Chip
 } from '@heroui/react';
-import { Star, ArrowRight, PlayCircle } from 'lucide-react';
+import { Star, Clock, User, ArrowRight, PlayCircle } from 'lucide-react';
+import { cn } from '@/lib/cn';
 import { ctaButtonClass, Eyebrow } from '@/components/ui/primitives';
 import Link from 'next/link';
 
@@ -41,7 +42,8 @@ interface MarketplaceItemCardProps {
   };
 }
 
-export function MarketplaceItemCard({
+export function MarketplaceItemCard({ 
+  id,
   type,
   category, 
   title, 
@@ -162,7 +164,7 @@ export function MarketplaceItemCard({
           </Button>
         ) : (
           <Button
-            onPress={() => primaryAction.onPress?.()}
+            onPress={primaryAction.onPress as any}
             className={ctaButtonClass({ hasShadow: false, className: 'group/btn' })}
           >
             {primaryAction.label}

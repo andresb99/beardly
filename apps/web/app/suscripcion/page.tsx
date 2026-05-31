@@ -1,11 +1,22 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
+import { Check } from 'lucide-react';
+import { resolveSubscriptionBillingMessage } from '@navaja/shared';
+import { SubscriptionBillingPanel } from '@/components/admin/subscription-billing-panel';
 import { getCurrentAuthContext } from '@/lib/auth';
 import { buildSitePageMetadata } from '@/lib/site-metadata';
 import {
   getSubscriptionPlanDescriptor,
+  normalizeSubscriptionStatus,
+  normalizeSubscriptionTier,
   PUBLIC_MARKETPLACE_PLANS,
+  type SubscriptionStatus,
+  type SubscriptionTier,
 } from '@/lib/subscription-plans';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { buildAdminHref } from '@/lib/workspace-routes';
+
+import { cn } from '@/lib/cn';
 
 import { SubscriptionClient } from '@/components/public/subscription-client';
 
@@ -22,6 +33,12 @@ export const metadata: Metadata = buildSitePageMetadata({
     'Gestiona la suscripcion de tu cuenta y compara los planes Free, Pro y Business para tu operacion.',
   path: '/suscripcion',
 });
+
+interface SubscriptionRow {
+  shop_id: string;
+  plan: SubscriptionTier;
+  status: SubscriptionStatus;
+}
 
 export default async function SubscriptionPage({ searchParams }: SubscriptionPageProps) {
   const params = await searchParams;

@@ -47,6 +47,36 @@ export function getModelsNeededFromRequirements(input: unknown): number {
   return Math.trunc(parsed);
 }
 
+function normalizeModelCategories(input: unknown): string[] {
+  if (!Array.isArray(input)) {
+    return [];
+  }
+
+  const seen = new Set<string>();
+  const normalized: string[] = [];
+
+  for (const category of input) {
+    if (typeof category !== 'string') {
+      continue;
+    }
+
+    const trimmed = category.trim();
+    if (!trimmed) {
+      continue;
+    }
+
+    const dedupeKey = trimmed.toLowerCase();
+    if (seen.has(dedupeKey)) {
+      continue;
+    }
+
+    seen.add(dedupeKey);
+    normalized.push(trimmed);
+  }
+
+  return normalized;
+}
+
 export async function listMarketplaceOpenModelCalls(): Promise<MarketplaceOpenModelCall[]> {
   const supabase = createSupabaseAdminClient();
 
@@ -142,8 +172,7 @@ export async function listMarketplaceOpenModelCalls(): Promise<MarketplaceOpenMo
         start_at: String(session.start_at),
         location: String(session.location),
         model_categories: [], 
-        compensation_type:
-          (req?.compensation_type as 'gratis' | 'descuento' | 'pago' | null | undefined) || 'gratis',
+        compensation_type: (req?.compensation_type as any) || 'gratis',
         compensation_value_cents: req?.compensation_value_cents ? Number(req.compensation_value_cents) : null,
         notes_public: req?.notes_public || 'Se requiere modelo para práctica académica.',
         models_needed: req ? getModelsNeededFromRequirements(req.requirements) : (course.models_required || 1),

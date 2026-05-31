@@ -8,7 +8,6 @@ import { MonthGrid } from '@/components/calendar/month-grid';
 import { WeekGrid } from '@/components/calendar/week-grid';
 import { cn } from '@/lib/cn';
 import { useMediaQuery } from './use-media-query';
-import { CALENDAR_EVENT_TONE_LEGEND } from './event-tone';
 import type { CalendarEventTone } from './event-tone';
 
 export type CalendarEventStatus = 'confirmed' | 'pending' | 'cancelled';
@@ -333,15 +332,6 @@ export function Calendar({
           onCurrentPeriod={() => setReferenceDate(new Date())}
           onNextPeriod={() => setReferenceDate((current) => shiftReferenceDate(current, view, 1))}
         />
-
-        <div className="flex flex-wrap items-center gap-3 px-4 pb-2 md:px-5">
-          {CALENDAR_EVENT_TONE_LEGEND.map((entry) => (
-            <span key={entry.tone} className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">
-              <span className={`h-1.5 w-1.5 rounded-full ${entry.dotClassName}`} />
-              {entry.label}
-            </span>
-          ))}
-        </div>
 
         <div className="px-4 pb-4 pt-1 md:px-5 md:pb-5">
           {view === 'month' ? (

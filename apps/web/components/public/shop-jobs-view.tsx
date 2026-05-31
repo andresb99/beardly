@@ -1,6 +1,6 @@
 'use client';
 
-import { Briefcase, MapPin, TrendingUp, Award, Users } from 'lucide-react';
+import { Briefcase, MapPin, TrendingUp, Award, Users, Scissors } from 'lucide-react';
 import { JobsForm } from '@/components/public/jobs-form';
 
 interface ShopJobsViewProps {

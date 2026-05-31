@@ -16,7 +16,12 @@ import {
   CheckCircle2,
   Clock,
   Scissors,
+  Crown,
+  Calendar,
   ChevronRight,
+  Briefcase,
+  Users,
+  BookOpen,
   Phone,
   Star,
   Heart
@@ -67,6 +72,22 @@ function formatTime(t: string) {
   return `${hour}:${m}hs`;
 }
 
+function StaffInitials({ name, index }: { name: string; index: number }) {
+  const initials = name.split(' ').slice(0, 2).map((n) => n[0]?.toUpperCase() ?? '').join('');
+  const gradients = [
+    'from-[#a078ff] to-[#6d3bd7]',
+    'from-[#353437] to-[#1c1b1d]',
+    'from-[#ffb869] to-[#ca801e]',
+    'from-[#6d3bd7] to-[#340080]'
+  ];
+  const bg = gradients[index % gradients.length] ?? gradients[0];
+  return (
+    <div className={`flex h-20 w-20 shrink-0 items-center justify-center rounded-3xl bg-gradient-to-br ${bg} text-2xl font-bold text-white shadow-lg`}>
+      {initials}
+    </div>
+  );
+}
+
 function isOwnerRole(role: string) {
   const r = role.toLowerCase();
   return r.includes('owner') || r.includes('dueño') || r.includes('admin');
@@ -105,6 +126,7 @@ export default async function ShopProfilePage({ params }: ShopProfilePageProps) 
   const staffById = new Map((staff || []).map((s) => [String(s.id), String(s.name)]));
   const canBook = Boolean(services?.length) && Boolean(staff?.length);
   const locationLabel = [shop.locationLabel, shop.city, shop.region].filter(Boolean).join(' · ') || null;
+  const minPriceCents = (services || []).length > 0 ? Math.min(...(services || []).map((s) => Number(s.price_cents || 0))) : null;
 
   const hoursByDay = new Map<number, { startTime: string; endTime: string }[]>();
   for (const wh of shop.workingHours ?? []) {

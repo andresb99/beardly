@@ -1,21 +1,24 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
 import { MarketplaceJobsForm } from '@/components/public/marketplace-jobs-form';
-import { MarketingPanel, marketingCtaClassNames } from '@/components/public/marketing';
 import { PublicSectionEmptyState } from '@/components/public/public-section-empty-state';
 import { getPublicTenantRouteContext } from '@/lib/public-tenant-context';
-import { buildShopHref } from '@/lib/shop-links';
 import { buildSitePageMetadata } from '@/lib/site-metadata';
-import { listMarketplaceShops } from '@/lib/shops';
-import { buildTenantCanonicalHref } from '@/lib/tenant-public-urls';
-import ShopJobsPage, { generateMetadata as generateShopJobsMetadata } from '@/app/jobs/[slug]/page';
+import { listMarketplaceShops, getMarketplaceShopBySlug } from '@/lib/shops';
+import { ShopJobsView } from '@/components/public/shop-jobs-view';
+import { MarketplaceJobsList } from '@/components/public/marketplace-jobs-list';
+import { JobsHeroAvatars } from '@/components/public/jobs-hero-avatars';
 
 export async function generateMetadata(): Promise<Metadata> {
   const routeContext = await getPublicTenantRouteContext();
   if (routeContext.mode !== 'path' && routeContext.shopSlug) {
-    return generateShopJobsMetadata({
-      params: Promise.resolve({ slug: routeContext.shopSlug }),
-    });
+    const shop = await getMarketplaceShopBySlug(routeContext.shopSlug);
+    if (shop) {
+      return buildSitePageMetadata({
+        title: `Empleo | ${shop.name}`,
+        description: `Postulaciones y vacantes abiertas en ${shop.name}. Inicia tu legado aquí.`,
+        path: `/jobs`,
+      });
+    }
   }
 
   return buildSitePageMetadata({
@@ -29,9 +32,10 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function JobsPage() {
   const routeContext = await getPublicTenantRouteContext();
   if (routeContext.mode !== 'path' && routeContext.shopSlug) {
-    return ShopJobsPage({
-      params: Promise.resolve({ slug: routeContext.shopSlug }),
-    });
+    const shop = await getMarketplaceShopBySlug(routeContext.shopSlug);
+    if (shop) {
+      return <ShopJobsView shop={shop} />;
+    }
   }
 
   const shops = await listMarketplaceShops();
@@ -47,63 +51,50 @@ export default async function JobsPage() {
   }
 
   return (
-    <section className="space-y-6">
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-3 border-b border-black/5 pb-5 dark:border-white/[0.06]">
-        <div>
-          <p className="mb-1 text-[11px] font-semibold uppercase tracking-widest text-brass">
-            Empleo
-          </p>
-          <h1 className="font-[family-name:var(--font-heading)] text-2xl font-bold text-ink dark:text-white md:text-3xl">
-            Postulate a una barberia o deja tu CV en la bolsa general
-          </h1>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <span className="rounded-full bg-black/5 px-3 py-1 text-xs font-semibold text-slate/70 dark:bg-white/5 dark:text-white/50">
-            {shops.length}
-          </span>
-        </div>
-      </div>
+    <div className="min-h-screen">
+      <div className="mx-auto max-w-7xl px-4 py-12 md:px-10 md:py-20 space-y-24">
+        
+        {/* Hero Section */}
+        <div className="grid gap-12 lg:grid-cols-2 lg:gap-20 items-center">
+          <div className="max-w-xl">
+            <div className="mb-6 inline-flex rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-[10px] font-bold tracking-[0.2em] uppercase text-slate-400">
+              The Nocturnal Elite
+            </div>
+            
+            <h1 className="font-[family-name:var(--font-heading)] text-6xl font-bold leading-[0.9] md:text-8xl md:leading-[0.85] text-white tracking-tight">
+              JOIN THE <br/>
+              <span className="text-[#c5b4ff]">ELITE</span>
+            </h1>
+            
+            <p className="mt-8 text-lg md:text-xl text-slate-400 font-medium leading-relaxed max-w-md">
+              Estamos redefiniendo el estándar del grooming masculino. Si eres un artista del corte, el escenario está listo para tu maestría.
+            </p>
 
-      <MarketplaceJobsForm
-        shops={shops.map((shop) => ({
+            <JobsHeroAvatars />
+          </div>
+
+          <div>
+             <MarketplaceJobsForm
+                shops={shops.map((shop) => ({
+                  id: shop.id,
+                  name: shop.name,
+                  city: shop.city,
+                  region: shop.region,
+                }))}
+              />
+          </div>
+        </div>
+
+        {/* Active Studios Section */}
+        <MarketplaceJobsList shops={shops.map(shop => ({
           id: shop.id,
           name: shop.name,
+          slug: shop.slug,
           city: shop.city,
           region: shop.region,
-        }))}
-      />
-
-      <div className="space-y-4">
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {shops.map((shop) => (
-            <MarketingPanel
-              key={shop.id}
-              eyebrow={[shop.city, shop.region].filter(Boolean).join(' - ') || 'Uruguay'}
-              eyebrowClassName="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate/60 dark:text-slate-400"
-              title={shop.name}
-              titleClassName="mt-2 font-[family-name:var(--font-heading)] text-2xl font-semibold text-ink dark:text-slate-100"
-              description={
-                shop.description || 'Postulate directo al pipeline privado de esta barberia.'
-              }
-            >
-              <div className="flex flex-wrap gap-3">
-                <Link
-                  href={buildShopHref(shop.slug, 'jobs')}
-                  className={marketingCtaClassNames.panelPrimary}
-                >
-                  Enviar CV directo
-                </Link>
-                <Link
-                  href={buildTenantCanonicalHref(shop, 'profile')}
-                  className={marketingCtaClassNames.panelSecondary}
-                >
-                  Ver barberia
-                </Link>
-              </div>
-            </MarketingPanel>
-          ))}
-        </div>
+          description: shop.description
+        }))} />
       </div>
-    </section>
+    </div>
   );
 }

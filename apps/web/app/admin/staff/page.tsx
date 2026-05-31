@@ -1,4 +1,4 @@
-import { CalendarRange, Clock3, Scissors, ShieldCheck, UserRoundPlus, type LucideIcon } from 'lucide-react';
+import { Briefcase, CalendarRange, Clock3, ExternalLink, Scissors, ShieldCheck, UserRoundPlus, Zap, type LucideIcon } from 'lucide-react';
 import { AdminStaffForms } from '@/components/admin/staff-forms';
 import { requireAdmin } from '@/lib/auth';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
@@ -429,6 +429,10 @@ export default async function StaffPage({ searchParams }: StaffPageProps) {
           name: String(item.name),
         }))}
         services={(services || []).map((s) => ({ id: String(s.id), name: String(s.name) }))}
+        staffServices={(staffServices || []).map((ss) => ({
+          staff_id: String(ss.staff_id),
+          service_id: String(ss.service_id),
+        }))}
       />
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)]">

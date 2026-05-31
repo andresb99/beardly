@@ -8,7 +8,7 @@ import {
   DrawerFooter,
   Button
 } from "@heroui/react";
-import { Check } from "lucide-react";
+import { X, Check } from "lucide-react";
 import { useState } from "react";
 
 interface FilterDrawerProps {

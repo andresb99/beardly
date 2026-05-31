@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Button, Input, Select, SelectItem } from '@heroui/react';
+import { Button, Input, Select, SelectItem, Textarea } from '@heroui/react';
 
 interface ShopOption {
   id: string;
@@ -29,6 +29,18 @@ export function MarketplaceJobsForm({ shops }: MarketplaceJobsFormProps) {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
+  const selectedTargetLabel = useMemo(() => {
+    if (target === NETWORK_SCOPE) {
+      return 'Bolsa general del marketplace';
+    }
+
+    const shop = shops.find((item) => item.id === target);
+    if (!shop) {
+      return 'Barberia seleccionada';
+    }
+
+    return [shop.name, shop.city || shop.region].filter(Boolean).join(' - ');
+  }, [shops, target]);
   const targetOptions = useMemo(
     () => [
       {

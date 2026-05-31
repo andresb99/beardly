@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback, useTransition } from 'react';
 import { createPortal } from 'react-dom';
 import { MarketplaceItemCard } from '@/components/public/marketplace-item-card';
+import { buildTenantCanonicalHref } from '@/lib/tenant-public-urls';
 import { CourseGridSkeleton } from '@/components/courses/course-skeleton';
 import { Button, Slider, Switch } from '@heroui/react';
 import { X, ChevronRight, SlidersHorizontal, Loader2 } from 'lucide-react';
@@ -69,6 +70,7 @@ export function CoursesClient({ initialCourses, initialHasMore, initialTotal, me
   const [isLoadingMore, setIsLoadingMore] = useState(false);
 
   const bufferRef = useRef<{ page: number; courses: CourseItem[]; hasMore: boolean } | null>(null);
+  const [mounted, setMounted] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [isFilterClosing, setIsFilterClosing] = useState(false);
@@ -86,6 +88,8 @@ export function CoursesClient({ initialCourses, initialHasMore, initialTotal, me
   const sentinelRef = useRef<HTMLDivElement>(null);
   const isLoadingRef = useRef(false);
   const prevFiltersRef = useRef(JSON.stringify({}));
+
+  useEffect(() => { setMounted(true); }, []);
 
   const currentFilters = useMemo((): CourseFilters => ({
     level: activeLevel !== 'Todos' ? activeLevel : undefined,
