@@ -1,7 +1,5 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { JobsForm } from '@/components/public/jobs-form';
-import { getPublicTenantRouteContext } from '@/lib/public-tenant-context';
 import { getMarketplaceShopBySlug } from '@/lib/shops';
 import { buildTenantPageMetadata } from '@/lib/tenant-public-metadata';
 import { ShopJobsView } from '@/components/public/shop-jobs-view';

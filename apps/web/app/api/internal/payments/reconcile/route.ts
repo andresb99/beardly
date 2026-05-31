@@ -1,3 +1,4 @@
+import { timingSafeEqual } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getPaymentOpsEnv } from '@/lib/env.server';
@@ -14,11 +15,21 @@ function getBearerToken(request: NextRequest) {
   return match?.[1]?.trim() || null;
 }
 
+function timingSafeStringEqual(left: string, right: string) {
+  const leftBuffer = Buffer.from(left);
+  const rightBuffer = Buffer.from(right);
+  if (leftBuffer.length !== rightBuffer.length) {
+    return false;
+  }
+  return timingSafeEqual(leftBuffer, rightBuffer);
+}
+
 function isAuthorized(request: NextRequest) {
   const secret = getPaymentOpsEnv().PAYMENT_RECONCILE_CRON_SECRET;
   const bearer = getBearerToken(request);
-  const querySecret = request.nextUrl.searchParams.get('secret');
-  return bearer === secret || querySecret === secret;
+  // Secret must travel in the Authorization header only — never in the query
+  // string, where it would leak into access/proxy logs and Referer headers.
+  return bearer !== null && timingSafeStringEqual(bearer, secret);
 }
 
 async function handleReconcile(request: NextRequest) {

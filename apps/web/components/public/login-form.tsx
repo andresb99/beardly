@@ -2,22 +2,17 @@
 
 import Link from 'next/link';
 import {
-  Check,
   ChevronRight,
   Eye,
   EyeOff,
   LogIn,
-  Sparkles,
   UserPlus,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button, Input } from '@heroui/react';
-import { APP_NAME } from '@/lib/constants';
 import { env } from '@/lib/env';
 import { resolveSafeNextPath } from '@/lib/navigation';
 import {
-  getMaxAnnualSavingsPercent,
-  getSubscriptionPlanDescriptor,
   type SubscriptionBillingMode,
   PUBLIC_MARKETPLACE_PLANS,
 } from '@/lib/subscription-plans';
@@ -32,16 +27,6 @@ interface LoginFormProps {
   initialMode?: AuthMode;
   nextPath?: string;
   initialMessage?: string | null;
-}
-
-const UYU_FORMATTER = new Intl.NumberFormat('es-UY', {
-  style: 'currency',
-  currency: 'UYU',
-  maximumFractionDigits: 0,
-});
-
-function formatUyuCents(amountCents: number) {
-  return UYU_FORMATTER.format(Math.round(amountCents / 100));
 }
 
 export function isEmailValid(value: string) {
@@ -127,9 +112,9 @@ export function LoginForm({
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(initialMessage);
   const [hasRecoverySession, setHasRecoverySession] = useState(initialMode !== 'reset');
-  const [billingMode, setBillingMode] = useState<SubscriptionBillingMode>('monthly');
-  const [selectedPlanId, setSelectedPlanId] = useState<MarketplacePlanId>('pro');
-  const [planSelectionIntent, setPlanSelectionIntent] = useState<{
+  const [billingMode] = useState<SubscriptionBillingMode>('monthly');
+  const [selectedPlanId] = useState<MarketplacePlanId>('pro');
+  const [planSelectionIntent] = useState<{
     planId: MarketplacePlanId;
     billingMode: SubscriptionBillingMode;
   } | null>(null);
@@ -474,47 +459,7 @@ export function LoginForm({
     reset: 'Define una nueva contrasena para tu cuenta.',
   };
 
-  const showPlans = mode === 'register';
   const isPasswordMode = mode === 'login' || mode === 'register';
-  const selectedPlan = useMemo(
-    () => getSubscriptionPlanDescriptor(selectedPlanId),
-    [selectedPlanId],
-  );
-  const selectedPlanFeatures = useMemo(() => selectedPlan?.features || [], [selectedPlan]);
-  const planOptions = useMemo(
-    () =>
-      PUBLIC_MARKETPLACE_PLANS.map((planId) => {
-        const plan = getSubscriptionPlanDescriptor(planId);
-        const isSelected = selectedPlan?.id === plan.id;
-        const optionPrice =
-          billingMode === 'monthly'
-            ? `${formatUyuCents(plan.monthlyPriceCents)} / mes`
-            : plan.annualInstallmentCents > 0
-              ? `12x ${formatUyuCents(plan.annualInstallmentCents)}`
-              : 'Gratis';
-
-        return {
-          id: plan.id,
-          name: plan.name,
-          isSelected,
-          optionPrice,
-        };
-      }),
-    [billingMode, selectedPlan],
-  );
-  const maxAnnualSavingsPercent = getMaxAnnualSavingsPercent();
-  const handleSelectPlanCta = useCallback(() => {
-    if (isBusy) {
-      return;
-    }
-
-    setPlanSelectionIntent({
-      planId: selectedPlanId,
-      billingMode,
-    });
-    setError(null);
-    setMessage(null);
-  }, [billingMode, isBusy, selectedPlanId]);
   const handleModeChange = useCallback(
     (nextMode: AuthMode) => {
       if (!isBusy) {
@@ -523,22 +468,11 @@ export function LoginForm({
     },
     [isBusy],
   );
-  const handleSelectPlanId = useCallback((planId: MarketplacePlanId) => {
-    setSelectedPlanId(planId);
-  }, []);
   const inputClassNames = {
     inputWrapper: 'login-input-wrapper',
     label: 'login-input-label',
     input: 'login-input-field',
   };
-
-  /* Mode switcher: only login/register as primary tabs */
-  const modeButtonClassName = (isActive: boolean) =>
-    `relative z-10 flex min-h-[2.5rem] items-center justify-center gap-1.5 px-3 py-2 text-center text-[0.82rem] font-bold leading-tight transition-all duration-200 sm:gap-2 sm:px-4 ${
-      isActive
-        ? 'text-brand-on-primary'
-        : 'text-slate/54 hover:text-ink dark:text-zinc-400 dark:hover:text-white'
-    }`;
 
   return (
     <div

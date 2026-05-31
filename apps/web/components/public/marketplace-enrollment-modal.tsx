@@ -11,6 +11,15 @@ export interface SessionInfo {
   seatsLeft: number;
 }
 
+export interface MarketplaceEnrollmentSubmitData {
+  name: string;
+  email: string;
+  phone: string;
+  notes: string;
+  sessionId: string;
+  consent: boolean;
+}
+
 interface MarketplaceEnrollmentModalProps {
   type: 'course' | 'model';
   title: string;
@@ -18,7 +27,7 @@ interface MarketplaceEnrollmentModalProps {
   sessions: SessionInfo[];
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (data: any) => Promise<void>;
+  onSubmit: (data: MarketplaceEnrollmentSubmitData) => Promise<void>;
   isLoading?: boolean;
   error?: string | null;
   message?: string | null;

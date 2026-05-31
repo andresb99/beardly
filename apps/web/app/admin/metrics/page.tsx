@@ -1,13 +1,10 @@
-import Link from 'next/link';
 import { formatCurrency } from '@navaja/shared';
-import { Button } from '@heroui/button';
 import { Card, CardBody } from '@heroui/card';
 import { MetricsApexOverview } from '@/components/admin/metrics-apex-overview';
-import { SurfaceDatePicker } from '@/components/heroui/surface-field';
 import { requireAdmin } from '@/lib/auth';
 import { getDashboardMetricsForDateRange, getStaffPerformanceDashboard } from '@/lib/metrics';
 import { buildAdminHref } from '@/lib/workspace-routes';
-import { Calendar, Filter, DollarSign, Activity, Star } from 'lucide-react';
+import { Calendar, DollarSign, Activity, Star } from 'lucide-react';
 import { StaffFilter } from '@/components/admin/staff-filter';
 import { RangeFilter } from '@/components/admin/range-filter';
 interface MetricsPageProps {
@@ -30,17 +27,6 @@ interface MetricSparkCardProps {
   series: number[];
   tone: SparkTone;
 }
-
-function getRangePillClassName(isActive: boolean) {
-  if (isActive) {
-    return 'border-white/65 bg-white/72 text-ink dark:border-white/12 dark:bg-white/[0.08] dark:text-slate-100';
-  }
-
-  return 'border-white/45 bg-white/36 text-slate/80 hover:bg-white/52 dark:border-white/6 dark:bg-white/[0.03] dark:text-slate-300 dark:hover:bg-white/[0.05]';
-}
-
-const filterPanelSectionClassName =
-  'rounded-[1.45rem] border border-white/58 bg-white/42 px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] dark:border-white/10 dark:bg-[rgb(22,19,36)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]';
 
 function coerceStaffId(value: string | undefined) {
   const normalized = String(value || '').trim();
@@ -86,19 +72,6 @@ function clamp(value: number, min: number, max: number) {
   }
 
   return value;
-}
-
-function shortenStaffName(value: string) {
-  const trimmed = String(value || '').trim();
-  if (!trimmed) {
-    return 'Sin nombre';
-  }
-
-  if (trimmed.length <= 12) {
-    return trimmed;
-  }
-
-  return `${trimmed.slice(0, 12)}...`;
 }
 
 function buildSparklinePaths(values: number[], width = 260, height = 84, padding = 8) {
@@ -446,7 +419,7 @@ export default async function MetricsPage({ searchParams }: MetricsPageProps) {
   );
 }
 
-function XIcon(props: any) {
+function XIcon(props: { className?: string }) {
   return (
     <svg
       {...props}

@@ -9,8 +9,7 @@ import {
   Button,
   Chip
 } from '@heroui/react';
-import { Star, Clock, User, ArrowRight, PlayCircle } from 'lucide-react';
-import { cn } from '@/lib/cn';
+import { Star, ArrowRight, PlayCircle } from 'lucide-react';
 import { ctaButtonClass, Eyebrow } from '@/components/ui/primitives';
 import Link from 'next/link';
 
@@ -39,7 +38,6 @@ export function CourseCard({
   duration, 
   level,
   shopName,
-  shopSlug,
   imageUrl,
   upcomingSessions,
   ratingAvg,

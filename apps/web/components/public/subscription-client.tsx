@@ -48,7 +48,7 @@ export function SubscriptionClient({ plans, ctx, manageWorkspaceHref }: Subscrip
         <div className="flex justify-center">
           <Tabs 
             selectedKey={billingCycle}
-            onSelectionChange={(key) => setBillingCycle(key as any)}
+            onSelectionChange={(key) => setBillingCycle(key as 'monthly' | 'annual')}
             variant="light"
             radius="full"
             classNames={{

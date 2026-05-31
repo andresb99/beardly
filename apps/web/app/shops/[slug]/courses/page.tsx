@@ -2,14 +2,11 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { formatCurrency } from '@navaja/shared';
-import { CourseMediaCard } from '@/components/public/course-media-card';
 import { getPublicTenantRouteContext } from '@/lib/public-tenant-context';
 import { buildTenantCourseHref, buildTenantPublicHref } from '@/lib/shop-links';
 import { getMarketplaceShopBySlug } from '@/lib/shops';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import { buildTenantPageMetadata } from '@/lib/tenant-public-metadata';
-import { Container } from '@/components/heroui/container';
-import { ShopPageBreadcrumb } from '@/components/public/shop-page-breadcrumb';
 
 interface ShopCoursesPageProps {
   params: Promise<{ slug: string }>;
@@ -29,12 +26,6 @@ const LEVEL_LABELS: Record<string, string> = {
   beginner: 'Principiante',
   intermediate: 'Intermedio',
   advanced: 'Avanzado',
-};
-
-const LEVEL_COLORS: Record<string, string> = {
-  beginner: 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/20',
-  intermediate: 'bg-amber-500/15 text-amber-300 border border-amber-500/20',
-  advanced: 'bg-rose-500/15 text-rose-300 border border-rose-500/20',
 };
 
 export async function generateMetadata({ params }: ShopCoursesPageProps): Promise<Metadata> {

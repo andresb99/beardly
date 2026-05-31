@@ -1,19 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { bookingInputSchema, formatCurrency } from '@navaja/shared';
-import {
-  Button,
-  Card,
-  CardBody,
-  Checkbox,
-  Input,
-  Select,
-  SelectItem,
-  Textarea,
-} from '@heroui/react';
-import { ChevronRight, ChevronLeft, Clock, Scissors, User, CalendarDays, CheckCircle2, Star, ShieldCheck, CreditCard, Banknote, Check } from 'lucide-react';
+import { Button, Checkbox } from '@heroui/react';
+import { ChevronRight, ChevronLeft, Clock, Scissors, CalendarDays, CheckCircle2, ShieldCheck, CreditCard, Banknote, Check } from 'lucide-react';
 import { cn } from '@/lib/cn';
 
 interface ServiceOption {
@@ -85,11 +76,7 @@ export function BookingFlow({
   initialCustomerEmail,
   initialCustomerName = '',
   initialCustomerPhone = '',
-  preferredPaymentMethod = null,
   supportsOnlinePayment = true,
-  cancellationNoticeHours = 6,
-  staffCancellationRefundMode = 'automatic_full',
-  cancellationPolicyText = null,
 }: BookingFlowProps) {
   const router = useRouter();
 
@@ -107,16 +94,13 @@ export function BookingFlow({
   const [payInStore, setPayInStore] = useState(!supportsOnlinePayment);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [, setError] = useState<string | null>(null);
   const [agreedToTerms, setAgreedToTerms] = useState(true);
   const [acknowledgedPolicy, setAcknowledgedPolicy] = useState(true);
 
   // Derived Values
   const selectedService = useMemo(() => services.find(s => s.id === serviceId), [serviceId, services]);
   const selectedStaff = useMemo(() => staff.find(s => s.id === staffId), [staffId, staff]);
-  const requiresOnlinePayment = supportsOnlinePayment && !payInStore && (selectedService?.price_cents || 0) > 0;
-
-  const currentStepInfo = STEPS[step - 1];
 
   // Logic: Load Slots
   useEffect(() => {
@@ -132,8 +116,6 @@ export function BookingFlow({
     const query = new URLSearchParams({ shop_id: shopId, service_id: serviceId, date });
     if (staffId) query.set('staff_id', staffId);
 
-    console.log('Fetching availability:', query.toString());
-
     fetch(`/api/availability?${query.toString()}`, { signal: controller.signal })
       .then(async res => {
         if (!res.ok) {
@@ -143,7 +125,6 @@ export function BookingFlow({
         return res.json();
       })
       .then((payload: { slots: AvailabilitySlot[] }) => {
-        console.log('Received slots:', payload.slots?.length || 0);
         setSlots(payload.slots || []);
         if (selectedSlot && !payload.slots.find(s => s.start_at === selectedSlot.start_at)) {
           setSelectedSlot(null);
@@ -205,7 +186,7 @@ export function BookingFlow({
         timezone: shopTimezone,
       });
       router.push(`/book/success?${successParams.toString()}`);
-    } catch (err) {
+    } catch {
       setError('Failed to confirm booking.');
     } finally {
       setSubmitting(false);

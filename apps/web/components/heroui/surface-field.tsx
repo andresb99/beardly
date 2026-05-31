@@ -1,6 +1,6 @@
 'use client';
 
-import type { ComponentProps } from 'react';
+import type { ComponentProps, ComponentType } from 'react';
 import { useEffect, useState } from 'react';
 import { parseDate, parseDateTime } from '@internationalized/date';
 import type { DatePickerProps } from '@heroui/date-picker';
@@ -17,7 +17,11 @@ type CheckboxClassNames = NonNullable<ComponentProps<typeof Checkbox>['className
 type SurfaceDatePickerClassNames = NonNullable<DatePickerProps['classNames']>;
 type SurfaceDateValue = ReturnType<typeof parseSurfaceCalendarDate>;
 type SurfaceDateTimeValue = ReturnType<typeof parseSurfaceCalendarDateTime>;
-const HeroDatePicker = DatePicker as any;
+type HeroDatePickerProps = Omit<DatePickerProps, 'value' | 'onChange'> & {
+  value?: SurfaceDateValue | SurfaceDateTimeValue;
+  onChange?: (value: unknown) => void;
+};
+const HeroDatePicker = DatePicker as unknown as ComponentType<HeroDatePickerProps>;
 
 export type SurfaceInputUiVariant = 'default' | 'temporal';
 export type SurfaceInputClassNames = InputClassNames;

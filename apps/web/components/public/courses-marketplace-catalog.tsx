@@ -7,7 +7,7 @@ import { SelectItem } from '@heroui/select';
 import { LoaderCircle, LocateFixed } from 'lucide-react';
 import { SurfaceSelect } from '@/components/heroui/surface-select';
 import { CourseMediaCard } from '@/components/public/course-media-card';
-import { buildShopHref, buildTenantRootHref } from '@/lib/shop-links';
+import { buildTenantRootHref } from '@/lib/shop-links';
 import type { MarketplaceShop } from '@/lib/shops';
 
 interface MarketplaceCourseCatalogItem {

@@ -17,6 +17,7 @@ vi.mock('@/app/admin/actions', () => ({
   createTimeOffAction: vi.fn(),
   searchStaffInviteeAction: vi.fn(async () => []),
   upsertWorkingHoursRangeAction: vi.fn(),
+  upsertStaffServicesAction: vi.fn(),
 }));
 
 describe('AdminStaffForms', () => {
@@ -31,6 +32,7 @@ describe('AdminStaffForms', () => {
         shopSlug="test-shop"
         staff={[]}
         weekdays={['Domingo', 'Lunes', 'Martes', 'Miercoles', 'Jueves', 'Viernes', 'Sabado']}
+        services={[]}
       />,
     );
 
@@ -57,6 +59,7 @@ describe('AdminStaffForms', () => {
         shopSlug="test-shop"
         staff={[{ id: 'staff-1', name: 'Luis' }]}
         weekdays={['Domingo', 'Lunes', 'Martes', 'Miercoles', 'Jueves', 'Viernes', 'Sabado']}
+        services={[]}
       />,
     );
 

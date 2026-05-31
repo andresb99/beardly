@@ -64,7 +64,12 @@ export function CourseDetailView({
     setIsModalOpen(true);
   }, []);
 
-  const handleEnroll = async (formData: any) => {
+  const handleEnroll = async (formData: {
+    sessionId?: string;
+    name?: string;
+    phone?: string;
+    email?: string;
+  }) => {
     setError(null);
     setMessage(null);
 
@@ -101,7 +106,7 @@ export function CourseDetailView({
 
       setMessage('Inscripción enviada. Te contactamos para confirmar el cupo.');
       setTimeout(() => setIsModalOpen(false), 2000);
-    } catch (err) {
+    } catch {
       setError('Error al procesar la inscripción.');
     } finally {
       setLoading(false);

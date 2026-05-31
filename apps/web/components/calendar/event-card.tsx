@@ -1,6 +1,6 @@
 'use client';
 
-import { Chip, Tooltip } from '@heroui/react';
+import { Chip } from '@heroui/react';
 import { cn } from '@/lib/cn';
 import type { CalendarEvent } from './calendar';
 import {
@@ -37,11 +37,7 @@ export function EventCard({ event, locale, height, compact = false, onClick }: E
   const resolvedTone = resolveCalendarEventTone(event);
   const statusLabel = resolveCalendarEventStatusLabel(event);
   const clientLabel = event.clientName?.trim() || event.title;
-  const titleLabel = event.clientName?.trim() ? event.title : 'Bloque en agenda';
-  const resourceLabel = event.resourceName?.trim() || null;
-  const detailLabel = resourceLabel || (!event.clientName?.trim() ? titleLabel : null);
   const timeRange = formatTimeRange(event.start, event.end, locale);
-  const isCompact = compact || height < 92;
   const isDense = compact || height < 76;
   const isTiny = height < 58;
 
@@ -72,8 +68,8 @@ export function EventCard({ event, locale, height, compact = false, onClick }: E
               <p className={cn('truncate font-bold text-white', isTiny ? 'text-[11px] leading-tight' : 'text-sm')}>
                 {event.title}
               </p>
-              {clientLabel !== event.title && !isDense ? (
-                <p className="truncate text-xs font-medium text-slate-400 mt-0.5">
+              {clientLabel !== event.title ? (
+                <p className={cn('truncate font-medium text-slate-400', isDense ? 'text-[10px] mt-0' : 'text-xs mt-0.5')}>
                   {clientLabel}
                 </p>
               ) : null}
