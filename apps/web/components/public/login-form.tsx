@@ -486,6 +486,7 @@ export function LoginForm({
             <div className="grid w-full grid-cols-2 gap-1">
               <button
                 type="button"
+                data-testid="auth-mode-login"
                 className={`flex min-h-[2.5rem] items-center justify-center gap-2 rounded-[0.9rem] px-4 py-2 text-center text-xs font-black uppercase tracking-widest transition-all duration-300 ${
                   mode === 'login'
                     ? '!bg-[#D0BCFF] !text-white shadow-lg shadow-brand-primary/20'
@@ -498,6 +499,7 @@ export function LoginForm({
               </button>
               <button
                 type="button"
+                data-testid="auth-mode-register"
                 className={`flex min-h-[2.5rem] items-center justify-center gap-2 rounded-[0.9rem] px-4 py-2 text-center text-xs font-black uppercase tracking-widest transition-all duration-300 ${
                   mode === 'register'
                     ? '!bg-[#D0BCFF] !text-white shadow-lg shadow-brand-primary/20'

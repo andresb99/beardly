@@ -35,6 +35,23 @@ describe('BookPageContent', () => {
     expect(screen.queryByText(/encontrada/i)).not.toBeInTheDocument();
   });
 
+  it('matches shops with missing city, region and location label during search', () => {
+    const shopWithNullLocation: MarketplaceShop = {
+      ...mockMarketplaceShops[0]!,
+      id: 'null-location-id',
+      name: 'Navaja Sin Ubicacion',
+      slug: 'navaja-sin-ubicacion',
+      city: null,
+      region: null,
+      locationLabel: null,
+    };
+
+    render(<BookPageContent shops={[shopWithNullLocation]} />);
+    fireEvent.change(getSearchInput(), { target: { value: 'navaja' } });
+
+    expect(screen.getByRole('heading', { name: 'Navaja Sin Ubicacion' })).toBeInTheDocument();
+  });
+
   describe('inline controls', () => {
     it('shows the search field, date picker and quick filter pills by default', () => {
       render(<BookPageContent shops={shops} />);
@@ -250,6 +267,14 @@ describe('BookPageContent', () => {
       fireEvent.click(screen.getByRole('button', { name: /verificadas/i }));
 
       expect(screen.getAllByText('Verificadas')).toHaveLength(2);
+    });
+
+    it('shows an open-now chip when the open-now filter is active', () => {
+      render(<BookPageContent shops={shops} />);
+
+      fireEvent.click(screen.getByRole('button', { name: /abierto ahora/i }));
+
+      expect(screen.getAllByText('Abierto ahora')).toHaveLength(2);
     });
   });
 
