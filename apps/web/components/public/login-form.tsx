@@ -13,6 +13,7 @@ import {
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button, Input } from '@heroui/react';
 import { APP_NAME } from '@/lib/constants';
+import { env } from '@/lib/env';
 import { resolveSafeNextPath } from '@/lib/navigation';
 import {
   getMaxAnnualSavingsPercent,
